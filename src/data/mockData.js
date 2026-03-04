@@ -1,45 +1,41 @@
 // Mock data for ClickAngles demo
 
-export const CTR_DATA = {
+export const CREATIVE_DATA = {
     labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
     datasets: [
-        { label: 'Tu CTR', data: [4.2, 5.1, 6.3, 5.8, 7.2, 8.1, 7.6, 9.2, 10.1, 11.3, 12.5, 13.8], color: '#DC2626' },
-        { label: 'Benchmark', data: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5], color: '#333' },
-        { label: 'Target 2026', data: [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10], color: '#10B981' },
+        { label: 'Proyectos', data: [3, 5, 4, 6, 8, 7, 9, 11, 10, 13, 15, 18], color: '#DC2626' },
+        { label: 'Miniaturas', data: [8, 12, 10, 15, 20, 18, 22, 28, 25, 32, 38, 42], color: '#10B981' },
     ]
 };
 
 export const METRICS = {
-    avgCTR: { value: '13.8%', change: '+2.3%', direction: 'up', label: 'CTR Promedio' },
-    impressions: { value: '245K', change: '+18%', direction: 'up', label: 'Impresiones' },
-    totalClicks: { value: '33.8K', change: '+24%', direction: 'up', label: 'Clics Totales' },
-    thumbScore: { value: '92', change: '+5', direction: 'up', label: 'Thumb Score' },
+    activeProjects: { value: '12', change: '+3', direction: 'up', label: 'Proyectos Activos' },
+    thumbnails: { value: '42', change: '+8', direction: 'up', label: 'Miniaturas Generadas' },
+    anglesUsed: { value: '18', change: '+5', direction: 'up', label: 'Ángulos Usados' },
+    avgScore: { value: '89', change: '+4', direction: 'up', label: 'Score Promedio' },
 };
 
 export const ALERTS = [
     {
         id: 1,
-        type: 'warning',
-        title: 'Penalización de Clickbait Detectada',
-        message: 'Tu video "IA Destruye Todo" fue marcado por YouTube por discrepancia título-contenido. CTR cayó 40% en 48h.',
+        type: 'success',
+        title: 'Nuevo Record de Productividad',
+        message: 'Has generado 42 miniaturas este mes, superando tu récord anterior de 38. ¡Excelente ritmo creativo!',
         time: 'Hace 2 horas',
-        video: 'IA Destruye Todo'
     },
     {
         id: 2,
-        type: 'success',
-        title: 'Benchmark Superado',
-        message: 'Tu CTR promedio de los últimos 7 días (13.8%) supera el benchmark 2026 de 10%. ¡Excelente rendimiento!',
+        type: 'info',
+        title: 'Tendencia de Ángulo',
+        message: 'Los ángulos de tipo "Controversia" están generando scores 35% más altos en el nicho Tech esta semana.',
         time: 'Hace 5 horas',
-        video: null
     },
     {
         id: 3,
-        type: 'info',
-        title: 'Tendencia de Ángulo',
-        message: 'Los ángulos de tipo "Controversia" están generando un CTR 35% mayor en el nicho Tech esta semana.',
+        type: 'warning',
+        title: 'Proyecto Sin Finalizar',
+        message: 'El proyecto "Cursor vs VSCode" lleva 5 días en borrador. ¿Querés completarlo o archivarlo?',
         time: 'Hace 1 día',
-        video: null
     }
 ];
 
@@ -48,7 +44,7 @@ export const RECENT_PROJECTS = [
         id: 1,
         title: 'GPT-5 vs Gemini Ultra',
         angle: 'El Versus',
-        ctr: '14.2%',
+        score: 94,
         status: 'published',
         date: '2026-02-27'
     },
@@ -56,7 +52,7 @@ export const RECENT_PROJECTS = [
         id: 2,
         title: 'Este Prompt Secreto Cambia Todo',
         angle: 'Atajo Secreto',
-        ctr: '16.1%',
+        score: 91,
         status: 'published',
         date: '2026-02-25'
     },
@@ -64,7 +60,7 @@ export const RECENT_PROJECTS = [
         id: 3,
         title: 'Lo Que OpenAI No Quiere Que Sepas',
         angle: 'Caja Negra',
-        ctr: '12.8%',
+        score: 88,
         status: 'draft',
         date: '2026-02-24'
     },
@@ -72,7 +68,7 @@ export const RECENT_PROJECTS = [
         id: 4,
         title: 'Construí Una App en 10 Min',
         angle: 'Tutorial Imposible',
-        ctr: '11.5%',
+        score: 85,
         status: 'published',
         date: '2026-02-22'
     },
@@ -106,4 +102,3 @@ export const ENGINE_VARIANTS = [
     { id: 5, angle: 'La Revelación', text: 'LA VERDAD SOBRE DEEPSEEK', style: 'reveal-curtain', score: 82 },
     { id: 6, angle: 'Error Fatal', text: 'ESTE BUG DESTRUYE TODO', style: 'error-red', score: 79 },
 ];
-

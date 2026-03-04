@@ -1,4 +1,4 @@
-import { CTR_DATA, METRICS, ALERTS, RECENT_PROJECTS } from '../data/mockData.js';
+import { CREATIVE_DATA, METRICS, ALERTS, RECENT_PROJECTS } from '../data/mockData.js';
 import { icon } from '../icons.js';
 
 function drawChart(canvas) {
@@ -12,36 +12,42 @@ function drawChart(canvas) {
   const pad = { top: 20, right: 20, bottom: 30, left: 40 };
   const cW = w - pad.left - pad.right, cH = h - pad.top - pad.bottom;
 
+  const maxVal = 50;
   ctx.strokeStyle = '#1A1A1A'; ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + (cH / 4) * i;
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.top + (cH / 5) * i;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
     ctx.fillStyle = '#666'; ctx.font = '10px Inter'; ctx.textAlign = 'right';
-    ctx.fillText(`${(20 - i * 5)}%`, pad.left - 8, y + 3);
+    ctx.fillText(`${maxVal - i * 10}`, pad.left - 8, y + 3);
   }
   ctx.fillStyle = '#666'; ctx.font = '10px Inter'; ctx.textAlign = 'center';
-  CTR_DATA.labels.forEach((l, i) => {
-    ctx.fillText(l, pad.left + (cW / (CTR_DATA.labels.length - 1)) * i, h - 8);
+  CREATIVE_DATA.labels.forEach((l, i) => {
+    ctx.fillText(l, pad.left + (cW / (CREATIVE_DATA.labels.length - 1)) * i, h - 8);
   });
 
-  CTR_DATA.datasets.forEach((ds, di) => {
+  CREATIVE_DATA.datasets.forEach((ds, di) => {
     const pts = ds.data.map((v, i) => ({
       x: pad.left + (cW / (ds.data.length - 1)) * i,
-      y: pad.top + cH - (v / 20) * cH
+      y: pad.top + cH - (v / maxVal) * cH
     }));
-    if (di === 0) {
-      ctx.beginPath(); ctx.moveTo(pts[0].x, pad.top + cH);
-      pts.forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.lineTo(pts[pts.length - 1].x, pad.top + cH); ctx.closePath();
-      const g = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
-      g.addColorStop(0, 'rgba(220, 38, 38, 0.3)'); g.addColorStop(1, 'rgba(220, 38, 38, 0)');
-      ctx.fillStyle = g; ctx.fill();
-    }
-    ctx.beginPath(); ctx.strokeStyle = ds.color; ctx.lineWidth = di === 0 ? 2.5 : 1;
-    if (di > 0) ctx.setLineDash([5, 5]); else ctx.setLineDash([]);
+
+    // Area fill
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pad.top + cH);
+    pts.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(pts[pts.length - 1].x, pad.top + cH); ctx.closePath();
+    const g = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
+    const baseColor = ds.color;
+    g.addColorStop(0, baseColor + '40'); g.addColorStop(1, baseColor + '00');
+    ctx.fillStyle = g; ctx.fill();
+
+    // Line
+    ctx.beginPath(); ctx.strokeStyle = ds.color; ctx.lineWidth = 2.5;
+    ctx.setLineDash([]);
     pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.stroke(); ctx.setLineDash([]);
-    if (di === 0) pts.forEach((p, i) => {
+    ctx.stroke();
+
+    // Points
+    pts.forEach((p, i) => {
       ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
       ctx.fillStyle = ds.color; ctx.fill();
       if (i === pts.length - 1) {
@@ -56,8 +62,8 @@ export function renderDashboard(container) {
   const html = `<div class="animate-in">
     <div class="section-header">
       <div>
-        <h2 class="section-title">Dashboard de Estrategia</h2>
-        <p class="section-subtitle">Análisis de rendimiento CTR en tiempo real</p>
+        <h2 class="section-title">Dashboard Creativo</h2>
+        <p class="section-subtitle">Resumen de tu actividad creativa y producción</p>
       </div>
       <div class="tabs">
         <button class="tab active">7 Días</button><button class="tab">30 Días</button>
@@ -67,35 +73,34 @@ export function renderDashboard(container) {
 
     <div class="grid-4 mb-lg">
       <div class="metric-card accent">
-        <div class="metric-label">${METRICS.avgCTR.label}</div>
-        <div class="metric-value glow-accent">${METRICS.avgCTR.value}</div>
-        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.avgCTR.change}</div>
+        <div class="metric-label">${METRICS.activeProjects.label}</div>
+        <div class="metric-value glow-accent">${METRICS.activeProjects.value}</div>
+        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.activeProjects.change}</div>
       </div>
       <div class="metric-card success">
-        <div class="metric-label">${METRICS.impressions.label}</div>
-        <div class="metric-value glow-success">${METRICS.impressions.value}</div>
-        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.impressions.change}</div>
+        <div class="metric-label">${METRICS.thumbnails.label}</div>
+        <div class="metric-value glow-success">${METRICS.thumbnails.value}</div>
+        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.thumbnails.change}</div>
       </div>
       <div class="metric-card accent">
-        <div class="metric-label">${METRICS.totalClicks.label}</div>
-        <div class="metric-value glow-accent">${METRICS.totalClicks.value}</div>
-        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.totalClicks.change}</div>
+        <div class="metric-label">${METRICS.anglesUsed.label}</div>
+        <div class="metric-value glow-accent">${METRICS.anglesUsed.value}</div>
+        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.anglesUsed.change}</div>
       </div>
       <div class="metric-card success">
-        <div class="metric-label">${METRICS.thumbScore.label}</div>
-        <div class="metric-value glow-success">${METRICS.thumbScore.value}</div>
-        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.thumbScore.change}</div>
+        <div class="metric-label">${METRICS.avgScore.label}</div>
+        <div class="metric-value glow-success">${METRICS.avgScore.value}</div>
+        <div class="metric-change up">${icon('trendUp', 12)} ${METRICS.avgScore.change}</div>
       </div>
     </div>
 
     <div class="grid-2 mb-lg" style="grid-template-columns: 2fr 1fr;">
       <div class="chart-container">
         <div class="card-header">
-          <div class="card-title">Evolución CTR</div>
+          <div class="card-title">Actividad Creativa</div>
           <div class="flex gap-md items-center">
-            <div class="flex gap-xs items-center"><span style="width:10px;height:3px;background:#DC2626;border-radius:2px;display:inline-block;"></span><span class="text-xs text-muted">Tu CTR</span></div>
-            <div class="flex gap-xs items-center"><span style="width:10px;height:3px;background:#333;border-radius:2px;display:inline-block;border:1px dashed #555;"></span><span class="text-xs text-muted">Benchmark</span></div>
-            <div class="flex gap-xs items-center"><span style="width:10px;height:3px;background:#10B981;border-radius:2px;display:inline-block;border:1px dashed #10B981;"></span><span class="text-xs text-muted">Target 2026</span></div>
+            <div class="flex gap-xs items-center"><span style="width:10px;height:3px;background:#DC2626;border-radius:2px;display:inline-block;"></span><span class="text-xs text-muted">Proyectos</span></div>
+            <div class="flex gap-xs items-center"><span style="width:10px;height:3px;background:#10B981;border-radius:2px;display:inline-block;"></span><span class="text-xs text-muted">Miniaturas</span></div>
           </div>
         </div>
         <canvas class="chart-canvas" id="ctr-chart"></canvas>
@@ -134,7 +139,7 @@ export function renderDashboard(container) {
             <div style="font-size:13px;font-weight:600;margin-bottom:4px;" class="truncate">${p.title}</div>
             <div class="flex items-center justify-between">
               <span class="badge badge-accent">${p.angle}</span>
-              <span class="text-sm ${parseFloat(p.ctr) >= 10 ? 'text-success' : 'text-accent'} font-bold">${p.ctr}</span>
+              <span class="text-sm ${p.score >= 90 ? 'text-success' : 'text-accent'} font-bold">${p.score}</span>
             </div>
           </div>
         </div>
@@ -144,18 +149,18 @@ export function renderDashboard(container) {
     <div class="card mt-lg" style="border: 1px solid rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.03);">
       <div class="card-header">
         <div>
-          <div class="card-title">${icon('crosshair', 16)} Benchmark 2026</div>
-          <div class="card-subtitle">Target CTR: 5-15% para contenido Tech/IA</div>
+          <div class="card-title">${icon('crosshair', 16)} Productividad Mensual</div>
+          <div class="card-subtitle">Objetivo: 20 proyectos y 50 miniaturas por mes</div>
         </div>
         <span class="badge badge-success">En camino</span>
       </div>
       <div class="progress-bar" style="height:8px;">
-        <div class="progress-bar-fill" style="width: 92%;"></div>
+        <div class="progress-bar-fill" style="width: 84%;"></div>
       </div>
       <div class="flex justify-between mt-sm">
-        <span class="text-xs text-muted">5% mínimo</span>
-        <span class="text-xs text-success font-bold">13.8% actual</span>
-        <span class="text-xs text-muted">15% óptimo</span>
+        <span class="text-xs text-muted">0 proyectos</span>
+        <span class="text-xs text-success font-bold">18 proyectos actuales</span>
+        <span class="text-xs text-muted">20 objetivo</span>
       </div>
     </div>
   </div>`;

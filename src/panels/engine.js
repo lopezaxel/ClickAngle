@@ -82,18 +82,7 @@ export function renderEngine(container) {
   });
 
   html += `</div>
-    <div class="card mt-lg" style="background:var(--bg-tertiary);">
-      <div class="card-header"><div class="card-title">${icon('link', 16)} Workflow</div><span class="badge badge-success">Completado</span></div>
-      <div class="flex gap-lg items-center" style="overflow-x:auto;padding-bottom:var(--space-sm);">`;
-
-  [{ l: 'Prompt+Script', d: 'System_Prompt + Angle_Logic' }, { l: 'Google AI Studio', d: 'Visual desc + keywords' }, { l: 'Gen Imagen', d: 'Flux API — Tech/IA' }, { l: 'Canvas', d: 'Texto superpuesto' }].forEach((s, i) => {
-    html += `<div class="flex items-center gap-md" style="min-width:180px;">
-        <div style="width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;color:var(--success);">${icon('check', 14)}</div>
-        <div><div class="text-xs font-bold">${s.l}</div><div style="font-size:10px;color:var(--text-tertiary);">${s.d}</div></div>
-        ${i < 3 ? '<span style="color:var(--text-tertiary);font-size:16px;">→</span>' : ''}</div>`;
-  });
-
-  html += `</div></div></div>`;
+  </div>`;
   container.innerHTML = html;
 
   const btn = document.getElementById('btn-generate');

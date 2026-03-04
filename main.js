@@ -2,6 +2,7 @@ import './style.css';
 import { registerRoute, initRouter } from './src/router.js';
 import { renderSidebar } from './src/components/sidebar.js';
 import { renderSearchbar } from './src/components/searchbar.js';
+import { renderWorkflow, updateWorkflow } from './src/components/workflow.js';
 import { renderDashboard } from './src/panels/dashboard.js';
 import { renderCerebro } from './src/panels/cerebro.js';
 import { renderBrand } from './src/panels/brand.js';
@@ -50,14 +51,19 @@ registerRoute('settings', (ws) => {
 document.addEventListener('DOMContentLoaded', () => {
   const sidebar = document.getElementById('sidebar');
   const topbar = document.getElementById('topbar');
+  const workflowBar = document.getElementById('workflow-bar');
   const workspace = document.getElementById('workspace');
 
   renderSidebar(sidebar);
   renderSearchbar(topbar);
+  renderWorkflow(workflowBar);
   initRouter(workspace);
 
-  // Re-render sidebar on route change to update active state
-  window.addEventListener('hashchange', () => renderSidebar(sidebar));
+  // Re-render sidebar and workflow on route change to update active state
+  window.addEventListener('hashchange', () => {
+    renderSidebar(sidebar);
+    updateWorkflow(workflowBar);
+  });
 
   // Set default route
   if (!window.location.hash) window.location.hash = '#dashboard';
