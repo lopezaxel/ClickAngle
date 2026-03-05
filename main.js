@@ -11,6 +11,7 @@ import { renderAngulos } from './src/panels/angulos.js';
 import { renderEngine } from './src/panels/engine.js';
 import { renderEditor } from './src/panels/editor.js';
 import { renderLogin } from './src/panels/login.js';
+import { renderSettings } from './src/panels/settings.js';
 import { renderEmptyState } from './src/panels/emptyState.js';
 import { initAuth } from './src/lib/auth.js';
 import { getState, subscribe } from './src/lib/state.js';
@@ -25,31 +26,8 @@ registerRoute('angulos', renderAngulos);
 registerRoute('engine', renderEngine);
 registerRoute('editor', renderEditor);
 
-// Settings (placeholder)
-registerRoute('settings', (ws) => {
-  ws.innerHTML = `<div class="animate-in">
-    <div class="section-header">
-      <div><h2 class="section-title">${icon('cog', 22)} Configuración</h2>
-      <p class="section-subtitle">API keys y preferencias del sistema</p></div></div>
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-title mb-md">${icon('key', 16)} API Keys</div>
-        <div class="form-group"><label class="form-label">Google AI Studio Key</label>
-        <input type="password" class="form-input" placeholder="AIza..." value="••••••••••••••••" /></div>
-        <div class="form-group"><label class="form-label">Fal.AI Key (opcional)</label>
-        <input type="password" class="form-input" placeholder="fal-..." /></div>
-        <button class="btn btn-primary btn-sm mt-md">${icon('save', 14)} Guardar Keys</button>
-      </div>
-      <div class="card">
-        <div class="card-title mb-md">${icon('sliders', 16)} Preferencias</div>
-        <div class="form-group"><label class="form-label">Tema</label>
-        <select class="form-select"><option selected>Dark Mode</option><option>Ultra Dark</option></select></div>
-        <div class="form-group"><label class="form-label">Idioma</label>
-        <select class="form-select"><option selected>Español</option><option>English</option></select></div>
-      </div>
-    </div>
-  </div>`;
-});
+// Settings
+registerRoute('settings', renderSettings);
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const workspace = document.getElementById('workspace');
 
   let initialized = false;
+  let hadChannels = false;
 
   function renderApp() {
     const { session, channels, activeChannelId } = getState();
@@ -71,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
       topbar.style.display = 'none';
       workflowBar.style.display = 'none';
       renderLogin(workspace);
+      initialized = false;
+      hadChannels = false;
       return;
     }
 
@@ -87,11 +68,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!channels || channels.length === 0 || !activeChannelId) {
       // No channels — show empty state
       renderEmptyState(workspace);
+      hadChannels = false;
     } else {
       // Normal app — render current route
-      if (!initialized) {
+      if (!initialized || !hadChannels) {
+        // First time or just got channels after empty state
         initRouter(workspace);
         initialized = true;
+        hadChannels = true;
       } else {
         reRenderCurrentRoute(workspace);
       }

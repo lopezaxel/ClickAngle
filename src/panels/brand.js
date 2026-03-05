@@ -54,7 +54,10 @@ export async function renderBrand(container) {
         <h2 class="section-title">${icon('palette', 22)} Identidad Visual</h2>
         <p class="section-subtitle">Define tu marca para consistencia en todas las miniaturas</p>
       </div>
-      <button class="btn btn-primary btn-sm" id="btn-save-brand">${icon('save', 14)} Guardar Cambios</button>
+      <div class="flex gap-sm">
+        <button class="btn btn-secondary btn-sm" id="btn-analyze-adn">${icon('brain', 14)} Analizar ADN</button>
+        <button class="btn btn-primary btn-sm" id="btn-save-brand">${icon('save', 14)} Guardar Cambios</button>
+      </div>
     </div>
 
     <div class="grid-2" style="grid-template-columns: 1fr 1fr;">
@@ -186,6 +189,42 @@ export async function renderBrand(container) {
         renderBrand(container);
       } catch (err) { alert('Error: ' + err.message); }
     });
+  });
+
+  // Analyze ADN
+  document.getElementById('btn-analyze-adn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-analyze-adn');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Analizando...`;
+    btn.disabled = true;
+
+    try {
+      // Fetch channel info
+      const { data: channel } = await supabase.from('channels').select('*').eq('id', activeChannelId).single();
+
+      // MOCK IA ANALYSIS (This would be a call to an Edge Function or AI API)
+      // System Prompt 1 logic
+      const mockAdn = {
+        niche: channel.niche || 'Tech/IA',
+        tone: 'Agresivo, Directo, High-Energy',
+        visual_style: 'Dark Mode, Neones, Tipografía Impact',
+        target_audience: 'Aspirantes a creadores y entusiastas de IA',
+        psychology: 'Curiosidad extrema y miedo a quedarse atrás (FOMO)'
+      };
+
+      await supabase.from('brand_kits').upsert({
+        channel_id: activeChannelId,
+        channel_adn: mockAdn
+      }, { onConflict: 'channel_id' });
+
+      alert('¡ADN del canal analizado y guardado!');
+      renderBrand(container);
+    } catch (err) {
+      alert('Error en el análisis: ' + err.message);
+    } finally {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
   });
 
   // Save brand

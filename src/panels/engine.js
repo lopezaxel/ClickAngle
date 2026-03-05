@@ -107,6 +107,41 @@ export async function renderEngine(container) {
 
   container.innerHTML = html;
 
+  // Auto-select expression based on angle (Phase 3 automation)
+  document.getElementById('select-angle')?.addEventListener('change', (e) => {
+    const angleId = e.target.value;
+    const angle = angleList.find(a => a.id === angleId);
+    const expressionSelect = document.getElementById('select-expression');
+
+    if (angle && expressionSelect) {
+      // Mapping logic: Keywords in angle description/name -> Expression type
+      const mapping = {
+        'ERROR': ['preocupado', 'sorpresa', 'pensando'],
+        'CONTRASTE': ['sorpresa', 'confianza'],
+        'RECOMPENSA': ['confianza', 'señalando'],
+        'CURIOSIDAD': ['pensando', 'sorpresa']
+      };
+
+      const normalizedAngle = angle.name.toUpperCase();
+      let targetExpression = 'confianza'; // default
+
+      for (const [key, exprs] of Object.entries(mapping)) {
+        if (normalizedAngle.includes(key)) {
+          // Find first matching expression in user's vault
+          const found = faceList.find(f => exprs.includes(f.expression_type.toLowerCase()));
+          if (found) {
+            targetExpression = found.id;
+            break;
+          }
+        }
+      }
+
+      if (expressionSelect.querySelector(`option[value="${targetExpression}"]`)) {
+        expressionSelect.value = targetExpression;
+      }
+    }
+  });
+
   // Generate button
   const btn = document.getElementById('btn-generate');
   if (btn) {
@@ -131,13 +166,19 @@ export async function renderEngine(container) {
 
         // Create placeholder variants
         const selectedAngle = angleList.find(a => a.id === angleId);
+        const hookText = title.toUpperCase().slice(0, 30); // Simple hook extraction
+
         const variantData = Array.from({ length: 6 }, (_, i) => ({
           project_id: project.id,
           angle_id: angleId,
-          overlay_text: title.toUpperCase().slice(0, 30),
+          overlay_text: i === 0 ? hookText : `${hookText} [V${i + 1}]`,
           style_preset: ['tech', 'minimal', 'dramatic', 'neon', 'clean', 'bold'][i],
           impact_score: Math.floor(Math.random() * 20) + 75,
-          ai_metadata: { angle_name: selectedAngle?.name || '', prompt: selectedAngle?.logic_prompt || '' }
+          ai_metadata: {
+            angle_name: selectedAngle?.name || '',
+            prompt: selectedAngle?.logic_prompt || '',
+            expression_used: document.getElementById('select-expression')?.value || 'none'
+          }
         }));
 
         await supabase.from('thumbnail_variants').insert(variantData);

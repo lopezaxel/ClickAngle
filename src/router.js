@@ -1,6 +1,7 @@
 // Simple hash-based SPA router
 const routes = {};
 let currentWorkspace = null;
+let renderCounter = 0;
 
 export function registerRoute(hash, renderFn) {
     routes[hash] = renderFn;
@@ -14,7 +15,7 @@ export function getCurrentRoute() {
     return window.location.hash.slice(1) || 'dashboard';
 }
 
-export function reRenderCurrentRoute(workspace) {
+export async function reRenderCurrentRoute(workspace) {
     if (workspace) currentWorkspace = workspace;
     const route = getCurrentRoute();
     const renderFn = routes[route];
@@ -24,15 +25,23 @@ export function reRenderCurrentRoute(workspace) {
     });
 
     if (renderFn && currentWorkspace) {
+        const myRender = ++renderCounter;
         currentWorkspace.innerHTML = '';
-        renderFn(currentWorkspace);
+        try {
+            await renderFn(currentWorkspace);
+        } catch (err) {
+            console.error(`Error rendering ${route}:`, err);
+            if (renderCounter === myRender) {
+                currentWorkspace.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);">Error cargando ${route}</div>`;
+            }
+        }
     }
 }
 
 export function initRouter(workspace) {
     currentWorkspace = workspace;
 
-    function render() {
+    async function render() {
         const route = getCurrentRoute();
         const renderFn = routes[route];
 
@@ -41,15 +50,25 @@ export function initRouter(workspace) {
         });
 
         if (renderFn) {
+            const myRender = ++renderCounter;
             workspace.style.opacity = '0';
             workspace.style.transform = 'translateY(8px)';
-            setTimeout(() => {
-                workspace.innerHTML = '';
-                renderFn(workspace);
+            await new Promise(r => setTimeout(r, 150));
+            if (renderCounter !== myRender) return; // another render started
+            workspace.innerHTML = '';
+            try {
+                await renderFn(workspace);
+            } catch (err) {
+                console.error(`Error rendering ${route}:`, err);
+                if (renderCounter === myRender) {
+                    workspace.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);">Error cargando ${route}</div>`;
+                }
+            }
+            if (renderCounter === myRender) {
                 workspace.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
                 workspace.style.opacity = '1';
                 workspace.style.transform = 'translateY(0)';
-            }, 150);
+            }
         }
     }
 

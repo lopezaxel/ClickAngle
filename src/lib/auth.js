@@ -83,28 +83,53 @@ export async function createChannel(name, youtubeHandle = '', niche = 'Tech/IA')
 
     // Reload channels
     const channels = await loadUserChannels(user.id);
-    setState({ channels });
-    setActiveChannel(data.id);
+    // Set channels and active channel in a single state update to avoid double re-render
+    setState({ channels, activeChannelId: data.id });
+    localStorage.setItem('clickangles_active_channel', data.id);
 
     return data;
 }
 
+async function loadUserData(session) {
+    if (session?.user) {
+        try {
+            const profile = await loadUserProfile(session.user.id);
+            const channels = await loadUserChannels(session.user.id);
+            const activeChannelId = restoreActiveChannel(channels);
+            setState({ currentUser: profile, session, channels, activeChannelId });
+        } catch (err) {
+            console.error('Error loading user data:', err);
+            setState({ currentUser: null, session, channels: [], activeChannelId: null });
+        }
+    } else {
+        setState({ currentUser: null, session: null, channels: [], activeChannelId: null });
+    }
+}
+
 export async function initAuth(onReady) {
-    // Listen for auth changes
+    // Listen for future auth changes
     supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-            try {
-                const profile = await loadUserProfile(session.user.id);
-                const channels = await loadUserChannels(session.user.id);
-                const activeChannelId = restoreActiveChannel(channels);
-                setState({ currentUser: profile, session, channels, activeChannelId });
-            } catch (err) {
-                console.error('Error loading user data:', err);
-                setState({ currentUser: null, session, channels: [], activeChannelId: null });
-            }
-        } else {
+        await loadUserData(session);
+        if (onReady) { onReady(); onReady = null; }
+    });
+
+    // Also do an initial session check as a fallback
+    // (onAuthStateChange may not fire on corrupted sessions)
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        await loadUserData(session);
+    } catch (err) {
+        console.warn('Session recovery error:', err.message);
+        // If it's a lock/abort error, clear corrupted session and show login
+        if (err.message?.includes('Lock') || err.message?.includes('Abort') || err.name === 'AbortError') {
+            console.warn('Clearing corrupted session...');
+            // Remove Supabase auth keys from localStorage
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('sb-')) localStorage.removeItem(key);
+            });
             setState({ currentUser: null, session: null, channels: [], activeChannelId: null });
         }
-        if (onReady) onReady();
-    });
+    }
+    if (onReady) onReady();
 }

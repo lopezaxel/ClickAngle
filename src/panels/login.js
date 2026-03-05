@@ -2,12 +2,12 @@ import { signIn, signUp } from '../lib/auth.js';
 import { icon } from '../icons.js';
 
 export function renderLogin(container) {
-    let mode = 'login'; // 'login' | 'register'
-    let loading = false;
-    let errorMsg = '';
+  let mode = 'login'; // 'login' | 'register'
+  let loading = false;
+  let errorMsg = '';
 
-    function render() {
-        container.innerHTML = `
+  function render() {
+    container.innerHTML = `
     <div class="login-wrapper">
       <div class="login-card animate-in">
         <div class="login-header">
@@ -45,11 +45,16 @@ export function renderLogin(container) {
           </div>
           <div class="form-group">
             <label class="form-label">Contraseña</label>
-            <input type="password" class="form-input" id="input-password" placeholder="••••••••" minlength="6" required />
+            <div style="position:relative;">
+              <input type="password" class="form-input" id="input-password" placeholder="••••••••" minlength="6" required style="padding-right:44px;" />
+              <button type="button" id="toggle-password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px 6px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);transition:color 0.2s;" title="Mostrar contraseña">
+                ${icon('eye', 18)}
+              </button>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary" style="width:100%;padding:var(--space-md);font-size:15px;font-weight:700;" ${loading ? 'disabled' : ''}>
             ${loading ? `<span class="animate-pulse">${icon('clock', 16)}</span> ${mode === 'login' ? 'Ingresando...' : 'Registrando...'}` :
-                `${icon(mode === 'login' ? 'bolt' : 'user', 16)} ${mode === 'login' ? 'Ingresar' : 'Crear Cuenta'}`}
+        `${icon(mode === 'login' ? 'bolt' : 'user', 16)} ${mode === 'login' ? 'Ingresar' : 'Crear Cuenta'}`}
           </button>
         </form>
 
@@ -62,40 +67,57 @@ export function renderLogin(container) {
       </div>
     </div>`;
 
-        // Bind events
-        document.getElementById('tab-login')?.addEventListener('click', () => { mode = 'login'; errorMsg = ''; render(); });
-        document.getElementById('tab-register')?.addEventListener('click', () => { mode = 'register'; errorMsg = ''; render(); });
-        document.getElementById('switch-mode')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            mode = mode === 'login' ? 'register' : 'login';
-            errorMsg = '';
-            render();
-        });
+    // Bind events
+    document.getElementById('tab-login')?.addEventListener('click', () => { mode = 'login'; errorMsg = ''; render(); });
+    document.getElementById('tab-register')?.addEventListener('click', () => { mode = 'register'; errorMsg = ''; render(); });
+    document.getElementById('switch-mode')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      mode = mode === 'login' ? 'register' : 'login';
+      errorMsg = '';
+      render();
+    });
 
-        document.getElementById('auth-form')?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('input-email').value;
-            const password = document.getElementById('input-password').value;
+    // Toggle password visibility
+    document.getElementById('toggle-password')?.addEventListener('click', () => {
+      const pwInput = document.getElementById('input-password');
+      const toggleBtn = document.getElementById('toggle-password');
+      if (pwInput.type === 'password') {
+        pwInput.type = 'text';
+        toggleBtn.innerHTML = icon('eyeOff', 18);
+        toggleBtn.title = 'Ocultar contraseña';
+        toggleBtn.style.color = 'var(--accent-light)';
+      } else {
+        pwInput.type = 'password';
+        toggleBtn.innerHTML = icon('eye', 18);
+        toggleBtn.title = 'Mostrar contraseña';
+        toggleBtn.style.color = 'var(--text-muted)';
+      }
+    });
 
-            loading = true;
-            errorMsg = '';
-            render();
+    document.getElementById('auth-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('input-email').value;
+      const password = document.getElementById('input-password').value;
 
-            try {
-                if (mode === 'login') {
-                    await signIn(email, password);
-                } else {
-                    const fullName = document.getElementById('input-name')?.value || '';
-                    await signUp(email, password, fullName);
-                }
-                // Auth state change handler in main.js will handle the redirect
-            } catch (err) {
-                errorMsg = err.message || 'Error de autenticación';
-                loading = false;
-                render();
-            }
-        });
-    }
+      loading = true;
+      errorMsg = '';
+      render();
 
-    render();
+      try {
+        if (mode === 'login') {
+          await signIn(email, password);
+        } else {
+          const fullName = document.getElementById('input-name')?.value || '';
+          await signUp(email, password, fullName);
+        }
+        // Auth state change handler in main.js will handle the redirect
+      } catch (err) {
+        errorMsg = err.message || 'Error de autenticación';
+        loading = false;
+        render();
+      }
+    });
+  }
+
+  render();
 }
