@@ -2,7 +2,12 @@ import { createChannel } from '../lib/auth.js';
 import { icon } from '../icons.js';
 
 export function renderEmptyState(container) {
-    container.innerHTML = `
+  // Reset container style in case a router transition was in progress
+  container.style.opacity = '1';
+  container.style.transform = 'none';
+  container.style.transition = 'none';
+
+  container.innerHTML = `
   <div class="animate-in" style="display:flex;align-items:center;justify-content:center;min-height:60vh;">
     <div style="text-align:center;max-width:480px;">
       <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg, var(--accent), var(--accent-dark));display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-lg);box-shadow:0 0 40px var(--accent-glow);">
@@ -44,23 +49,23 @@ export function renderEmptyState(container) {
     </div>
   </div>`;
 
-    document.getElementById('create-channel-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('channel-name').value;
-        const handle = document.getElementById('channel-handle').value;
-        const niche = document.getElementById('channel-niche').value;
-        const btn = document.getElementById('btn-create-channel');
+  document.getElementById('create-channel-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('channel-name').value;
+    const handle = document.getElementById('channel-handle').value;
+    const niche = document.getElementById('channel-niche').value;
+    const btn = document.getElementById('btn-create-channel');
 
-        btn.disabled = true;
-        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Creando...`;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Creando...`;
 
-        try {
-            await createChannel(name, handle, niche);
-            // State change will trigger re-render via main.js
-        } catch (err) {
-            alert('Error al crear canal: ' + err.message);
-            btn.disabled = false;
-            btn.innerHTML = `${icon('rocket', 16)} Crear Canal`;
-        }
-    });
+    try {
+      await createChannel(name, handle, niche);
+      // State change will trigger re-render via main.js
+    } catch (err) {
+      alert('Error al crear canal: ' + err.message);
+      btn.disabled = false;
+      btn.innerHTML = `${icon('rocket', 16)} Crear Canal`;
+    }
+  });
 }

@@ -3,25 +3,28 @@ import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
 
 export async function renderSettings(container) {
-    const { currentUser } = getState();
-    if (!currentUser) {
-        container.innerHTML = '<div class="loading-spinner">Inicia sesión para configurar</div>';
-        return;
-    }
+  const { currentUser } = getState();
+  if (!currentUser) {
+    container.innerHTML = '<div class="loading-spinner">Inicia sesión para configurar</div>';
+    return;
+  }
 
-    container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
+  container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
-    // Fetch current profile for keys
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('google_ai_key, fal_ai_key')
-        .eq('id', currentUser.id)
-        .single();
+  // Fetch masked keys via secure RPC (never returns the actual key)
+  let maskedKeys = { google_ai_key_masked: '', fal_ai_key_masked: '', google_ai_key_set: false, fal_ai_key_set: false };
+  try {
+    const { data, error } = await supabase.rpc('get_masked_api_keys');
+    if (error) throw error;
+    maskedKeys = data;
+  } catch (err) {
+    console.error('Error fetching masked keys:', err);
+  }
 
-    const googleKey = profile?.google_ai_key || '';
-    const falKey = profile?.fal_ai_key || '';
+  const googlePlaceholder = maskedKeys.google_ai_key_set ? maskedKeys.google_ai_key_masked : 'AIza...';
+  const falPlaceholder = maskedKeys.fal_ai_key_set ? maskedKeys.fal_ai_key_masked : 'fal-...';
 
-    const html = `<div class="animate-in">
+  const html = `<div class="animate-in">
     <div class="section-header">
       <div>
         <h2 class="section-title">${icon('cog', 22)} Configuración</h2>
@@ -33,25 +36,49 @@ export async function renderSettings(container) {
       <div class="card">
         <div class="card-header">
           <div class="card-title">${icon('key', 16)} API Keys</div>
-          <span class="badge badge-accent">Seguro</span>
+          <span class="badge badge-accent">${icon('lock', 12)} Encriptado</span>
         </div>
-        <p class="text-sm text-muted mb-md">Estas llaves se guardan en tu perfil y se usan para la generación de imágenes e IA.</p>
+        <p class="text-sm text-muted mb-md">Tus claves se guardan <strong>encriptadas</strong> en la base de datos. Nunca se exponen en texto plano.</p>
         
         <div class="form-group">
           <label class="form-label">Google AI Studio Key</label>
-          <div style="position:relative;">
-            <input type="password" class="form-input" id="google-key-input" placeholder="AIza..." value="${googleKey}" />
-            <button class="btn-toggle-pass" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-tertiary);">${icon('eye', 16)}</button>
-          </div>
-          <p class="text-xs text-muted mt-xs">Obtenla en <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-accent">Google AI Studio</a></p>
+          <input type="password" class="form-input" id="google-key-input" 
+            placeholder="${googlePlaceholder}" 
+            value=""
+            autocomplete="off"
+            spellcheck="false"
+            data-lpignore="true"
+            data-1p-ignore="true" />
+          <p class="text-xs text-muted mt-xs">
+            ${maskedKeys.google_ai_key_set
+      ? `${icon('check', 12)} Clave configurada — dejá el campo vacío para mantenerla, o ingresá una nueva para reemplazarla.`
+      : `Obtenla en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-accent">Google AI Studio</a>`}
+          </p>
         </div>
         
         <div class="form-group">
           <label class="form-label">Fal.AI Key (opcional)</label>
-          <input type="password" class="form-input" id="fal-key-input" placeholder="fal-..." value="${falKey}" />
+          <input type="password" class="form-input" id="fal-key-input" 
+            placeholder="${falPlaceholder}" 
+            value=""
+            autocomplete="off"
+            spellcheck="false"
+            data-lpignore="true"
+            data-1p-ignore="true" />
+          <p class="text-xs text-muted mt-xs">
+            ${maskedKeys.fal_ai_key_set
+      ? `${icon('check', 12)} Clave configurada — dejá el campo vacío para mantenerla, o ingresá una nueva para reemplazarla.`
+      : 'Opcional — para generación de imágenes avanzada'}
+          </p>
         </div>
         
+        <div id="save-keys-feedback" style="display:none;" class="mb-md"></div>
         <button class="btn btn-primary btn-sm mt-md" id="btn-save-keys">${icon('save', 14)} Guardar Keys</button>
+        
+        <div class="text-xs text-muted mt-md" style="padding:var(--space-sm);background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
+          ${icon('lock', 12)} <strong>Seguridad:</strong> Las claves se encriptan con AES-256 antes de almacenarse. 
+          Nunca se transmiten ni se muestran en texto plano después de guardarlas.
+        </div>
       </div>
       
       <div class="card">
@@ -77,45 +104,58 @@ export async function renderSettings(container) {
     </div>
   </div>`;
 
-    container.innerHTML = html;
+  container.innerHTML = html;
 
-    // Toggle password visibility
-    container.querySelectorAll('.btn-toggle-pass').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const input = btn.previousElementSibling;
-            const isPass = input.type === 'password';
-            input.type = isPass ? 'text' : 'password';
-            btn.innerHTML = isPass ? icon('eyeOff', 16) : icon('eye', 16);
-        });
-    });
+  // Save logic — uses secure RPC, never writes directly to the profiles table
+  document.getElementById('btn-save-keys')?.addEventListener('click', async () => {
+    const googleVal = document.getElementById('google-key-input').value.trim();
+    const falVal = document.getElementById('fal-key-input').value.trim();
+    const btn = document.getElementById('btn-save-keys');
+    const feedback = document.getElementById('save-keys-feedback');
 
-    // Save logic
-    document.getElementById('btn-save-keys')?.addEventListener('click', async () => {
-        const googleVal = document.getElementById('google-key-input').value;
-        const falVal = document.getElementById('fal-key-input').value;
-        const btn = document.getElementById('btn-save-keys');
+    // If both fields are empty, nothing to save
+    if (!googleVal && !falVal) {
+      feedback.style.display = 'block';
+      feedback.innerHTML = `<div class="text-xs" style="color:var(--warning);">${icon('alertTriangle', 12)} Ingresá al menos una clave para guardar.</div>`;
+      return;
+    }
 
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Guardando...`;
-        btn.disabled = true;
+    // Basic validation for Google AI key format
+    if (googleVal && !googleVal.startsWith('AIza')) {
+      feedback.style.display = 'block';
+      feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} La clave de Google AI debe comenzar con "AIza".</div>`;
+      return;
+    }
 
-        try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    google_ai_key: googleVal,
-                    fal_ai_key: falVal
-                })
-                .eq('id', currentUser.id);
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Encriptando y guardando...`;
+    btn.disabled = true;
+    feedback.style.display = 'none';
 
-            if (error) throw error;
+    try {
+      // Build params — only send keys that have values (empty = keep existing)
+      const params = {};
+      if (googleVal) params.p_google_ai_key = googleVal;
+      if (falVal) params.p_fal_ai_key = falVal;
 
-            alert('¡Configuración guardada correctamente!');
-        } catch (err) {
-            alert('Error al guardar: ' + err.message);
-        } finally {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
-        }
-    });
+      const { error } = await supabase.rpc('save_user_api_keys', params);
+      if (error) throw error;
+
+      // Clear the input fields after saving (don't keep keys in DOM)
+      document.getElementById('google-key-input').value = '';
+      document.getElementById('fal-key-input').value = '';
+
+      feedback.style.display = 'block';
+      feedback.innerHTML = `<div class="text-xs" style="color:var(--success);">${icon('check', 12)} Claves guardadas y encriptadas correctamente.</div>`;
+
+      // Refresh the view to show updated masked keys
+      setTimeout(() => renderSettings(container), 1500);
+    } catch (err) {
+      feedback.style.display = 'block';
+      feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} Error: ${err.message}</div>`;
+    } finally {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  });
 }

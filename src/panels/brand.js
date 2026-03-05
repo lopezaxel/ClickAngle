@@ -79,8 +79,8 @@ export async function renderBrand(container) {
               </div>
             `).join('')}
             ${faceList.length === 0 ? ['Sorpresa', 'Confianza', 'Señalando', 'Pensando'].map(label => `
-              <div class="card" style="text-align:center; padding: var(--space-md); opacity:0.5;">
-                <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-tertiary);border:1px solid var(--border);margin:0 auto var(--space-sm);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);">${icon('user', 20)}</div>
+              <div class="card empty-face-slot" data-suggested="${label}" style="text-align:center; padding: var(--space-md); opacity:0.6; cursor:pointer; border: 1px dashed var(--border);">
+                <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-tertiary);margin:0 auto var(--space-sm);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);">${icon('plus', 18)}</div>
                 <div class="text-xs font-bold">${label}</div>
               </div>
             `).join('') : ''}
@@ -145,25 +145,44 @@ export async function renderBrand(container) {
     </div>
   </div>`;
 
-  // Face Upload
+  // Face Vault Upload Logic
+  async function handleFaceUpload(file, suggestedName) {
+    try {
+      const expression = prompt('Nombre de la expresión (ej: Sorpresa, Confianza, Pensando):', suggestedName || 'Normal');
+      if (expression === null) return;
+
+      const zone = document.getElementById('face-upload-zone');
+      if (zone) {
+        zone.innerHTML = `<span class="animate-pulse">${icon('clock', 32)}</span><div class="mt-sm">Subiendo...</div>`;
+        zone.style.pointerEvents = 'none';
+      }
+
+      const url = await uploadToStorage('faces', file, activeChannelId);
+      await supabase.from('face_vault').insert({
+        channel_id: activeChannelId,
+        expression_type: expression || 'Normal',
+        image_url: url
+      });
+
+      renderBrand(container);
+    } catch (err) {
+      alert('Error al subir rostro: ' + err.message);
+      renderBrand(container);
+    }
+  }
+
   const faceUploadZone = document.getElementById('face-upload-zone');
   if (faceUploadZone) {
     faceUploadZone.addEventListener('click', () => {
-      const expression = prompt('Nombre de la expresión (ej: Sorpresa, Confianza, Pensando):');
-      if (!expression) return;
-      triggerFileInput('image/*', async (file) => {
-        try {
-          const url = await uploadToStorage('faces', file, activeChannelId);
-          await supabase.from('face_vault').insert({
-            channel_id: activeChannelId,
-            expression_type: expression,
-            image_url: url
-          });
-          renderBrand(container);
-        } catch (err) { alert('Error: ' + err.message); }
-      });
+      triggerFileInput('image/*', (file) => handleFaceUpload(file));
     });
   }
+
+  container.querySelectorAll('.empty-face-slot').forEach(slot => {
+    slot.addEventListener('click', () => {
+      triggerFileInput('image/*', (file) => handleFaceUpload(file, slot.dataset.suggested));
+    });
+  });
 
   // Delete faces
   container.querySelectorAll('.btn-delete-face').forEach(btn => {

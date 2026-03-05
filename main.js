@@ -30,7 +30,7 @@ registerRoute('editor', renderEditor);
 registerRoute('settings', renderSettings);
 
 // Initialize app
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
   const app = document.getElementById('app');
   const sidebar = document.getElementById('sidebar');
   const topbar = document.getElementById('topbar');
@@ -103,4 +103,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Set default route
   if (!window.location.hash) window.location.hash = '#dashboard';
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  // DOM is already loaded (common in Vite HMR environments)
+  initApp();
+}

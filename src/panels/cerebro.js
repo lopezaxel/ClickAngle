@@ -118,35 +118,63 @@ export async function renderCerebro(container) {
       } catch (err) { alert('Error: ' + err.message); }
     });
 
-    // Process ADN (logic connecting Phase 1 and 2)
+    // Process ADN using direct Browser call (Temporary Option B)
     document.getElementById('btn-process-script')?.addEventListener('click', async () => {
       if (!scriptText) { alert('Ingresa un guión primero'); return; }
 
       const btn = document.getElementById('btn-process-script');
-      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Analizando...`;
+      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Analizando con IA...`;
       btn.disabled = true;
 
       try {
-        const sentences = scriptText.split(/[.!?]+/).filter(s => s.trim());
-        const hook = sentences[0]?.trim() || 'No se pudo extraer el hook';
-
-        // Fetch Brand ADN to personalize recommendation
+        // 1. Fetch Brand ADN to personalize
         const { data: brandKit } = await supabase.from('brand_kits').select('channel_adn').eq('channel_id', activeChannelId).maybeSingle();
         const adn = brandKit?.channel_adn || {};
 
-        analysisResult = {
-          hook,
-          tension: sentences[Math.floor(sentences.length / 2)]?.trim() || 'Crea tensión mediante una pregunta o misterio.',
-          promise: sentences[sentences.length - 1]?.trim() || 'Resuelve el misterio al final.',
-          // System Prompt 2 Logic: Recommended Angles
-          recommended_angles: [
-            { id: 'ANG-001', name: 'Contraste Extremo', reason: `Ideal para tu nicho de ${adn.niche || 'contenido'} y el hook detectado.` },
-            { id: 'ANG-005', name: 'El Gran Error', reason: 'Detectamos un punto de tensión que encaja con el miedo al fracaso.' },
-            { id: 'ANG-012', name: 'Curiosidad Pura', reason: 'Tu audiencia responde bien a misterios visuales.' }
-          ]
-        };
+        // 2. Get the Decrypted API Key from the database
+        const { data: apiKey, error: keyError } = await supabase.rpc('get_decrypted_api_key', {
+          key_name: 'google_ai_key'
+        });
+
+        if (keyError || !apiKey) {
+          throw new Error("No se encontró tu Google API Key. Por favor configúrala en Settings.");
+        }
+
+        // 3. Call Google Gemini directly from the browser
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              role: "user",
+              parts: [{
+                text: `Eres un experto en ingeniería de CTR. 
+                Analiza el guión y extrae el ADN en JSON puro (sin markdown):
+                {
+                  "hook": "análisis del gancho",
+                  "tension": "análisis de tensión",
+                  "promise": "promesa del video",
+                  "recommended_angles": [{"name": "Nombre", "reason": "Motivo"}]
+                }
+                Contexto: ${JSON.stringify(adn)}\n\nGUIÓN:\n${scriptText}`
+              }]
+            }]
+          })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+
+        // 4. Parse and display result
+        const aiText = data.candidates[0].content.parts[0].text;
+        const cleanJson = aiText.replace(/```json|```/g, '').trim();
+        analysisResult = JSON.parse(cleanJson);
+
         render();
-      } catch (err) { alert('Error: ' + err.message); }
+      } catch (err) {
+        console.error(err);
+        alert('Error: ' + err.message);
+      }
       finally {
         btn.innerHTML = `${icon('dna', 16)} Procesar ADN`;
         btn.disabled = false;

@@ -26,7 +26,7 @@ export async function signOut() {
 export async function loadUserProfile(userId) {
     const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, email, full_name, avatar_url, subscription_tier, created_at')
         .eq('id', userId)
         .single();
     if (error) throw error;
@@ -121,15 +121,15 @@ export async function initAuth(onReady) {
         await loadUserData(session);
     } catch (err) {
         console.warn('Session recovery error:', err.message);
-        // If it's a lock/abort error, clear corrupted session and show login
+        // If it's a lock/abort error, clear corrupted session entirely
         if (err.message?.includes('Lock') || err.message?.includes('Abort') || err.name === 'AbortError') {
             console.warn('Clearing corrupted session...');
-            // Remove Supabase auth keys from localStorage
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith('sb-')) localStorage.removeItem(key);
             });
-            setState({ currentUser: null, session: null, channels: [], activeChannelId: null });
         }
+        // Always reset state on error so the app doesn't stay stuck on a black screen!
+        setState({ currentUser: null, session: null, channels: [], activeChannelId: null });
     }
     if (onReady) onReady();
 }
