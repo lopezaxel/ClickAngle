@@ -4,6 +4,7 @@ const state = {
     session: null,          // supabase auth session
     activeChannelId: null,  // currently selected channel UUID
     channels: [],           // user's channels list
+    apiKeyStatus: 'not_connected', // 'connected', 'not_connected', 'disconnected'
 };
 
 const listeners = new Set();

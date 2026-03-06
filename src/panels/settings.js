@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
+import { checkApiKey } from '../lib/intelligence.js';
 
 export async function renderSettings(container) {
   const { currentUser } = getState();
@@ -37,7 +38,12 @@ export async function renderSettings(container) {
       <div class="card">
         <div class="card-header">
           <div class="card-title">${icon('key', 16)} API Keys</div>
-          <span class="badge badge-accent">${icon('lock', 12)} Encriptado</span>
+          <div class="flex items-center gap-xs">
+            <span class="badge ${getState().apiKeyStatus === 'connected' ? 'badge-success' : (getState().apiKeyStatus === 'disconnected' ? 'badge-warning' : 'badge-danger')}">
+                ${getState().apiKeyStatus === 'connected' ? 'Conectada' : (getState().apiKeyStatus === 'disconnected' ? 'Desconectada' : 'No Vinculada')}
+            </span>
+            <span class="badge badge-accent">${icon('lock', 12)} Encriptado</span>
+          </div>
         </div>
         <p class="text-sm text-muted mb-md">Tus claves se guardan <strong>encriptadas</strong> en la base de datos. Nunca se exponen en texto plano.</p>
         
@@ -107,56 +113,54 @@ export async function renderSettings(container) {
 
   container.innerHTML = html;
 
-  // Save logic — uses secure RPC, never writes directly to the profiles table
-  document.getElementById('btn-save-keys')?.addEventListener('click', async () => {
-    const googleVal = document.getElementById('google-key-input').value.trim();
-    const falVal = document.getElementById('fal-key-input').value.trim();
-    const btn = document.getElementById('btn-save-keys');
-    const feedback = document.getElementById('save-keys-feedback');
+  const btn = document.getElementById('btn-save-keys');
+  if (btn) {
+    btn.onclick = async () => {
+      const googleVal = document.getElementById('google-key-input').value.trim();
+      const falVal = document.getElementById('fal-key-input').value.trim();
+      const feedback = document.getElementById('save-keys-feedback');
 
-    // If both fields are empty, nothing to save
-    if (!googleVal && !falVal) {
-      feedback.style.display = 'block';
-      feedback.innerHTML = `<div class="text-xs" style="color:var(--warning);">${icon('alertTriangle', 12)} Ingresá al menos una clave para guardar.</div>`;
-      return;
-    }
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Encriptando y guardando...`;
+      btn.disabled = true;
+      feedback.style.display = 'none';
 
-    // Basic validation for Google AI key format
-    if (googleVal && !googleVal.startsWith('AIza')) {
-      feedback.style.display = 'block';
-      feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} La clave de Google AI debe comenzar con "AIza".</div>`;
-      return;
-    }
+      try {
+        const params = {};
+        if (googleVal) params.p_google_ai_key = googleVal;
+        if (falVal) params.p_fal_ai_key = falVal;
 
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Encriptando y guardando...`;
-    btn.disabled = true;
-    feedback.style.display = 'none';
+        const { error } = await supabase.rpc('save_user_api_keys', params);
+        if (error) throw error;
 
-    try {
-      // Build params — only send keys that have values (empty = keep existing)
-      const params = {};
-      if (googleVal) params.p_google_ai_key = googleVal;
-      if (falVal) params.p_fal_ai_key = falVal;
+        // Clear the input fields after saving
+        const googleInput = document.getElementById('google-key-input');
+        if (googleInput) googleInput.value = '';
 
-      const { error } = await supabase.rpc('save_user_api_keys', params);
-      if (error) throw error;
+        const falInput = document.getElementById('fal-key-input');
+        if (falInput) falInput.value = '';
 
-      // Clear the input fields after saving (don't keep keys in DOM)
-      document.getElementById('google-key-input').value = '';
-      document.getElementById('fal-key-input').value = '';
+        if (feedback) {
+          feedback.style.display = 'block';
+          feedback.innerHTML = `<div class="text-xs" style="color:var(--success);">${icon('check', 12)} Claves guardadas. Validando conexión...</div>`;
+        }
 
-      feedback.style.display = 'block';
-      feedback.innerHTML = `<div class="text-xs" style="color:var(--success);">${icon('check', 12)} Claves guardadas y encriptadas correctamente.</div>`;
+        if (btn) {
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+        }
 
-      // Refresh the view to show updated masked keys
-      setTimeout(() => renderSettings(container), 1500);
-    } catch (err) {
-      feedback.style.display = 'block';
-      feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} Error: ${err.message}</div>`;
-    } finally {
-      btn.innerHTML = originalHtml;
-      btn.disabled = false;
-    }
-  });
+        // Re-verify key status. This will trigger a global state update and a re-render.
+        // We do not await it here so we don't throw errors if elements vanish during its execution.
+        checkApiKey();
+
+      } catch (err) {
+        console.error('Save keys error:', err);
+        feedback.style.display = 'block';
+        feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} Error: ${err.message}</div>`;
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+      }
+    };
+  }
 }

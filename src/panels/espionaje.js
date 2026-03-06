@@ -18,13 +18,22 @@ function triggerFileInput(accept, callback) {
 }
 
 async function uploadToStorage(file, channelId) {
-  const ext = file.name.split('.').pop();
-  const fileName = `${channelId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('references').upload(fileName, file);
-  if (error) throw error;
-  const { data: urlData } = supabase.storage.from('references').getPublicUrl(fileName);
-  return urlData.publicUrl;
+  try {
+    const ext = file.name.split('.').pop();
+    const fileName = `${channelId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('references').upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+    if (error) throw error;
+    const { data: urlData } = supabase.storage.from('references').getPublicUrl(fileName);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error('Espionage Storage Error:', err);
+    throw new Error('Error al subir miniatura: ' + err.message);
+  }
 }
+
 
 export async function renderEspionaje(container) {
   const { activeChannelId } = getState();
@@ -87,7 +96,11 @@ export async function renderEspionaje(container) {
   async function handleUpload(file) {
     const title = prompt('Nombre/Canal de la referencia:', file.name.replace(/\.[^.]+$/, ''));
     if (!title) return;
+    const btn = document.getElementById('btn-upload-ref');
+    const originalHtml = btn.innerHTML;
     try {
+      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Subiendo...`;
+      btn.disabled = true;
       const url = await uploadToStorage(file, activeChannelId);
       await supabase.from('visual_references').insert({
         channel_id: activeChannelId,
@@ -97,7 +110,11 @@ export async function renderEspionaje(container) {
       });
       renderEspionaje(container);
     } catch (err) { alert('Error: ' + err.message); }
+    finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+    }
   }
+
 
   const dz = document.getElementById('ref-drop-zone');
   if (dz) {

@@ -107,29 +107,69 @@ async function loadUserData(session) {
 }
 
 export async function initAuth(onReady) {
-    // Listen for future auth changes
+    let resolved = false;
+    const finish = () => {
+        if (!resolved && onReady) {
+            resolved = true;
+            onReady();
+        }
+    };
+
+    // Listen for future auth changes (login/logout/refresh)
     supabase.auth.onAuthStateChange(async (event, session) => {
-        await loadUserData(session);
-        if (onReady) { onReady(); onReady = null; }
+        // If we get an event, we definitely want to load data
+        try {
+            await loadUserData(session);
+        } catch (e) {
+            console.error('Auth change data load error:', e);
+        }
+        finish();
     });
 
-    // Also do an initial session check as a fallback
-    // (onAuthStateChange may not fire on corrupted sessions)
+    // Strategy: Try to get session, but don't wait forever.
+    // Some browser storage locks or network issues can make getSession() hang indefinitely.
     try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Auth Timeout')), 3000)
+        );
+
+        // Race the session check against a 3s timeout
+        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
+
         if (error) throw error;
-        await loadUserData(session);
+        if (session) {
+            await loadUserData(session);
+        } else {
+            // No session, just reset state
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null });
+        }
     } catch (err) {
-        console.warn('Session recovery error:', err.message);
-        // If it's a lock/abort error, clear corrupted session entirely
-        if (err.message?.includes('Lock') || err.message?.includes('Abort') || err.name === 'AbortError') {
-            console.warn('Clearing corrupted session...');
+        console.warn('Session init error or timeout:', err.message);
+
+        // If it's a known "stuck" error or a timeout, clean house
+        if (err.message?.includes('Lock') ||
+            err.message?.includes('Abort') ||
+            err.message?.includes('Timeout') ||
+            err.message?.includes('Refresh Token')) {
+
+            console.warn('Clearing potentially corrupted auth state...');
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith('sb-')) localStorage.removeItem(key);
             });
+
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null });
+
+            // If it was a persistent lock, a reload might be the only cure
+            if (!err.message.includes('Timeout')) {
+                setTimeout(() => window.location.reload(), 1000);
+            }
+        } else {
+            // General error (e.g. network), just ensure UI is unblocked
+            setState({ session: null, currentUser: null });
         }
-        // Always reset state on error so the app doesn't stay stuck on a black screen!
-        setState({ currentUser: null, session: null, channels: [], activeChannelId: null });
+    } finally {
+        // UNBLOCK THE UI - This calls initRouter in main.js
+        finish();
     }
-    if (onReady) onReady();
 }

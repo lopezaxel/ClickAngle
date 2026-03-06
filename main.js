@@ -16,6 +16,7 @@ import { renderEmptyState } from './src/panels/emptyState.js';
 import { initAuth } from './src/lib/auth.js';
 import { getState, subscribe } from './src/lib/state.js';
 import { icon } from './src/icons.js';
+import { checkApiKey } from './src/lib/intelligence.js';
 
 // Register all panel routes
 registerRoute('dashboard', renderDashboard);
@@ -59,8 +60,12 @@ function initApp() {
 
     // Only re-bind shared components if they are empty
     if (!sidebar.innerHTML) renderSidebar(sidebar);
-    if (!topbar.innerHTML) renderSearchbar(topbar);
+    if (!topbar.innerHTML) {
+      renderSearchbar(topbar);
+      checkApiKey(); // Verify API key when topbar is first rendered
+    }
     if (!workflowBar.innerHTML) renderWorkflow(workflowBar);
+
 
     if (!channels || channels.length === 0 || !activeChannelId) {
       // No channels — show empty state

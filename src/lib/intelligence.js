@@ -31,8 +31,73 @@ Responde SIEMPRE en formato JSON puro.`,
     ESPIONAGE_ANALYSIS: `Eres un analista de competencia especializado en YouTube.
 Analiza miniaturas de referencia de otros creadores para decodificar por qué funcionan.
 Identifica patrones visuales, psicología del color y estructuras de composición que el usuario debería replicar.
-Responde SIEMPRE en formato JSON puro.`
+Responde SIEMPRE en formato JSON puro.`,
+
+    IMAGE_GEN: `Eres un experto en generación de prompts para miniaturas de YouTube. 
+Tu objetivo es crear una descripción visual altamente detallada que sea optimizada para modelos de generación de imagen.
+Enfócate en: Composición, Iluminación Cinematográfica, Expresiones de alto impacto y Estilo "Clickbait" Profesional.`
 };
+
+const MODEL_MAPPING = {
+    CHANNEL_ADN: 'gemini-1.5-flash-latest',
+    BRANDING_ANALYSIS: 'gemini-1.5-flash-latest',
+    SCRIPT_ANALYSIS: 'gemini-1.5-pro-latest', // High context for scripts
+    ESPIONAGE_ANALYSIS: 'gemini-1.5-flash-latest',
+    IMAGE_GEN: 'gemini-2.0-flash', // Still valid
+};
+
+import { setState } from './state.js';
+
+export async function checkApiKey() {
+    try {
+        const { data: apiKeyData, error: rpcError } = await supabase.rpc('get_decrypted_api_key', {
+            key_name: 'google_ai_key'
+        });
+
+        if (rpcError) {
+            console.error('RPC Error fetching key:', rpcError);
+            if (rpcError.message?.includes('Refresh Token')) {
+                // If token is invalid, we can't do anything until relogin
+                setState({ apiKeyStatus: 'not_connected' });
+                return false;
+            }
+        }
+
+        if (!apiKeyData) {
+            setState({ apiKeyStatus: 'not_connected' });
+            return false;
+        }
+
+        const cleanKey = apiKeyData.trim();
+
+        // Quick test call to verify key - using v1 and gemini-1.5-flash:generateContent
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${cleanKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }] })
+        });
+
+        if (response.ok) {
+            setState({ apiKeyStatus: 'connected' });
+            return true;
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            console.error('Google API Error Validation:', errData);
+
+            // If it's a 404, maybe the model name is still wrong? Try fallback
+            if (response.status === 404) {
+                console.warn('404 on gemini-1.5-flash, key might be restricted or project not configured.');
+            }
+
+            setState({ apiKeyStatus: 'disconnected' });
+            return false;
+        }
+    } catch (err) {
+        console.error('Error verificando API key:', err);
+        setState({ apiKeyStatus: 'disconnected' });
+        return false;
+    }
+}
 
 export async function callAI(promptType, userContent, context = {}) {
     try {
@@ -41,13 +106,15 @@ export async function callAI(promptType, userContent, context = {}) {
         });
 
         if (keyError || !apiKeyData) {
+            setState({ apiKeyStatus: 'not_connected' });
             throw new Error("API Key de Google no configurada en Settings.");
         }
 
         const systemPrompt = SYSTEM_PROMPTS[promptType];
+        const model = MODEL_MAPPING[promptType] || 'gemini-1.5-flash';
         const fullPrompt = `${systemPrompt}\n\nCONTEXTO: ${JSON.stringify(context)}\n\nCONTENIDO A ANALIZAR:\n${userContent}`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeyData}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeyData}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -59,7 +126,16 @@ export async function callAI(promptType, userContent, context = {}) {
         });
 
         const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
+
+        if (data.error) {
+            if (data.error.code === 401 || data.error.status === 'UNAUTHENTICATED') {
+                setState({ apiKeyStatus: 'disconnected' });
+            }
+            throw new Error(data.error.message);
+        }
+
+        // Successfully called
+        setState({ apiKeyStatus: 'connected' });
 
         const aiText = data.candidates[0].content.parts[0].text;
         const cleanJson = aiText.replace(/```json|```/g, '').trim();
@@ -69,3 +145,4 @@ export async function callAI(promptType, userContent, context = {}) {
         throw err;
     }
 }
+

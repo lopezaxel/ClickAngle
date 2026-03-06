@@ -18,13 +18,22 @@ function triggerFileInput(accept, callback) {
 }
 
 async function uploadToStorage(bucket, file, channelId) {
-  const ext = file.name.split('.').pop();
-  const fileName = `${channelId}/${Date.now()}.${ext}`;
-  const { data, error } = await supabase.storage.from(bucket).upload(fileName, file);
-  if (error) throw error;
-  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
-  return urlData.publicUrl;
+  try {
+    const ext = file.name.split('.').pop();
+    const fileName = `${channelId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from(bucket).upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+    if (error) throw error;
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error('Storage Upload Error:', err);
+    throw new Error('Error al subir a almacenamiento: ' + err.message);
+  }
 }
+
 
 export async function renderBrand(container) {
   const { activeChannelId } = getState();
@@ -196,7 +205,11 @@ export async function renderBrand(container) {
   // Creator Thumbnail Upload
   document.getElementById('btn-upload-creator-thumb')?.addEventListener('click', () => {
     triggerFileInput('image/*', async (file) => {
+      const btn = document.getElementById('btn-upload-creator-thumb');
+      const originalHtml = btn.innerHTML;
       try {
+        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 12)}</span>`;
+        btn.style.opacity = '1';
         const url = await uploadToStorage('references', file, activeChannelId);
         await supabase.from('creator_thumbnails').insert({
           channel_id: activeChannelId,
@@ -204,15 +217,24 @@ export async function renderBrand(container) {
         });
         renderBrand(container);
       } catch (err) { alert('Error: ' + err.message); }
+      finally {
+        if (btn) { btn.innerHTML = originalHtml; btn.style.opacity = '0.6'; }
+      }
     });
   });
 
+
   // Face Upload
-  const uploadFace = (file, suggested) => {
+  const uploadFace = (suggested) => {
     triggerFileInput('image/*', async (file) => {
       try {
         const expression = prompt('Tipo de expresión:', suggested || 'Normal');
         if (expression === null) return;
+        const btn = document.getElementById('btn-upload-face');
+        const orig = btn.innerHTML;
+        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Subiendo...`;
+        btn.disabled = true;
+
         const url = await uploadToStorage('faces', file, activeChannelId);
         await supabase.from('face_vault').insert({
           channel_id: activeChannelId,
@@ -221,13 +243,18 @@ export async function renderBrand(container) {
         });
         renderBrand(container);
       } catch (err) { alert('Error: ' + err.message); }
+      finally {
+        const btn = document.getElementById('btn-upload-face');
+        if (btn) { btn.disabled = false; btn.innerHTML = icon('upload', 14) + ' Subir Rostro'; }
+      }
     });
   }
 
-  document.getElementById('btn-upload-face')?.addEventListener('click', uploadFace);
+  document.getElementById('btn-upload-face')?.addEventListener('click', () => uploadFace());
   container.querySelectorAll('.empty-face-slot').forEach(slot => {
-    slot.addEventListener('click', () => uploadFace(null, slot.dataset.suggested));
+    slot.addEventListener('click', () => uploadFace(slot.dataset.suggested));
   });
+
 
   // Deletions
   container.querySelectorAll('.btn-delete-face').forEach(btn => {

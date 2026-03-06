@@ -24,16 +24,21 @@ export async function renderCerebro(container) {
         <div class="card mb-md">
           <div class="card-header">
             <div class="card-title">${icon('upload', 16)} Subir Guión</div>
-            <span class="badge badge-neutral">Soporta .txt, .md</span>
+            <span class="badge badge-neutral">Soporta .txt, .md, .pdf</span>
           </div>
           <div class="upload-zone" id="script-drop-zone">
             <div class="upload-zone-icon" style="font-size:20px;opacity:0.4;">${icon('file', 40)}</div>
             <div class="upload-zone-text">Arrastra tu guión o haz clic</div>
-            <div class="upload-zone-hint">Máx. 50KB. También puedes pegar el texto abajo.</div>
+            <div class="upload-zone-hint">Soporta Guiones en PDF, TXT o MD.</div>
           </div>
         </div>
         <div class="card">
           <div class="card-header"><div class="card-title">Cajón de Texto Estratégico</div></div>
+          <div id="pdf-loading" style="display:none; padding:var(--space-sm); background:var(--bg-tertiary); border-radius:var(--radius-sm); border:1px solid var(--accent); margin-bottom:var(--space-sm);">
+            <div class="flex items-center gap-sm text-xs animate-pulse">
+                ${icon('clock', 12)} Extrayendo texto del PDF...
+            </div>
+          </div>
           <textarea class="form-textarea" id="script-input" placeholder="Pega aquí el guión completo del video..." style="min-height:250px; font-size:13px; line-height:1.5;">${scriptText}</textarea>
           <div class="flex justify-between items-center mt-md">
             <span class="text-xs text-muted" id="char-count">${scriptText.length} caracteres</span>
@@ -41,6 +46,7 @@ export async function renderCerebro(container) {
               <button class="btn btn-primary" id="btn-process-script">${icon('dna', 16)} Procesar ADN del Video</button>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -91,28 +97,76 @@ export async function renderCerebro(container) {
     const si = document.getElementById('script-input');
     const cc = document.getElementById('char-count');
 
+    async function extractTextFromFile(file) {
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        document.getElementById('pdf-loading').style.display = 'block';
+        try {
+          // Ensure PDF.js is loaded
+          if (!window.pdfjsLib) {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+          }
+
+          const reader = new FileReader();
+          const buffer = await new Promise((resolve) => {
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsArrayBuffer(file);
+          });
+
+          const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+          let text = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map(item => item.str).join(' ') + '\n';
+          }
+          return text;
+        } catch (err) {
+          console.error('PDF Error:', err);
+          return `Error al leer PDF: ${err.message}. Por favor intenta copiar el texto manualmente.`;
+        } finally {
+          document.getElementById('pdf-loading').style.display = 'none';
+        }
+      } else {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsText(file);
+        });
+      }
+    }
+
     if (dz) {
       dz.addEventListener('click', () => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.txt,.md';
-        input.onchange = (e) => {
+        input.accept = '.txt,.md,.pdf';
+        input.onchange = async (e) => {
           const f = e.target.files[0];
           if (f) {
-            const r = new FileReader();
-            r.onload = ev => { scriptText = ev.target.result; render(); };
-            r.readAsText(f);
+            scriptText = await extractTextFromFile(f);
+            render();
           }
         };
         input.click();
       });
       ['dragenter', 'dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('drag-over'); }));
       ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('drag-over'); }));
-      dz.addEventListener('drop', e => {
+      dz.addEventListener('drop', async e => {
         const f = e.dataTransfer.files[0];
-        if (f) { const r = new FileReader(); r.onload = ev => { scriptText = ev.target.result; render(); }; r.readAsText(f); }
+        if (f) {
+          scriptText = await extractTextFromFile(f);
+          render();
+        }
       });
     }
+
 
     if (si) si.addEventListener('input', () => { scriptText = si.value; cc.textContent = si.value.length + ' caracteres'; });
 
