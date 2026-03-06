@@ -1,5 +1,7 @@
 import { icon } from '../icons.js';
 
+let searchListenerAdded = false;
+
 export function renderSearchbar(container) {
   container.innerHTML = `
     <div class="search-container">
@@ -16,10 +18,13 @@ export function renderSearchbar(container) {
     </div>
   `;
 
-  document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      document.getElementById('global-search')?.focus();
-    }
-  });
+  if (!searchListenerAdded) {
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('global-search')?.focus();
+      }
+    });
+    searchListenerAdded = true;
+  }
 }

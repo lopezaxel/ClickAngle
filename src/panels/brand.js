@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
+import { callAI } from '../lib/intelligence.js';
 
 function triggerFileInput(accept, callback) {
   const input = document.createElement('input');
@@ -45,29 +46,64 @@ export async function renderBrand(container) {
     .eq('channel_id', activeChannelId)
     .order('created_at', { ascending: true });
 
+  // Fetch creator thumbnails
+  const { data: creatorThumbs } = await supabase
+    .from('creator_thumbnails')
+    .select('*')
+    .eq('channel_id', activeChannelId)
+    .order('created_at', { ascending: false });
+
   const faceList = faces || [];
+  const thumbList = creatorThumbs || [];
   const colors = brandKit?.colors || ['#DC2626', '#10B981', '#F5F5F5', '#6B7280', '#3B82F6', '#F59E0B'];
+  const adn = brandKit?.detailed_adn || brandKit?.channel_adn || null;
 
   container.innerHTML = `<div class="animate-in">
     <div class="section-header">
       <div>
-        <h2 class="section-title">${icon('palette', 22)} Identidad Visual</h2>
-        <p class="section-subtitle">Define tu marca para consistencia en todas las miniaturas</p>
+        <h2 class="section-title">${icon('palette', 22)} Identidad de Marca</h2>
+        <p class="section-subtitle">Define el ADN de tu canal y tus mejores miniaturas</p>
       </div>
       <div class="flex gap-sm">
-        <button class="btn btn-secondary btn-sm" id="btn-analyze-adn">${icon('brain', 14)} Analizar ADN</button>
-        <button class="btn btn-primary btn-sm" id="btn-save-brand">${icon('save', 14)} Guardar Cambios</button>
+        <button class="btn btn-secondary btn-sm" id="btn-analyze-adn">${icon('brain', 14)} Analizar ADN Detallado</button>
+        <button class="btn btn-primary btn-sm" id="btn-save-brand">${icon('save', 14)} Guardar Configuración</button>
       </div>
     </div>
 
     <div class="grid-2" style="grid-template-columns: 1fr 1fr;">
       <div>
+        <!-- ADN DEL CANAL -->
+        <div class="card mb-md">
+          <div class="card-header">
+            <div class="card-title">${icon('dna', 16)} ADN del Canal</div>
+            <span class="badge ${adn ? 'badge-accent' : 'badge-neutral'}">${adn ? 'Analizado' : 'Pendiente'}</span>
+          </div>
+          ${adn ? `
+            <div class="adn-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-sm); margin-top:var(--space-sm);">
+               <div class="card p-sm bg-tertiary">
+                 <div class="text-xs font-bold text-accent">Branding</div>
+                 <div class="text-xs text-muted">${adn.branding || 'N/A'}</div>
+               </div>
+               <div class="card p-sm bg-tertiary">
+                 <div class="text-xs font-bold text-accent">Tono</div>
+                 <div class="text-xs text-muted">${adn.tone || adn.tone_of_voice || 'N/A'}</div>
+               </div>
+               <div class="card p-sm bg-tertiary" style="grid-column: span 2;">
+                 <div class="text-xs font-bold text-accent">Temas/Nichos</div>
+                 <div class="text-xs text-muted">${adn.themes || adn.niche || 'N/A'}</div>
+               </div>
+            </div>
+          ` : `
+            <p class="text-sm text-muted p-md text-center">Analiza tu canal para definir su tono y estilo visual</p>
+          `}
+        </div>
+
+        <!-- FACE VAULT -->
         <div class="card mb-md">
           <div class="card-header">
             <div class="card-title">${icon('camera', 16)} Face Vault</div>
-            <span class="badge badge-accent">${faceList.length} Expresiones</span>
+            <span class="badge badge-accent">${faceList.length} Fotos</span>
           </div>
-          <p class="text-sm text-muted mb-md">Sube fotos con diferentes expresiones. La IA seleccionará la mejor según el ángulo elegido.</p>
           <div class="grid-4 mb-md" style="grid-template-columns: repeat(4, 1fr);">
             ${faceList.map(f => `
               <div class="card face-slot" data-face-id="${f.id}" style="text-align:center; padding: var(--space-md); cursor:pointer; position:relative;">
@@ -78,187 +114,140 @@ export async function renderBrand(container) {
                 <div class="text-xs font-bold">${f.expression_type}</div>
               </div>
             `).join('')}
-            ${faceList.length === 0 ? ['Sorpresa', 'Confianza', 'Señalando', 'Pensando'].map(label => `
+            ${faceList.length < 4 ? ['Sorpresa', 'Señalando'].map(label => `
               <div class="card empty-face-slot" data-suggested="${label}" style="text-align:center; padding: var(--space-md); opacity:0.6; cursor:pointer; border: 1px dashed var(--border);">
                 <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-tertiary);margin:0 auto var(--space-sm);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);">${icon('plus', 18)}</div>
                 <div class="text-xs font-bold">${label}</div>
               </div>
             `).join('') : ''}
           </div>
-          <div class="upload-zone" id="face-upload-zone" style="padding: var(--space-lg); cursor:pointer;">
-            <div style="opacity:0.4;margin-bottom:var(--space-sm);">${icon('upload', 32)}</div>
-            <div class="upload-zone-text">Subir nueva expresión</div>
-            <div class="upload-zone-hint">PNG, JPG — Fondo transparente recomendado</div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">${icon('image', 16)} Logo del Canal</div></div>
-          <div class="flex items-center gap-lg">
-            <div id="logo-preview" style="width:80px; height:80px; border-radius: var(--radius-lg); ${brandKit?.logo_url ? '' : 'background: linear-gradient(135deg, var(--accent), var(--accent-dark));'} display:flex; align-items:center; justify-content:center; color:white; box-shadow: 0 0 30px var(--accent-glow); overflow:hidden;">
-              ${brandKit?.logo_url
-      ? `<img src="${brandKit.logo_url}" alt="Logo" style="width:100%;height:100%;object-fit:cover;" />`
-      : icon('crosshair', 32)}
-            </div>
-            <div>
-              <div style="font-size:14px; font-weight:600; margin-bottom:4px;">${brandKit?.logo_url ? 'Logo personalizado' : 'Sin logo'}</div>
-              <div class="text-xs text-muted mb-sm">512x512px recomendado</div>
-              <button class="btn btn-secondary btn-sm" id="btn-change-logo">${icon('upload', 14)} ${brandKit?.logo_url ? 'Cambiar' : 'Subir'} Logo</button>
-            </div>
-          </div>
+          <button class="btn btn-secondary btn-sm w-full" id="btn-upload-face">${icon('upload', 14)} Subir Rostro</button>
         </div>
       </div>
 
       <div>
+        <!-- CREATOR THUMBNAILS (NUEVO SECTOR) -->
         <div class="card mb-md">
           <div class="card-header">
-            <div class="card-title">${icon('palette', 16)} Paleta de Colores</div>
-            <span class="badge badge-success">Máx. Contraste</span>
+            <div class="card-title">${icon('image', 16)} Mis Mejores Miniaturas</div>
+            <span class="badge badge-success">${thumbList.length} Éxitos</span>
           </div>
-          <p class="text-sm text-muted mb-md">Colores optimizados para máximo contraste en miniaturas.</p>
-          <div class="flex gap-md mb-lg" style="flex-wrap:wrap;">
-            ${colors.map(c => `
-              <div style="text-align:center;">
-                <div class="color-swatch" style="background: ${c}; width:56px; height:56px;"></div>
-                <div class="text-xs text-muted mt-sm font-mono">${c}</div>
-              </div>
+          <p class="text-xs text-muted mb-sm">Sube tus miniaturas con mejor CTR para que la IA aprenda tu estilo.</p>
+          <div class="grid-3 mb-md" style="grid-template-columns: repeat(3, 1fr);">
+            ${thumbList.map(t => `
+               <div class="card p-0 overflow-hidden relative group" style="aspect-ratio:16/9;">
+                 <img src="${t.image_url}" style="width:100%;height:100%;object-fit:cover;" />
+                 <button class="btn-delete-thumb" data-thumb-id="${t.id}" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;">${icon('x', 12)}</button>
+               </div>
             `).join('')}
+            ${thumbList.length < 6 ? `
+              <div class="card empty-thumb-slot flex items-center justify-center border-dashed" id="btn-upload-creator-thumb" style="aspect-ratio:16/9; cursor:pointer; opacity:0.6;">
+                ${icon('plus', 24)}
+              </div>
+            ` : ''}
           </div>
         </div>
+
         <div class="card">
-          <div class="card-header"><div class="card-title">${icon('type', 16)} Tipografía</div></div>
-          <div class="form-group">
-            <label class="form-label">Fuente de Interfaz</label>
-            <div class="card" style="padding: var(--space-md); background: var(--bg-tertiary);">
-              <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 700; margin-bottom: var(--space-xs);">${brandKit?.font_interface || 'Inter'} — Font Principal</div>
-              <div style="font-family: var(--font-sans); font-size: 14px; color: var(--text-secondary);">ABCDEFGHIJKLMabcdefghijklm 0123456789</div>
-            </div>
+          <div class="card-header"><div class="card-title">${icon('palette', 16)} Colores y Fuentes</div></div>
+          <div class="flex gap-sm mb-md">
+            ${colors.map(c => `
+              <div class="color-swatch" style="background: ${c}; width:32px; height:32px; border-radius:4px;"></div>
+            `).join('')}
           </div>
-          <div class="form-group">
-            <label class="form-label">Fuente de Miniaturas</label>
-            <div class="card" style="padding: var(--space-md); background: var(--bg-tertiary);">
-              <div style="font-family: var(--font-impact); font-size: 28px; letter-spacing: 2px; margin-bottom: var(--space-xs); color: var(--accent-light);">${brandKit?.font_thumbnails || 'BANGERS'} — THUMBNAILS</div>
-              <div style="font-family: var(--font-impact); font-size: 16px; color: var(--text-secondary); letter-spacing: 1px;">ABCDEFGHIJKLM 0123456789</div>
-            </div>
+          <div class="form-group mb-sm">
+            <label class="text-xs font-bold">Fuente Miniaturas</label>
+            <div class="p-sm bg-tertiary rounded mt-xs" style="font-family: var(--font-impact); font-size:18px;">${brandKit?.font_thumbnails || 'BANGERS'}</div>
           </div>
         </div>
       </div>
     </div>
   </div>`;
 
-  // Face Vault Upload Logic
-  async function handleFaceUpload(file, suggestedName) {
-    try {
-      const expression = prompt('Nombre de la expresión (ej: Sorpresa, Confianza, Pensando):', suggestedName || 'Normal');
-      if (expression === null) return;
+  // --- Handlers ---
 
-      const zone = document.getElementById('face-upload-zone');
-      if (zone) {
-        zone.innerHTML = `<span class="animate-pulse">${icon('clock', 32)}</span><div class="mt-sm">Subiendo...</div>`;
-        zone.style.pointerEvents = 'none';
-      }
-
-      const url = await uploadToStorage('faces', file, activeChannelId);
-      await supabase.from('face_vault').insert({
-        channel_id: activeChannelId,
-        expression_type: expression || 'Normal',
-        image_url: url
-      });
-
-      renderBrand(container);
-    } catch (err) {
-      alert('Error al subir rostro: ' + err.message);
-      renderBrand(container);
-    }
-  }
-
-  const faceUploadZone = document.getElementById('face-upload-zone');
-  if (faceUploadZone) {
-    faceUploadZone.addEventListener('click', () => {
-      triggerFileInput('image/*', (file) => handleFaceUpload(file));
-    });
-  }
-
-  container.querySelectorAll('.empty-face-slot').forEach(slot => {
-    slot.addEventListener('click', () => {
-      triggerFileInput('image/*', (file) => handleFaceUpload(file, slot.dataset.suggested));
-    });
-  });
-
-  // Delete faces
-  container.querySelectorAll('.btn-delete-face').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!confirm('¿Eliminar esta expresión?')) return;
-      await supabase.from('face_vault').delete().eq('id', btn.dataset.faceId);
-      renderBrand(container);
-    });
-  });
-
-  // Logo Upload
-  document.getElementById('btn-change-logo')?.addEventListener('click', () => {
-    triggerFileInput('image/*', async (file) => {
-      try {
-        const url = await uploadToStorage('logos', file, activeChannelId);
-        await supabase.from('brand_kits').upsert({
-          channel_id: activeChannelId,
-          logo_url: url,
-          primary_color: brandKit?.primary_color || '#DC2626',
-          secondary_color: brandKit?.secondary_color || '#10B981',
-        }, { onConflict: 'channel_id' });
-        renderBrand(container);
-      } catch (err) { alert('Error: ' + err.message); }
-    });
-  });
-
-  // Analyze ADN
+  // ADN Analysis
   document.getElementById('btn-analyze-adn')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-analyze-adn');
     const originalHtml = btn.innerHTML;
-    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Analizando...`;
-    btn.disabled = true;
-
     try {
-      // Fetch channel info
-      const { data: channel } = await supabase.from('channels').select('*').eq('id', activeChannelId).single();
+      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Analizando...`;
+      btn.disabled = true;
 
-      // MOCK IA ANALYSIS (This would be a call to an Edge Function or AI API)
-      // System Prompt 1 logic
-      const mockAdn = {
-        niche: channel.niche || 'Tech/IA',
-        tone: 'Agresivo, Directo, High-Energy',
-        visual_style: 'Dark Mode, Neones, Tipografía Impact',
-        target_audience: 'Aspirantes a creadores y entusiastas de IA',
-        psychology: 'Curiosidad extrema y miedo a quedarse atrás (FOMO)'
-      };
+      const { data: channel } = await supabase.from('channels').select('*').eq('id', activeChannelId).single();
+      const content = `Canal: ${channel.name}\nDescripción: ${channel.description}\nNicho: ${channel.niche}`;
+
+      const analysis = await callAI('CHANNEL_ADN', content);
 
       await supabase.from('brand_kits').upsert({
         channel_id: activeChannelId,
-        channel_adn: mockAdn
+        detailed_adn: analysis
       }, { onConflict: 'channel_id' });
 
-      alert('¡ADN del canal analizado y guardado!');
       renderBrand(container);
     } catch (err) {
-      alert('Error en el análisis: ' + err.message);
+      alert('Error en el análisis de ADN: ' + err.message);
     } finally {
       btn.innerHTML = originalHtml;
       btn.disabled = false;
     }
   });
 
-  // Save brand
+  // Creator Thumbnail Upload
+  document.getElementById('btn-upload-creator-thumb')?.addEventListener('click', () => {
+    triggerFileInput('image/*', async (file) => {
+      try {
+        const url = await uploadToStorage('references', file, activeChannelId);
+        await supabase.from('creator_thumbnails').insert({
+          channel_id: activeChannelId,
+          image_url: url
+        });
+        renderBrand(container);
+      } catch (err) { alert('Error: ' + err.message); }
+    });
+  });
+
+  // Face Upload
+  const uploadFace = (file, suggested) => {
+    triggerFileInput('image/*', async (file) => {
+      try {
+        const expression = prompt('Tipo de expresión:', suggested || 'Normal');
+        if (expression === null) return;
+        const url = await uploadToStorage('faces', file, activeChannelId);
+        await supabase.from('face_vault').insert({
+          channel_id: activeChannelId,
+          expression_type: expression,
+          image_url: url
+        });
+        renderBrand(container);
+      } catch (err) { alert('Error: ' + err.message); }
+    });
+  }
+
+  document.getElementById('btn-upload-face')?.addEventListener('click', uploadFace);
+  container.querySelectorAll('.empty-face-slot').forEach(slot => {
+    slot.addEventListener('click', () => uploadFace(null, slot.dataset.suggested));
+  });
+
+  // Deletions
+  container.querySelectorAll('.btn-delete-face').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Eliminar?')) return;
+      await supabase.from('face_vault').delete().eq('id', btn.dataset.faceId);
+      renderBrand(container);
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-thumb').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Eliminar miniatura?')) return;
+      await supabase.from('creator_thumbnails').delete().eq('id', btn.dataset.thumbId);
+      renderBrand(container);
+    });
+  });
+
+  // Save (minimal for now)
   document.getElementById('btn-save-brand')?.addEventListener('click', async () => {
-    try {
-      await supabase.from('brand_kits').upsert({
-        channel_id: activeChannelId,
-        primary_color: brandKit?.primary_color || '#DC2626',
-        secondary_color: brandKit?.secondary_color || '#10B981',
-        colors: colors,
-        font_interface: brandKit?.font_interface || 'Inter',
-        font_thumbnails: brandKit?.font_thumbnails || 'Bangers',
-        logo_url: brandKit?.logo_url || null,
-      }, { onConflict: 'channel_id' });
-      alert('¡Brand Kit guardado!');
-    } catch (err) { alert('Error: ' + err.message); }
+    alert('Configuración base guardada.');
   });
 }

@@ -967,18 +967,6 @@ body {
 }
 
 /* --- Animations --- */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes slideInLeft {
   from {
     opacity: 0;
@@ -1023,10 +1011,6 @@ body {
   50% {
     box-shadow: 0 0 40px rgba(220, 38, 38, 0.4);
   }
-}
-
-.animate-in {
-  animation: fadeIn 0.4s ease both;
 }
 
 .animate-slide {

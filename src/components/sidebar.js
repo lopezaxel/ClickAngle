@@ -5,13 +5,13 @@ import { signOut, createChannel, loadUserChannels } from '../lib/auth.js';
 import { setState } from '../lib/state.js';
 
 const NAV_ITEMS = [
-  { route: 'dashboard', icon: 'barChart', label: 'Dashboard', section: 'Análisis' },
-  { route: 'cerebro', icon: 'brain', label: 'El Cerebro', section: 'Análisis' },
-  { route: 'brand', icon: 'palette', label: 'Brand Kit', section: 'Recursos' },
-  { route: 'espionaje', icon: 'eye', label: 'Espionaje', section: 'Recursos' },
-  { route: 'angulos', icon: 'crosshair', label: 'Ángulos de Click', badge: '22', section: 'Creación' },
-  { route: 'engine', icon: 'cog', label: 'Fábrica Creativa', section: 'Creación' },
-  { route: 'editor', icon: 'scissors', label: 'Editor & Simulador', section: 'Creación' },
+  { route: 'dashboard', icon: 'barChart', label: 'Dashboard', section: 'Principal' },
+  { route: 'brand', icon: 'palette', label: 'Brand Kit', section: 'Workflow' },
+  { route: 'cerebro', icon: 'brain', label: 'El Cerebro', section: 'Workflow' },
+  { route: 'espionaje', icon: 'eye', label: 'Espionaje', section: 'Workflow' },
+  { route: 'angulos', icon: 'crosshair', label: 'Ángulos de Click', badge: '22', section: 'Workflow' },
+  { route: 'engine', icon: 'cog', label: 'Fábrica Creativa', section: 'Workflow' },
+  { route: 'editor', icon: 'scissors', label: 'Editor & Simulador', section: 'Workflow' },
 ];
 
 export function renderSidebar(container) {
@@ -39,7 +39,7 @@ export function renderSidebar(container) {
       <div class="channel-selector" id="channel-selector">
         <div class="channel-selector-current" id="channel-selector-toggle">
           <div class="channel-avatar">
-            ${activeChannel ? activeChannel.name.charAt(0).toUpperCase() : '?'}
+            ${activeChannel ? (activeChannel.name || 'C').charAt(0).toUpperCase() : '?'}
           </div>
           <div class="channel-info">
             <div class="channel-name">${activeChannel ? activeChannel.name : 'Sin canal'}</div>
@@ -50,7 +50,7 @@ export function renderSidebar(container) {
         <div class="channel-dropdown hidden" id="channel-dropdown">
           ${channels.map(ch => `
             <div class="channel-dropdown-item ${ch.id === activeChannelId ? 'active' : ''}" data-channel-id="${ch.id}">
-              <div class="channel-avatar-sm">${ch.name.charAt(0).toUpperCase()}</div>
+              <div class="channel-avatar-sm">${(ch.name || 'C').charAt(0).toUpperCase()}</div>
               <div>
                 <div style="font-size:13px;font-weight:600;">${ch.name}</div>
                 <div style="font-size:10px;color:var(--text-tertiary);">${ch.niche}</div>

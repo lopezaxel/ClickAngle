@@ -25,8 +25,6 @@ registerRoute('espionaje', renderEspionaje);
 registerRoute('angulos', renderAngulos);
 registerRoute('engine', renderEngine);
 registerRoute('editor', renderEditor);
-
-// Settings
 registerRoute('settings', renderSettings);
 
 // Initialize app
@@ -37,8 +35,7 @@ function initApp() {
   const workflowBar = document.getElementById('workflow-bar');
   const workspace = document.getElementById('workspace');
 
-  let initialized = false;
-  let hadChannels = false;
+  let routerInitialized = false;
 
   function renderApp() {
     const { session, channels, activeChannelId } = getState();
@@ -46,12 +43,11 @@ function initApp() {
     if (!session) {
       // Show login
       app.classList.add('login-mode');
-      sidebar.style.display = 'none';
-      topbar.style.display = 'none';
-      workflowBar.style.display = 'none';
+      sidebar.innerHTML = ''; sidebar.style.display = 'none';
+      topbar.innerHTML = ''; topbar.style.display = 'none';
+      workflowBar.innerHTML = ''; workflowBar.style.display = 'none';
       renderLogin(workspace);
-      initialized = false;
-      hadChannels = false;
+      routerInitialized = false;
       return;
     }
 
@@ -61,22 +57,25 @@ function initApp() {
     topbar.style.display = '';
     workflowBar.style.display = '';
 
-    renderSidebar(sidebar);
-    renderSearchbar(topbar);
-    renderWorkflow(workflowBar);
+    // Only re-bind shared components if they are empty
+    if (!sidebar.innerHTML) renderSidebar(sidebar);
+    if (!topbar.innerHTML) renderSearchbar(topbar);
+    if (!workflowBar.innerHTML) renderWorkflow(workflowBar);
 
     if (!channels || channels.length === 0 || !activeChannelId) {
       // No channels — show empty state
       renderEmptyState(workspace);
-      hadChannels = false;
+      routerInitialized = false;
     } else {
       // Normal app — render current route
-      if (!initialized || !hadChannels) {
-        // First time or just got channels after empty state
+      if (!routerInitialized) {
         initRouter(workspace);
-        initialized = true;
-        hadChannels = true;
+        routerInitialized = true;
       } else {
+        // Just refresh components that might change with channel switch
+        renderSidebar(sidebar);
+        updateWorkflow(workflowBar);
+        // And re-render the view
         reRenderCurrentRoute(workspace);
       }
     }
@@ -87,22 +86,19 @@ function initApp() {
     renderApp();
   });
 
-  // Listen for hash changes to update sidebar/workflow
+  // Listen for hash changes to update highlights without full re-render
   window.addEventListener('hashchange', () => {
     const { session, activeChannelId } = getState();
     if (session && activeChannelId) {
-      renderSidebar(sidebar);
       updateWorkflow(workflowBar);
     }
   });
 
-  // Initialize auth — this will trigger first renderApp via state change
+  // Initialize auth
   initAuth(() => {
-    // First auth check done
+    // Auth initialized
+    if (!window.location.hash) window.location.hash = '#dashboard';
   });
-
-  // Set default route
-  if (!window.location.hash) window.location.hash = '#dashboard';
 }
 
 if (document.readyState === 'loading') {

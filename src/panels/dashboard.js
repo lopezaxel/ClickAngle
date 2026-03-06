@@ -58,7 +58,7 @@ export async function renderDashboard(container) {
     supabase.from('projects').select('id', { count: 'exact' }).eq('channel_id', activeChannelId),
     supabase.from('thumbnail_variants').select('id, impact_score, project_id, projects!inner(channel_id)').eq('projects.channel_id', activeChannelId),
     supabase.from('user_favorite_angles').select('id', { count: 'exact' }).eq('channel_id', activeChannelId),
-    supabase.from('projects').select('*, thumbnail_variants(count)').eq('channel_id', activeChannelId).order('created_at', { ascending: false }).limit(4),
+    supabase.from('projects').select('*').eq('channel_id', activeChannelId).order('created_at', { ascending: false }).limit(4),
   ]);
 
   const projectCount = projectsRes.count || 0;

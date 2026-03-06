@@ -3,8 +3,8 @@ import { icon } from '../icons.js';
 
 const WORKFLOW_STEPS = [
     { route: 'brand', label: 'Brand Kit', desc: 'Identidad Visual', icon: 'palette', step: 1 },
-    { route: 'espionaje', label: 'Espionaje', desc: 'Análisis de Competencia', icon: 'eye', step: 2 },
-    { route: 'cerebro', label: 'El Cerebro', desc: 'ADN del Video', icon: 'brain', step: 3 },
+    { route: 'cerebro', label: 'El Cerebro', desc: 'ADN del Video', icon: 'brain', step: 2 },
+    { route: 'espionaje', label: 'Espionaje', desc: 'Análisis de Competencia', icon: 'eye', step: 3 },
     { route: 'angulos', label: 'Ángulos de Click', desc: 'Selección de Ángulo', icon: 'crosshair', step: 4 },
     { route: 'engine', label: 'Fábrica Creativa', desc: 'Generación', icon: 'cog', step: 5 },
     { route: 'editor', label: 'Editor & Simulador', desc: 'Edición Final', icon: 'scissors', step: 6 },

@@ -9,20 +9,21 @@ export async function renderSettings(container) {
     return;
   }
 
+  // Show a local loader while fetching keys
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
-  // Fetch masked keys via secure RPC (never returns the actual key)
+  // Fetch masked keys via secure RPC
   let maskedKeys = { google_ai_key_masked: '', fal_ai_key_masked: '', google_ai_key_set: false, fal_ai_key_set: false };
   try {
     const { data, error } = await supabase.rpc('get_masked_api_keys');
     if (error) throw error;
-    maskedKeys = data;
+    if (data) maskedKeys = data;
   } catch (err) {
     console.error('Error fetching masked keys:', err);
   }
 
-  const googlePlaceholder = maskedKeys.google_ai_key_set ? maskedKeys.google_ai_key_masked : 'AIza...';
-  const falPlaceholder = maskedKeys.fal_ai_key_set ? maskedKeys.fal_ai_key_masked : 'fal-...';
+  const googlePlaceholder = (maskedKeys && maskedKeys.google_ai_key_set) ? maskedKeys.google_ai_key_masked : 'AIza...';
+  const falPlaceholder = (maskedKeys && maskedKeys.fal_ai_key_set) ? maskedKeys.fal_ai_key_masked : 'fal-...';
 
   const html = `<div class="animate-in">
     <div class="section-header">
