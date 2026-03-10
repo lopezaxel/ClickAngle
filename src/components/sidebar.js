@@ -51,11 +51,16 @@ export function renderSidebar(container) {
           ${channels.map(ch => `
             <div class="channel-dropdown-item ${ch.id === activeChannelId ? 'active' : ''}" data-channel-id="${ch.id}">
               <div class="channel-avatar-sm">${(ch.name || 'C').charAt(0).toUpperCase()}</div>
-              <div>
-                <div style="font-size:13px;font-weight:600;">${ch.name}</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13px;font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${ch.name}</div>
                 <div style="font-size:10px;color:var(--text-tertiary);">${ch.niche}</div>
               </div>
-              ${ch.id === activeChannelId ? `<span style="margin-left:auto;color:var(--accent);">${icon('check', 14)}</span>` : ''}
+              <div style="display:flex; align-items:center; gap:8px;">
+                ${ch.id === activeChannelId ? `<span style="color:var(--accent);">${icon('check', 14)}</span>` : ''}
+                <button class="btn-delete-channel" data-id="${ch.id}" title="Eliminar canal" style="background:none; border:none; color:var(--text-tertiary); cursor:pointer; padding:4px; border-radius:4px; display:flex; align-items:center;">
+                  ${icon('trash', 14)}
+                </button>
+              </div>
             </div>
           `).join('')}
           <div class="channel-dropdown-item channel-add-btn" id="btn-add-channel-dropdown">
@@ -125,9 +130,31 @@ export function renderSidebar(container) {
 
   // Channel selection
   container.querySelectorAll('.channel-dropdown-item[data-channel-id]').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      // If delete button was clicked, don't select the channel
+      if (e.target.closest('.btn-delete-channel')) return;
+      
       setActiveChannel(item.dataset.channelId);
       dropdown?.classList.add('hidden');
+    });
+  });
+
+  // Delete channel
+  container.querySelectorAll('.btn-delete-channel').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const channelId = btn.dataset.id;
+      const channelName = channels.find(c => c.id === channelId)?.name || 'este canal';
+      
+      if (window.confirm(`¿Estás seguro de que quieres eliminar "${channelName}"? Esta acción no se puede deshacer.`)) {
+        try {
+          const { deleteChannel } = await import('../lib/auth.js');
+          await deleteChannel(channelId);
+          // Sidebar will re-render due to state subscription
+        } catch (err) {
+          alert('Error al eliminar el canal: ' + err.message);
+        }
+      }
     });
   });
 

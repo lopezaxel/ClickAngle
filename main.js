@@ -31,10 +31,9 @@ registerRoute('settings', renderSettings);
 // Initialize app
 function initApp() {
   const app = document.getElementById('app');
-  const sidebar = document.getElementById('sidebar');
-  const topbar = document.getElementById('topbar');
-  const workflowBar = document.getElementById('workflow-bar');
-  const workspace = document.getElementById('workspace');
+  
+  // These will be reassigned in renderApp if the DOM is rebuilt
+  let sidebar, topbar, workflowBar, workspace;
 
   let routerInitialized = false;
   let lastChannelId = null;
@@ -42,9 +41,42 @@ function initApp() {
   let lastSessionId = null;
 
   function renderApp() {
-    const { session, currentUser, activeChannelId } = getState();
+    const { session, currentUser, activeChannelId, isAuthInitializing } = getState();
 
-    // 1. Handle Authentication Screen
+    // 0. Handle Initialization (Prevent flicker to login)
+    if (isAuthInitializing) {
+      if (!app.querySelector('.loading-screen')) {
+        app.innerHTML = `
+          <div class="loading-screen">
+            <div class="loader"></div>
+            <p>Cargando ClickAngle...</p>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    // 1. Recover/Initialize DOM structure if loading screen is present or empty
+    if (app.querySelector('.loading-screen') || !app.querySelector('#main-area')) {
+      app.innerHTML = `
+        <aside id="sidebar"></aside>
+        <div id="main-area">
+          <header id="topbar"></header>
+          <div id="workflow-bar"></div>
+          <main id="workspace"></main>
+        </div>
+      `;
+      // Reset router as the workspace container is new
+      routerInitialized = false;
+    }
+
+    // Re-grab references (important after innerHTML changes)
+    sidebar = document.getElementById('sidebar');
+    topbar = document.getElementById('topbar');
+    workflowBar = document.getElementById('workflow-bar');
+    workspace = document.getElementById('workspace');
+
+    // 2. Handle Authentication Screen
     if (!session) {
       app.classList.add('login-mode');
       sidebar.innerHTML = ''; sidebar.style.display = 'none';

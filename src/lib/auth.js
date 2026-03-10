@@ -25,6 +25,7 @@ export async function signUp(email, password, fullName) {
 export async function signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    localStorage.removeItem('clickangles_active_channel');
     setState({ currentUser: null, session: null, activeChannelId: null, channels: [] });
 }
 
@@ -39,9 +40,31 @@ export async function loadUserProfile(userId) {
         setTimeout(() => reject(new Error('Timeout cargando perfil (30s)')), 30000)
     );
 
-    const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
-    if (error) throw error;
-    return data;
+    try {
+        const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (error) {
+            // If RLS fails or profile is missing (PGRST116), don't crash.
+            // Try to recover from Auth Session as a backup.
+            if (error.code === 'PGRST116') {
+                console.warn('Profile not found in DB, using session metadata backup.');
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    return {
+                        id: user.id,
+                        email: user.email,
+                        full_name: user.user_metadata?.full_name || 'Usuario',
+                        subscription_tier: 'Free (Recuperado)'
+                    };
+                }
+            }
+            throw error;
+        }
+        return data;
+    } catch (err) {
+        console.error('Critical Profile Load Error:', err);
+        throw err;
+    }
 }
 
 export async function loadUserChannels(userId) {
@@ -75,10 +98,46 @@ export async function loadUserChannels(userId) {
     })();
 
     const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout cargando canales (30s)')), 30000)
+        setTimeout(() => reject(new Error('Timeout cargando canales (45s)')), 45000)
     );
 
     return await Promise.race([channelsPromise, timeoutPromise]);
+}
+
+export async function deleteChannel(channelId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('No autenticado');
+
+    // 1. Delete from DB (The policy should handle cascading or check ownership)
+    const { error } = await supabase
+        .from('channels')
+        .delete()
+        .eq('id', channelId)
+        .eq('owner_id', user.id); 
+
+    if (error) throw error;
+
+    // 2. Update local state
+    const { channels, activeChannelId } = getState();
+    const newChannels = channels.filter(c => c.id !== channelId);
+    
+    let nextActiveId = activeChannelId;
+    if (activeChannelId === channelId) {
+        nextActiveId = newChannels.length > 0 ? newChannels[0].id : null;
+    }
+
+    setState({ 
+        channels: newChannels, 
+        activeChannelId: nextActiveId 
+    });
+
+    if (nextActiveId) {
+        localStorage.setItem('clickangles_active_channel', nextActiveId);
+    } else {
+        localStorage.removeItem('clickangles_active_channel');
+    }
+
+    return true;
 }
 
 export async function createChannel(name, youtubeHandle = '', niche = 'Tech/IA') {
@@ -108,90 +167,131 @@ export async function createChannel(name, youtubeHandle = '', niche = 'Tech/IA')
     return data;
 }
 
+let userDataPromise = null;
+
 async function loadUserData(session) {
-    if (session?.user) {
+    if (!session?.user) {
+        setState({ currentUser: null, session: null, channels: [], activeChannelId: null });
+        return;
+    }
+
+    if (userDataPromise) return userDataPromise;
+
+    userDataPromise = (async () => {
         try {
-            const profile = await loadUserProfile(session.user.id);
-            const channels = await loadUserChannels(session.user.id);
+            const placeholderUser = {
+                id: session.user.id,
+                email: session.user.email,
+                full_name: session.user.user_metadata?.full_name || 'Cargando...',
+                subscription_tier: '...',
+            };
+            setState({ currentUser: placeholderUser, session });
+
+            const [profile, channels] = await Promise.all([
+                loadUserProfile(session.user.id),
+                loadUserChannels(session.user.id)
+            ]);
+
             const activeChannelId = restoreActiveChannel(channels);
-            setState({ currentUser: profile, session, channels, activeChannelId });
+            
+            setState({ 
+                currentUser: profile, 
+                session, 
+                channels, 
+                activeChannelId,
+                isAuthInitializing: false 
+            });
         } catch (err) {
             console.error('Error loading user data:', err);
-            setState({ currentUser: null, session, channels: [], activeChannelId: null });
+            const isAuthError = err.message?.includes('JSON objectRequested') || 
+                               err.status === 401 || 
+                               err.status === 403 ||
+                               err.message?.includes('PGRST116');
+
+            if (isAuthError) {
+                await signOut();
+            } else {
+                setState({ session, isAuthInitializing: false });
+            }
+        } finally {
+            userDataPromise = null;
         }
-    } else {
-        setState({ currentUser: null, session: null, channels: [], activeChannelId: null });
-    }
+    })();
+
+    return userDataPromise;
 }
 
 export async function initAuth(onReady) {
     let resolved = false;
     const finish = () => {
-        if (!resolved && onReady) {
+        if (!resolved) {
             resolved = true;
-            onReady();
+            if (onReady) onReady();
         }
     };
 
-    // Listen for future auth changes (login/logout/refresh)
+    // Emergency Timeout: Increased to 35s to allow for the parallel loading
+    const emergencyTimeout = setTimeout(() => {
+        const { isAuthInitializing } = getState();
+        if (isAuthInitializing) {
+            console.warn('Auth initialization slow, proceeding to unlock UI...');
+            setState({ isAuthInitializing: false });
+            finish();
+        }
+    }, 35000);
+
+    // Listen for auth events IMMEDIATELY
     supabase.auth.onAuthStateChange(async (event, session) => {
-        // If we get an event, we definitely want to load data
-        try {
+        console.log('Auth Event:', event);
+        if (event === 'SIGNED_OUT') {
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false });
+        } else if (session) {
             await loadUserData(session);
-        } catch (e) {
-            console.error('Auth change data load error:', e);
         }
         finish();
     });
 
-    // Strategy: Try to get session, but don't wait forever.
-    // Some browser storage locks or network issues can make getSession() hang indefinitely.
     try {
-        const sessionPromise = supabase.auth.getSession();
+        // Use getUser() instead of getSession() to force a sync check with the server
+        // and ensure the internal auth client has the correct headers/tokens for RLS.
+        const sessionPromise = supabase.auth.getUser();
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Auth Timeout (15s)')), 15000)
+            setTimeout(() => reject(new Error('User Recovery Timeout (15s)')), 15000)
         );
 
-        // Race the session check against a 3s timeout
-        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
+        const { data: { user }, error } = await Promise.race([sessionPromise, timeoutPromise]);
 
         if (error) throw error;
+        
+        // After getUser succeeds, the client headers are guaranteed to be set correctly.
+        // Now fetch full session for loadUserData.
+        const { data: { session } } = await supabase.auth.getSession();
+        
         if (session) {
             await loadUserData(session);
         } else {
-            // No session, just reset state
-            setState({ session: null, currentUser: null, channels: [], activeChannelId: null });
+            console.log('No active session.');
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false });
         }
     } catch (err) {
-        console.warn('Session init error or timeout:', err.message);
-
-        // If it's a known "stuck" error or a timeout, clean house
-        // If it's a known "stuck" error, clean house. 
-        // For simple Timeouts, we DON'T clear localStorage to avoid unnecessary logouts.
-        if (err.message?.includes('Lock') ||
-            err.message?.includes('Abort') ||
-            err.message?.includes('Refresh Token')) {
-
-            console.warn('Clearing potentially corrupted auth state...');
+        console.warn('InitAuth strategy fallback:', err.message);
+        
+        if (err.message?.includes('Lock') || err.message?.includes('Abort') || err.message?.includes('Timeout')) {
+            console.warn('Protocolo Experto-Supabase: Limpieza de sesion por error critico.');
+            // Clear supabase storage to force fresh session
             Object.keys(localStorage).forEach(key => {
-                if (key.startsWith('sb-')) localStorage.removeItem(key);
+                if (key.includes('supabase.auth.token') || key.startsWith('sb-')) {
+                    localStorage.removeItem(key);
+                }
             });
-
-            setState({ session: null, currentUser: null, channels: [], activeChannelId: null });
-
-            // If it was a persistent lock, a reload might be the only cure
-            setTimeout(() => window.location.reload(), 1000);
+            setTimeout(() => window.location.reload(), 500);
         } else {
-            // Timeout or General error (e.g. network), just ensure UI is unblocked
-            // We keep the local state if it was already set or just reset if empty
-            console.warn('InitAuth delayed or network error, proceeding...');
-            const { session } = getState();
-            if (!session) {
-                setState({ session: null, currentUser: null, channels: [], activeChannelId: null });
-            }
+            setState({ isAuthInitializing: false });
         }
     } finally {
-        // UNBLOCK THE UI - This calls initRouter in main.js
+        clearTimeout(emergencyTimeout);
+        // We don't force isAuthInitializing to false here if a loadUserData is still running
+        // loadUserData will set it to false when it's TRULY done.
         finish();
     }
 }

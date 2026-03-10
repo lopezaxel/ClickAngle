@@ -89,7 +89,10 @@ export function renderLogin(container) {
         await signIn(email, password);
         // Auth state change handler in main.js will handle the redirect
       } catch (err) {
-        errorMsg = err.message || 'Error de autenticación';
+        console.error('Login attempt failed:', err);
+        errorMsg = err.message === 'Timeout de autenticación (30s)' 
+          ? 'La conexión está lenta. Reintentá en unos segundos.' 
+          : (err.message || 'Error de autenticación');
         loading = false;
         render();
       }
