@@ -49,99 +49,126 @@ function drawChart(canvas, chartData) {
 
 export async function renderDashboard(container) {
   const { activeChannelId } = getState();
-  if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
+  const route = 'dashboard';
+  
+  if (!activeChannelId) { 
+    container.innerHTML = '<div class="loading-spinner">Selecciona un canal para continuar</div>'; 
+    return; 
+  }
 
+  // Visual feedback immediate
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
-  // Fetch metrics
-  const [projectsRes, variantsRes, anglesRes, recentRes] = await Promise.all([
-    supabase.from('projects').select('id', { count: 'exact' }).eq('channel_id', activeChannelId),
-    supabase.from('thumbnail_variants').select('id, impact_score, project_id, projects!inner(channel_id)').eq('projects.channel_id', activeChannelId),
-    supabase.from('user_favorite_angles').select('id', { count: 'exact' }).eq('channel_id', activeChannelId),
-    supabase.from('projects').select('*').eq('channel_id', activeChannelId).order('created_at', { ascending: false }).limit(4),
-  ]);
+  try {
+    // Fetch metrics with a catch-all for individual failures
+    const [projectsRes, variantsRes, anglesRes, recentRes] = await Promise.all([
+      supabase.from('projects').select('id', { count: 'exact' }).eq('channel_id', activeChannelId),
+      supabase.from('thumbnail_variants').select('id, impact_score, project_id, projects!inner(channel_id)').eq('projects.channel_id', activeChannelId),
+      supabase.from('user_favorite_angles').select('id', { count: 'exact' }).eq('channel_id', activeChannelId),
+      supabase.from('projects').select('*').eq('channel_id', activeChannelId).order('created_at', { ascending: false }).limit(4),
+    ]);
 
-  const projectCount = projectsRes.count || 0;
-  const thumbnailCount = variantsRes.data?.length || 0;
-  const anglesUsed = anglesRes.count || 0;
-  const avgScore = thumbnailCount > 0
-    ? Math.round(variantsRes.data.reduce((sum, v) => sum + (v.impact_score || 0), 0) / thumbnailCount)
-    : 0;
-  const recentProjects = recentRes.data || [];
+    // Safety check: is this route still active?
+    if (window.location.hash.slice(1) !== route && window.location.hash.slice(1) !== '') return;
 
-  const html = `<div class="animate-in">
-    <div class="section-header">
-      <div>
-        <h2 class="section-title">Dashboard Creativo</h2>
-        <p class="section-subtitle">Resumen de tu actividad creativa y producción</p>
-      </div>
-    </div>
+    if (projectsRes.error || variantsRes.error || anglesRes.error || recentRes.error) {
+        throw new Error("No pudimos cargar algunos datos del servidor.");
+    }
 
-    <div class="grid-4 mb-lg">
-      <div class="metric-card accent">
-        <div class="metric-label">Proyectos</div>
-        <div class="metric-value glow-accent">${projectCount}</div>
-      </div>
-      <div class="metric-card success">
-        <div class="metric-label">Miniaturas Generadas</div>
-        <div class="metric-value glow-success">${thumbnailCount}</div>
-      </div>
-      <div class="metric-card accent">
-        <div class="metric-label">Ángulos Favoritos</div>
-        <div class="metric-value glow-accent">${anglesUsed}</div>
-      </div>
-      <div class="metric-card success">
-        <div class="metric-label">Score Promedio</div>
-        <div class="metric-value glow-success">${avgScore || '—'}</div>
-      </div>
-    </div>
+    const projectCount = projectsRes.count || 0;
+    const thumbnailCount = variantsRes.data?.length || 0;
+    const anglesUsed = anglesRes.count || 0;
+    const avgScore = thumbnailCount > 0
+      ? Math.round(variantsRes.data.reduce((sum, v) => sum + (v.impact_score || 0), 0) / thumbnailCount)
+      : 0;
+    const recentProjects = recentRes.data || [];
 
-    <div class="grid-2 mb-lg" style="grid-template-columns: 2fr 1fr;">
-      <div class="chart-container">
-        <div class="card-header">
-          <div class="card-title">Actividad Creativa</div>
+    const html = `<div class="animate-in">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Dashboard Creativo</h2>
+          <p class="section-subtitle">Resumen de tu actividad creativa y producción</p>
         </div>
-        <canvas class="chart-canvas" id="ctr-chart"></canvas>
       </div>
-      <div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:var(--space-xl);">
-        <div style="color:var(--accent);margin-bottom:var(--space-md);">${icon('crosshair', 48)}</div>
-        <div style="font-size:36px;font-weight:800;color:var(--accent-light);">${projectCount}</div>
-        <div class="text-sm text-muted">Proyectos totales</div>
-      </div>
-    </div>
 
-    <div class="section-header">
-      <div class="card-title">Proyectos Recientes</div>
-    </div>
-    ${recentProjects.length > 0 ? `
-    <div class="grid-4">
-      ${recentProjects.map(p => `
-        <div class="thumbnail-card">
-          <div class="thumb-img" style="background: linear-gradient(135deg, #1a1a2e, #16213e);">
-            ${icon('image', 32)}
+      <div class="grid-4 mb-lg">
+        <div class="metric-card accent">
+          <div class="metric-label">Proyectos</div>
+          <div class="metric-value glow-accent">${projectCount}</div>
+        </div>
+        <div class="metric-card success">
+          <div class="metric-label">Miniaturas Generadas</div>
+          <div class="metric-value glow-success">${thumbnailCount}</div>
+        </div>
+        <div class="metric-card accent">
+          <div class="metric-label">Ángulos Favoritos</div>
+          <div class="metric-value glow-accent">${anglesUsed}</div>
+        </div>
+        <div class="metric-card success">
+          <div class="metric-label">Score Promedio</div>
+          <div class="metric-value glow-success">${avgScore || '—'}</div>
+        </div>
+      </div>
+
+      <div class="grid-2 mb-lg" style="grid-template-columns: 2fr 1fr;">
+        <div class="chart-container">
+          <div class="card-header">
+            <div class="card-title">Actividad Creativa</div>
           </div>
-          <div class="thumb-info">
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px;" class="truncate">${p.title}</div>
-            <div class="flex items-center justify-between">
-              <span class="badge badge-${p.status === 'published' ? 'success' : 'neutral'}">${p.status}</span>
-              <span class="text-xs text-muted">${new Date(p.created_at).toLocaleDateString('es')}</span>
+          <canvas class="chart-canvas" id="ctr-chart"></canvas>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:var(--space-xl);">
+          <div style="color:var(--accent);margin-bottom:var(--space-md);">${icon('crosshair', 48)}</div>
+          <div style="font-size:36px;font-weight:800;color:var(--accent-light);">${projectCount}</div>
+          <div class="text-sm text-muted">Proyectos totales</div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <div class="card-title">Proyectos Recientes</div>
+      </div>
+      ${recentProjects.length > 0 ? `
+      <div class="grid-4">
+        ${recentProjects.map(p => `
+          <div class="thumbnail-card">
+            <div class="thumb-img" style="background: linear-gradient(135deg, #1a1a2e, #16213e);">
+              ${icon('image', 32)}
+            </div>
+            <div class="thumb-info">
+              <div style="font-size:13px;font-weight:600;margin-bottom:4px;" class="truncate">${p.title}</div>
+              <div class="flex items-center justify-between">
+                <span class="badge badge-${p.status === 'published' ? 'success' : 'neutral'}">${p.status}</span>
+                <span class="text-xs text-muted">${new Date(p.created_at).toLocaleDateString('es')}</span>
+              </div>
             </div>
           </div>
-        </div>
-      `).join('')}
-    </div>` : `
-    <div class="card" style="text-align:center;padding:var(--space-xl);color:var(--text-tertiary);">
-      ${icon('image', 32)}
-      <p class="text-sm text-muted mt-md">Sin proyectos aún. Creá tu primer proyecto en la Fábrica Creativa.</p>
-    </div>`}
-  </div>`;
+        `).join('')}
+      </div>` : `
+      <div class="card" style="text-align:center;padding:var(--space-xl);color:var(--text-tertiary);">
+        ${icon('image', 32)}
+        <p class="text-sm text-muted mt-md">Sin proyectos aún. Creá tu primer proyecto en la Fábrica Creativa.</p>
+      </div>`}
+    </div>`;
 
-  container.innerHTML = html;
-  requestAnimationFrame(() => {
-    const canvas = document.getElementById('ctr-chart');
-    if (canvas) drawChart(canvas, [
-      { label: 'Proyectos', data: [projectCount], color: '#DC2626' },
-      { label: 'Miniaturas', data: [thumbnailCount], color: '#10B981' },
-    ]);
-  });
+    container.innerHTML = html;
+    requestAnimationFrame(() => {
+      const canvas = document.getElementById('ctr-chart');
+      if (canvas && (window.location.hash.slice(1) === route || window.location.hash.slice(1) === '')) {
+          drawChart(canvas, [
+            { label: 'Proyectos', data: [projectCount], color: '#DC2626' },
+            { label: 'Miniaturas', data: [thumbnailCount], color: '#10B981' },
+          ]);
+      }
+    });
+
+  } catch (err) {
+    console.error('Dashboard error:', err);
+    container.innerHTML = `
+      <div style="padding:40px;text-align:center;color:var(--text-secondary);">
+        <div style="font-size:32px;margin-bottom:12px;color:var(--danger);">${icon('alertTriangle', 32)}</div>
+        <h3>Fallo en la Carga</h3>
+        <p class="text-sm">${err.message}</p>
+        <button onclick="window.location.reload()" class="btn btn-secondary btn-sm mt-md">Intentar de Nuevo</button>
+      </div>`;
+  }
 }

@@ -4,7 +4,7 @@ import { getState, setState, setActiveChannel, restoreActiveChannel } from './st
 export async function signIn(email, password) {
     const signInPromise = supabase.auth.signInWithPassword({ email, password });
     const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout de autenticación (15s)')), 15000)
+        setTimeout(() => reject(new Error('Timeout de autenticación (30s)')), 30000)
     );
 
     const { data, error } = await Promise.race([signInPromise, timeoutPromise]);
@@ -36,7 +36,7 @@ export async function loadUserProfile(userId) {
         .single();
     
     const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout cargando perfil (10s)')), 10000)
+        setTimeout(() => reject(new Error('Timeout cargando perfil (30s)')), 30000)
     );
 
     const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
@@ -75,7 +75,7 @@ export async function loadUserChannels(userId) {
     })();
 
     const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout cargando canales (10s)')), 10000)
+        setTimeout(() => reject(new Error('Timeout cargando canales (30s)')), 30000)
     );
 
     return await Promise.race([channelsPromise, timeoutPromise]);

@@ -37,53 +37,77 @@ function initApp() {
   const workspace = document.getElementById('workspace');
 
   let routerInitialized = false;
+  let lastChannelId = null;
+  let lastUserId = null;
+  let lastSessionId = null;
 
   function renderApp() {
-    const { session, channels, activeChannelId } = getState();
+    const { session, currentUser, activeChannelId } = getState();
 
+    // 1. Handle Authentication Screen
     if (!session) {
-      // Show login
       app.classList.add('login-mode');
       sidebar.innerHTML = ''; sidebar.style.display = 'none';
       topbar.innerHTML = ''; topbar.style.display = 'none';
       workflowBar.innerHTML = ''; workflowBar.style.display = 'none';
       renderLogin(workspace);
       routerInitialized = false;
+      lastUserId = null;
+      lastChannelId = null;
+      lastSessionId = null;
       return;
     }
 
-    // Authenticated
+    // 2. Setup Authenticated Layout
     app.classList.remove('login-mode');
     sidebar.style.display = '';
     topbar.style.display = '';
     workflowBar.style.display = '';
 
-    // Only re-bind shared components if they are empty
+    // Render Shared Components (once)
     if (!sidebar.innerHTML) renderSidebar(sidebar);
     if (!topbar.innerHTML) {
       renderSearchbar(topbar);
+      // Run initial key check once on startup
       checkApiKey().catch(err => console.error('Initial API check failed:', err));
+    } else {
+        // ALWAYS update the API status badge in the topbar on any state change
+        import('./src/components/searchbar.js').then(m => m.updateApiStatusBadge());
     }
+    
     if (!workflowBar.innerHTML) renderWorkflow(workflowBar);
 
+    // 3. Selective Re-rendering
+    // We only trigger a full Workspace re-render if the user or channel changed
+    const userId = currentUser?.id;
+    const sessionId = session?.access_token; // Use token as proxy for fresh session
 
-    if (!channels || channels.length === 0 || !activeChannelId) {
-      // No channels — show empty state
+    const significantChange = (userId !== lastUserId) || (activeChannelId !== lastChannelId) || (sessionId !== lastSessionId);
+
+    if (!activeChannelId) {
       renderEmptyState(workspace);
       routerInitialized = false;
     } else {
-      // Normal app — render current route
       if (!routerInitialized) {
         initRouter(workspace);
         routerInitialized = true;
-      } else {
-        // Just refresh components that might change with channel switch
+      } else if (significantChange) {
+        // Refresh components that change with channel
         renderSidebar(sidebar);
         updateWorkflow(workflowBar);
-        // And re-render the view
+        // Full re-render of current view
         reRenderCurrentRoute(workspace);
+      } else {
+        // Minor state change (like API status update)
+        // Just update peripheral UI without nuking the workspace
+        updateWorkflow(workflowBar);
       }
     }
+
+    // Update last seen state
+    lastUserId = userId;
+    lastChannelId = activeChannelId;
+    lastSessionId = sessionId;
   }
 
   // Subscribe to state changes
@@ -92,17 +116,15 @@ function initApp() {
       renderApp();
     } catch (err) {
       console.error('CRITICAL APP RENDER ERROR:', err);
-      // Try to recover by showing at least a fallback message
       if (workspace) {
         workspace.innerHTML = `<div style="padding:40px;color:red;">Error de aplicación inesperado. Revisa la consola.</div>`;
       }
     }
   });
 
-  // Initial render to unblock UI immediately
+  // Initial render
   renderApp();
 
-  // Listen for hash changes to update highlights without full re-render
   window.addEventListener('hashchange', () => {
     const { session, activeChannelId } = getState();
     if (session && activeChannelId) {
@@ -112,7 +134,6 @@ function initApp() {
 
   // Initialize auth
   initAuth(() => {
-    // Auth initialized
     if (!window.location.hash) window.location.hash = '#dashboard';
   });
 }

@@ -108,21 +108,23 @@ export async function renderSettings(container) {
   const btn = document.getElementById('btn-save-keys');
   if (btn) {
     btn.onclick = async () => {
-      const googleVal = document.getElementById('google-key-input').value.trim();
-      const falVal = document.getElementById('fal-key-input').value.trim();
+      const googleVal = document.getElementById('google-key-input')?.value.trim() || '';
       const feedback = document.getElementById('save-keys-feedback');
 
       const originalHtml = btn.innerHTML;
       btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Encriptando y guardando...`;
       btn.disabled = true;
-      feedback.style.display = 'none';
+      if (feedback) feedback.style.display = 'none';
 
       try {
         const params = {};
         if (googleVal) params.p_google_ai_key = googleVal;
-
-        const { error } = await supabase.rpc('save_user_api_keys', params);
-        if (error) throw error;
+        
+        // Only run RPC if there's actually something to save
+        if (Object.keys(params).length > 0) {
+          const { error } = await supabase.rpc('save_user_api_keys', params);
+          if (error) throw error;
+        }
 
         // Clear the input fields after saving
         const googleInput = document.getElementById('google-key-input');

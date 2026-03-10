@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 const routes = {};
 let currentWorkspace = null;
 let currentHashChangeHandler = null;
-let isRendering = false;
+let lastRenderId = 0;
 
 export function registerRoute(hash, renderFn) {
     routes[hash] = renderFn;
@@ -14,7 +14,6 @@ export function navigateTo(hash) {
 }
 
 export function getCurrentRoute() {
-    // Return from hash or default
     return window.location.hash.slice(1) || 'dashboard';
 }
 
@@ -37,45 +36,54 @@ function showLoader(workspace) {
 }
 
 /**
- * Re-renders the current route without transitions.
+ * Main render function used by both init and hashchange
  */
-export async function reRenderCurrentRoute(workspace) {
-    if (workspace) currentWorkspace = workspace;
-    
-    // If we are already rendering, don't pile up more renders.
-    // The current render will use the latest state anyway.
-    if (isRendering) return;
-
+async function performRender(workspace, showRouteLoader = true) {
+    const renderId = ++lastRenderId;
     const route = getCurrentRoute();
     const renderFn = routes[route];
 
-    if (renderFn && currentWorkspace) {
-        isRendering = true;
-        updateNavHighlights(route);
-        
-        try {
-            // Safety timeout for panels: 15s
-            const renderPromise = renderFn(currentWorkspace);
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Panel Render Timeout (15s)')), 15000)
-            );
+    if (!renderFn || !workspace) return;
 
-            await Promise.race([renderPromise, timeoutPromise]);
-        } catch (err) {
-            console.error(`Error re-rendering ${route}:`, err);
-            if (currentWorkspace) {
-                currentWorkspace.innerHTML = `
-                    <div style="padding:40px;text-align:center;background:rgba(220,38,38,0.05);border-radius:12px;margin:20px;border:1px solid var(--danger);">
-                        <div style="font-size:32px;margin-bottom:12px;">${icon('alertTriangle', 32)}</div>
-                        <h3 style="color:var(--danger);">Error en el Panel</h3>
-                        <p style="font-size:13px;opacity:0.7;">Hubo un problema al cargar esta sección. Refresca la página o intenta de nuevo.</p>
-                        <p style="font-size:10px;margin-top:10px;font-family:monospace;opacity:0.5;">${err.message}</p>
-                    </div>`;
-            }
-        } finally {
-            isRendering = false;
+    updateNavHighlights(route);
+    if (showRouteLoader) showLoader(workspace);
+
+    try {
+        // Safety timeout: 20s
+        const renderPromise = renderFn(workspace);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Panel Render Timeout (20s)')), 20000)
+        );
+
+        await Promise.race([renderPromise, timeoutPromise]);
+        
+        // If this isn't the latest render anymore, don't do anything else
+        if (renderId !== lastRenderId) return;
+
+    } catch (err) {
+        // Only show error if this is still the current render
+        if (renderId === lastRenderId) {
+            console.error(`Error rendering ${route}:`, err);
+            workspace.innerHTML = `
+                <div style="padding:40px;text-align:center;background:rgba(220,38,38,0.05);border-radius:12px;margin:20px;border:1px solid var(--danger);">
+                    <div style="font-size:32px;margin-bottom:12px;">${icon('alertTriangle', 32)}</div>
+                    <h3 style="color:var(--danger);">Error en la Sección</h3>
+                    <p style="font-size:13px;opacity:0.7;">Hubo un problema al cargar "${route}".</p>
+                    <p style="font-size:10px;margin-top:10px;font-family:monospace;opacity:0.5;">${err.message}</p>
+                    <button onclick="window.location.reload()" class="btn btn-primary btn-sm" style="margin-top:20px;">Refrescar App</button>
+                </div>`;
         }
     }
+}
+
+/**
+ * Re-renders the current route (e.g. when state changes like active channel)
+ */
+export async function reRenderCurrentRoute(workspace) {
+    if (workspace) currentWorkspace = workspace;
+    // We don't show the full route loader here to avoid "blinking" if possible,
+    // but the panel might show its own.
+    await performRender(currentWorkspace, false);
 }
 
 /**
@@ -88,42 +96,9 @@ export function initRouter(workspace) {
         window.removeEventListener('hashchange', currentHashChangeHandler);
     }
 
-    async function render() {
-        if (isRendering) return;
-
-        const route = getCurrentRoute();
-        const renderFn = routes[route];
-
-        if (renderFn) {
-            isRendering = true;
-            updateNavHighlights(route);
-            showLoader(workspace);
-
-            try {
-                // Safety timeout for new route: 15s
-                const renderPromise = renderFn(workspace);
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Router Render Timeout (15s)')), 15000)
-                );
-
-                await Promise.race([renderPromise, timeoutPromise]);
-            } catch (err) {
-                console.error(`Error rendering ${route}:`, err);
-                workspace.innerHTML = `
-                    <div style="padding:40px;text-align:center;background:rgba(220,38,38,0.05);border-radius:12px;margin:20px;border:1px solid var(--danger);">
-                        <div style="font-size:32px;margin-bottom:12px;">${icon('alertTriangle', 32)}</div>
-                        <h3 style="color:var(--danger);">Error Crítico de Navegación</h3>
-                        <p style="font-size:13px;opacity:0.7;">No se pudo cargar la vista "${route}".</p>
-                        <p style="font-size:10px;margin-top:10px;font-family:monospace;opacity:0.5;">${err.message}</p>
-                        <button onclick="window.location.reload()" class="btn btn-primary btn-sm" style="margin-top:20px;">Refrescar App</button>
-                    </div>`;
-            } finally {
-                isRendering = false;
-            }
-        }
-    }
-
-    currentHashChangeHandler = render;
-    window.addEventListener('hashchange', render);
-    render();
+    currentHashChangeHandler = () => performRender(workspace, true);
+    window.addEventListener('hashchange', currentHashChangeHandler);
+    
+    // Initial render
+    performRender(workspace, true);
 }

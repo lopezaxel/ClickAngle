@@ -60,13 +60,12 @@ export async function checkApiKey() {
 
         const cleanKey = apiKeyData.trim();
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${cleanKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }] }),
+            // Try to list models as a lightweight connectivity test first
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`, {
+                method: 'GET',
                 signal: controller.signal
             });
 
@@ -76,11 +75,25 @@ export async function checkApiKey() {
                 setState({ apiKeyStatus: 'connected' });
                 return true;
             } else {
+                // If models list fails, try a direct generation as fallback
+                const genResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${cleanKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }] })
+                });
+
+                if (genResponse.ok) {
+                    setState({ apiKeyStatus: 'connected' });
+                    return true;
+                }
+
+                console.warn('API Key test failed with status:', genResponse.status);
                 setState({ apiKeyStatus: 'disconnected' });
                 return false;
             }
         } catch (apiErr) {
             clearTimeout(timeoutId);
+            console.error('API connectivity test error:', apiErr);
             setState({ apiKeyStatus: 'disconnected' });
             return false;
         }
