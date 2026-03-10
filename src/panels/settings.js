@@ -14,7 +14,7 @@ export async function renderSettings(container) {
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
   // Fetch masked keys via secure RPC
-  let maskedKeys = { google_ai_key_masked: '', fal_ai_key_masked: '', google_ai_key_set: false, fal_ai_key_set: false };
+  let maskedKeys = { google_ai_key_masked: '', google_ai_key_set: false };
   try {
     const { data, error } = await supabase.rpc('get_masked_api_keys');
     if (error) throw error;
@@ -24,7 +24,6 @@ export async function renderSettings(container) {
   }
 
   const googlePlaceholder = (maskedKeys && maskedKeys.google_ai_key_set) ? maskedKeys.google_ai_key_masked : 'AIza...';
-  const falPlaceholder = (maskedKeys && maskedKeys.fal_ai_key_set) ? maskedKeys.fal_ai_key_masked : 'fal-...';
 
   const html = `<div class="animate-in">
     <div class="section-header">
@@ -63,24 +62,17 @@ export async function renderSettings(container) {
           </p>
         </div>
         
-        <div class="form-group">
-          <label class="form-label">Fal.AI Key (opcional)</label>
-          <input type="password" class="form-input" id="fal-key-input" 
-            placeholder="${falPlaceholder}" 
-            value=""
-            autocomplete="off"
-            spellcheck="false"
-            data-lpignore="true"
-            data-1p-ignore="true" />
-          <p class="text-xs text-muted mt-xs">
-            ${maskedKeys.fal_ai_key_set
-      ? `${icon('check', 12)} Clave configurada — dejá el campo vacío para mantenerla, o ingresá una nueva para reemplazarla.`
-      : 'Opcional — para generación de imágenes avanzada'}
-          </p>
         </div>
         
         <div id="save-keys-feedback" style="display:none;" class="mb-md"></div>
-        <button class="btn btn-primary btn-sm mt-md" id="btn-save-keys">${icon('save', 14)} Guardar Keys</button>
+        <div class="flex gap-sm mt-md">
+          <button class="btn btn-primary btn-sm" id="btn-save-keys">
+            ${icon('save', 14)} Guardar Keys
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-test-keys">
+            ${icon('refresh', 14)} Testear Conexión
+          </button>
+        </div>
         
         <div class="text-xs text-muted mt-md" style="padding:var(--space-sm);background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
           ${icon('lock', 12)} <strong>Seguridad:</strong> Las claves se encriptan con AES-256 antes de almacenarse. 
@@ -128,7 +120,6 @@ export async function renderSettings(container) {
       try {
         const params = {};
         if (googleVal) params.p_google_ai_key = googleVal;
-        if (falVal) params.p_fal_ai_key = falVal;
 
         const { error } = await supabase.rpc('save_user_api_keys', params);
         if (error) throw error;
@@ -137,12 +128,29 @@ export async function renderSettings(container) {
         const googleInput = document.getElementById('google-key-input');
         if (googleInput) googleInput.value = '';
 
-        const falInput = document.getElementById('fal-key-input');
-        if (falInput) falInput.value = '';
-
         if (feedback) {
           feedback.style.display = 'block';
-          feedback.innerHTML = `<div class="text-xs" style="color:var(--success);">${icon('check', 12)} Claves guardadas. Validando conexión...</div>`;
+          feedback.innerHTML = `<div class="text-xs" style="color:var(--accent);"><span class="animate-pulse">${icon('clock', 12)}</span> Claves guardadas en DB. Validando conexión con Google...</div>`;
+        }
+
+        const isValid = await checkApiKey();
+
+        if (isValid) {
+            if (feedback) {
+              feedback.innerHTML = `<div class="card" style="border-left: 3px solid var(--success); background: rgba(16, 185, 129, 0.05); padding: var(--space-sm) var(--space-md);">
+                <div class="text-xs" style="color:var(--success); font-weight:700;">${icon('check', 14)} ¡Conexión exitosa!</div>
+                <div class="text-xs text-muted">Google AI está vinculado y listo para procesar tus guiones.</div>
+              </div>`;
+            }
+            // Re-render settings after a short delay to update placeholders
+            setTimeout(() => renderSettings(container), 2000);
+        } else {
+            if (feedback) {
+              feedback.innerHTML = `<div class="card" style="border-left: 3px solid var(--danger); background: rgba(220, 38, 38, 0.05); padding: var(--space-sm) var(--space-md);">
+                <div class="text-xs" style="color:var(--danger); font-weight:700;">${icon('alertTriangle', 14)} La validación falló</div>
+                <div class="text-xs text-muted">Asegúrate de que la API Key sea correcta y tenga habilitado el servicio Gemini API en Google Cloud.</div>
+              </div>`;
+            }
         }
 
         if (btn) {
@@ -150,17 +158,48 @@ export async function renderSettings(container) {
           btn.disabled = false;
         }
 
-        // Re-verify key status. This will trigger a global state update and a re-render.
-        // We do not await it here so we don't throw errors if elements vanish during its execution.
-        checkApiKey();
-
       } catch (err) {
         console.error('Save keys error:', err);
-        feedback.style.display = 'block';
-        feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} Error: ${err.message}</div>`;
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
+        if (feedback) {
+          feedback.style.display = 'block';
+          feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} Error al guardar: ${err.message}</div>`;
+        }
+        if (btn) {
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+        }
       }
+    };
+  }
+
+  // Handle Test Connection
+  const testBtn = document.getElementById('btn-test-keys');
+  if (testBtn) {
+    testBtn.onclick = async () => {
+      const originalHtml = testBtn.innerHTML;
+      const feedback = document.getElementById('save-keys-feedback');
+      
+      testBtn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Testeando...`;
+      testBtn.disabled = true;
+      feedback.style.display = 'block';
+      feedback.innerHTML = `<div class="text-xs" style="color:var(--accent);"><span class="animate-pulse">${icon('clock', 12)}</span> Verificando estado actual...</div>`;
+
+      const isValid = await checkApiKey();
+      
+      if (isValid) {
+        feedback.innerHTML = `<div class="card" style="border-left: 3px solid var(--success); background: rgba(16, 185, 129, 0.05); padding: var(--space-sm) var(--space-md);">
+          <div class="text-xs" style="color:var(--success); font-weight:700;">${icon('check', 14)} Conexión activa</div>
+          <div class="text-xs text-muted">Todo funciona correctamente. Google AI está respondiendo.</div>
+        </div>`;
+      } else {
+        feedback.innerHTML = `<div class="card" style="border-left: 3px solid var(--danger); background: rgba(220, 38, 38, 0.05); padding: var(--space-sm) var(--space-md);">
+          <div class="text-xs" style="color:var(--danger); font-weight:700;">${icon('alertTriangle', 14)} No hay conexión</div>
+          <div class="text-xs text-muted">No pudimos comunicarnos con Google AI. Verifica tu clave o tu conexión a internet.</div>
+        </div>`;
+      }
+      
+      testBtn.innerHTML = originalHtml;
+      testBtn.disabled = false;
     };
   }
 }

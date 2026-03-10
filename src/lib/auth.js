@@ -1,8 +1,13 @@
 import { supabase } from './supabase.js';
-import { setState, setActiveChannel, restoreActiveChannel } from './state.js';
+import { getState, setState, setActiveChannel, restoreActiveChannel } from './state.js';
 
 export async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const signInPromise = supabase.auth.signInWithPassword({ email, password });
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout de autenticación (15s)')), 15000)
+    );
+
+    const { data, error } = await Promise.race([signInPromise, timeoutPromise]);
     if (error) throw error;
     return data;
 }
@@ -24,43 +29,56 @@ export async function signOut() {
 }
 
 export async function loadUserProfile(userId) {
-    const { data, error } = await supabase
+    const fetchPromise = supabase
         .from('profiles')
         .select('id, email, full_name, avatar_url, subscription_tier, created_at')
         .eq('id', userId)
         .single();
+    
+    const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout cargando perfil (10s)')), 10000)
+    );
+
+    const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
     if (error) throw error;
     return data;
 }
 
 export async function loadUserChannels(userId) {
-    // Channels the user owns
-    const { data: owned, error: e1 } = await supabase
-        .from('channels')
-        .select('*')
-        .eq('owner_id', userId)
-        .order('created_at', { ascending: true });
-    if (e1) throw e1;
+    const channelsPromise = (async () => {
+        // Channels the user owns
+        const { data: owned, error: e1 } = await supabase
+            .from('channels')
+            .select('*')
+            .eq('owner_id', userId)
+            .order('created_at', { ascending: true });
+        if (e1) throw e1;
 
-    // Channels the user is a member of
-    const { data: memberships, error: e2 } = await supabase
-        .from('channel_members')
-        .select('channel_id, role, channels(*)')
-        .eq('user_id', userId);
-    if (e2) throw e2;
+        // Channels the user is a member of
+        const { data: memberships, error: e2 } = await supabase
+            .from('channel_members')
+            .select('channel_id, role, channels(*)')
+            .eq('user_id', userId);
+        if (e2) throw e2;
 
-    const memberChannels = (memberships || []).map(m => ({ ...m.channels, role: m.role }));
-    const ownedWithRole = (owned || []).map(c => ({ ...c, role: 'owner' }));
+        const memberChannels = (memberships || []).map(m => ({ ...m.channels, role: m.role }));
+        const ownedWithRole = (owned || []).map(c => ({ ...c, role: 'owner' }));
 
-    // Merge, avoiding duplicates
-    const allChannels = [...ownedWithRole];
-    memberChannels.forEach(mc => {
-        if (!allChannels.find(c => c.id === mc.id)) {
-            allChannels.push(mc);
-        }
-    });
+        // Merge, avoiding duplicates
+        const allChannels = [...ownedWithRole];
+        memberChannels.forEach(mc => {
+            if (!allChannels.find(c => c.id === mc.id)) {
+                allChannels.push(mc);
+            }
+        });
+        return allChannels;
+    })();
 
-    return allChannels;
+    const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout cargando canales (10s)')), 10000)
+    );
+
+    return await Promise.race([channelsPromise, timeoutPromise]);
 }
 
 export async function createChannel(name, youtubeHandle = '', niche = 'Tech/IA') {
@@ -131,7 +149,7 @@ export async function initAuth(onReady) {
     try {
         const sessionPromise = supabase.auth.getSession();
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Auth Timeout')), 3000)
+            setTimeout(() => reject(new Error('Auth Timeout (15s)')), 15000)
         );
 
         // Race the session check against a 3s timeout
@@ -148,9 +166,10 @@ export async function initAuth(onReady) {
         console.warn('Session init error or timeout:', err.message);
 
         // If it's a known "stuck" error or a timeout, clean house
+        // If it's a known "stuck" error, clean house. 
+        // For simple Timeouts, we DON'T clear localStorage to avoid unnecessary logouts.
         if (err.message?.includes('Lock') ||
             err.message?.includes('Abort') ||
-            err.message?.includes('Timeout') ||
             err.message?.includes('Refresh Token')) {
 
             console.warn('Clearing potentially corrupted auth state...');
@@ -161,12 +180,15 @@ export async function initAuth(onReady) {
             setState({ session: null, currentUser: null, channels: [], activeChannelId: null });
 
             // If it was a persistent lock, a reload might be the only cure
-            if (!err.message.includes('Timeout')) {
-                setTimeout(() => window.location.reload(), 1000);
-            }
+            setTimeout(() => window.location.reload(), 1000);
         } else {
-            // General error (e.g. network), just ensure UI is unblocked
-            setState({ session: null, currentUser: null });
+            // Timeout or General error (e.g. network), just ensure UI is unblocked
+            // We keep the local state if it was already set or just reset if empty
+            console.warn('InitAuth delayed or network error, proceeding...');
+            const { session } = getState();
+            if (!session) {
+                setState({ session: null, currentUser: null, channels: [], activeChannelId: null });
+            }
         }
     } finally {
         // UNBLOCK THE UI - This calls initRouter in main.js

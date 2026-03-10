@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { setState } from './state.js';
 
 /**
  * Intelligence Layer for ClickAngle
@@ -39,14 +40,12 @@ Enfócate en: Composición, Iluminación Cinematográfica, Expresiones de alto i
 };
 
 const MODEL_MAPPING = {
-    CHANNEL_ADN: 'gemini-1.5-flash-latest',
-    BRANDING_ANALYSIS: 'gemini-1.5-flash-latest',
-    SCRIPT_ANALYSIS: 'gemini-1.5-pro-latest', // High context for scripts
-    ESPIONAGE_ANALYSIS: 'gemini-1.5-flash-latest',
-    IMAGE_GEN: 'gemini-2.0-flash', // Still valid
+    CHANNEL_ADN: 'gemini-1.5-flash',
+    BRANDING_ANALYSIS: 'gemini-1.5-flash',
+    SCRIPT_ANALYSIS: 'gemini-1.5-pro', // High context for scripts
+    ESPIONAGE_ANALYSIS: 'gemini-1.5-flash',
+    IMAGE_GEN: 'gemini-2.0-flash', 
 };
-
-import { setState } from './state.js';
 
 export async function checkApiKey() {
     try {
@@ -54,47 +53,39 @@ export async function checkApiKey() {
             key_name: 'google_ai_key'
         });
 
-        if (rpcError) {
-            console.error('RPC Error fetching key:', rpcError);
-            if (rpcError.message?.includes('Refresh Token')) {
-                // If token is invalid, we can't do anything until relogin
-                setState({ apiKeyStatus: 'not_connected' });
-                return false;
-            }
-        }
-
-        if (!apiKeyData) {
+        if (rpcError || !apiKeyData) {
             setState({ apiKeyStatus: 'not_connected' });
             return false;
         }
 
         const cleanKey = apiKeyData.trim();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-        // Quick test call to verify key - using v1 and gemini-1.5-flash:generateContent
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${cleanKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }] })
-        });
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${cleanKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }] }),
+                signal: controller.signal
+            });
 
-        if (response.ok) {
-            setState({ apiKeyStatus: 'connected' });
-            return true;
-        } else {
-            const errData = await response.json().catch(() => ({}));
-            console.error('Google API Error Validation:', errData);
+            clearTimeout(timeoutId);
 
-            // If it's a 404, maybe the model name is still wrong? Try fallback
-            if (response.status === 404) {
-                console.warn('404 on gemini-1.5-flash, key might be restricted or project not configured.');
+            if (response.ok) {
+                setState({ apiKeyStatus: 'connected' });
+                return true;
+            } else {
+                setState({ apiKeyStatus: 'disconnected' });
+                return false;
             }
-
+        } catch (apiErr) {
+            clearTimeout(timeoutId);
             setState({ apiKeyStatus: 'disconnected' });
             return false;
         }
     } catch (err) {
-        console.error('Error verificando API key:', err);
-        setState({ apiKeyStatus: 'disconnected' });
+        console.error('Critical checkApiKey error:', err);
         return false;
     }
 }
@@ -107,14 +98,14 @@ export async function callAI(promptType, userContent, context = {}) {
 
         if (keyError || !apiKeyData) {
             setState({ apiKeyStatus: 'not_connected' });
-            throw new Error("API Key de Google no configurada en Settings.");
+            throw new Error("API Key de Google no configurada. Verificá en Settings.");
         }
 
         const systemPrompt = SYSTEM_PROMPTS[promptType];
         const model = MODEL_MAPPING[promptType] || 'gemini-1.5-flash';
         const fullPrompt = `${systemPrompt}\n\nCONTEXTO: ${JSON.stringify(context)}\n\nCONTENIDO A ANALIZAR:\n${userContent}`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeyData}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeyData.trim()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -125,24 +116,41 @@ export async function callAI(promptType, userContent, context = {}) {
             })
         });
 
-        const data = await response.json();
-
-        if (data.error) {
-            if (data.error.code === 401 || data.error.status === 'UNAUTHENTICATED') {
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            if (response.status === 401) {
                 setState({ apiKeyStatus: 'disconnected' });
+                throw new Error("API Key inválida.");
             }
-            throw new Error(data.error.message);
+            throw new Error(errData.error?.message || "Error en la API de Google");
         }
 
-        // Successfully called
+        const data = await response.json();
+        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!aiText) throw new Error("La IA no devolvió respuesta.");
+
         setState({ apiKeyStatus: 'connected' });
 
-        const aiText = data.candidates[0].content.parts[0].text;
-        const cleanJson = aiText.replace(/```json|```/g, '').trim();
-        return JSON.parse(cleanJson);
+        // Robust JSON cleaning
+        let cleanJson = aiText.trim();
+        const jsonMatch = cleanJson.match(/[\{\[]([\s\S]*)[\}\]]/);
+        if (jsonMatch) {
+            cleanJson = jsonMatch[0];
+        } else if (cleanJson.includes('```')) {
+            cleanJson = cleanJson.replace(/```json|```/g, '').trim();
+        }
+
+        try {
+            return JSON.parse(cleanJson);
+        } catch (parseErr) {
+            console.error('JSON Parse Error:', aiText);
+            throw new Error("Formato de datos inválido.");
+        }
     } catch (err) {
         console.error(`AI Error (${promptType}):`, err);
         throw err;
     }
 }
+
 

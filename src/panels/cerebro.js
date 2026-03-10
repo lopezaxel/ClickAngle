@@ -129,7 +129,10 @@ export async function renderCerebro(container) {
           return text;
         } catch (err) {
           console.error('PDF Error:', err);
-          return `Error al leer PDF: ${err.message}. Por favor intenta copiar el texto manualmente.`;
+          return `<div class="text-danger" style="font-size:12px; padding:var(--space-sm); background:rgba(220,38,38,0.05); border-radius:var(--radius-sm); border:1px solid rgba(220,38,38,0.1);">
+            ${icon('alertTriangle', 14)} <strong>Error al leer PDF:</strong> ${err.message}. <br/>
+            Por favor intenta copiar el texto manualmente.
+          </div>`;
         } finally {
           document.getElementById('pdf-loading').style.display = 'none';
         }
@@ -196,7 +199,17 @@ export async function renderCerebro(container) {
 
         render();
       } catch (err) {
-        alert('Error: ' + err.message);
+        console.error('Script Processing Error:', err);
+        const feedbackDiv = document.createElement('div');
+        feedbackDiv.style.marginTop = 'var(--space-md)';
+        feedbackDiv.innerHTML = `<div class="card" style="border-left: 3px solid var(--danger); background: rgba(220, 38, 38, 0.05); padding: var(--space-md);">
+          <div class="text-xs" style="color:var(--danger); font-weight:700;">${icon('alertTriangle', 14)} Error en el análisis</div>
+          <div class="text-xs text-muted">${err.message}</div>
+        </div>`;
+        btn.parentNode.insertBefore(feedbackDiv, btn.nextSibling);
+        
+        // Remove after 5 seconds
+        setTimeout(() => feedbackDiv.remove(), 5000);
       }
       finally {
         btn.innerHTML = originalHtml;

@@ -62,7 +62,7 @@ function initApp() {
     if (!sidebar.innerHTML) renderSidebar(sidebar);
     if (!topbar.innerHTML) {
       renderSearchbar(topbar);
-      checkApiKey(); // Verify API key when topbar is first rendered
+      checkApiKey().catch(err => console.error('Initial API check failed:', err));
     }
     if (!workflowBar.innerHTML) renderWorkflow(workflowBar);
 
@@ -88,8 +88,19 @@ function initApp() {
 
   // Subscribe to state changes
   subscribe(() => {
-    renderApp();
+    try {
+      renderApp();
+    } catch (err) {
+      console.error('CRITICAL APP RENDER ERROR:', err);
+      // Try to recover by showing at least a fallback message
+      if (workspace) {
+        workspace.innerHTML = `<div style="padding:40px;color:red;">Error de aplicación inesperado. Revisa la consola.</div>`;
+      }
+    }
   });
+
+  // Initial render to unblock UI immediately
+  renderApp();
 
   // Listen for hash changes to update highlights without full re-render
   window.addEventListener('hashchange', () => {

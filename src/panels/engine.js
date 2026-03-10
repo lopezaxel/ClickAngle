@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
+import { callAI } from '../lib/intelligence.js';
 
 export async function renderEngine(container) {
   const { activeChannelId } = getState();
@@ -88,9 +89,23 @@ export async function renderEngine(container) {
     <div class="grid-3">
       ${variants.map((v, i) => `<div class="thumbnail-card" style="animation:fadeIn 0.4s ease both;animation-delay:${i * 0.1}s;">
         <div class="thumb-img" style="background:linear-gradient(${135 + i * 30}deg,#0a0a1a,#1a0a2e);position:relative;">
-          ${v.image_url
-          ? `<img src="${v.image_url}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
-          : `<span style="color:var(--text-tertiary);">${icon('image', 36)}</span>`}
+          ${v.status === 'processing' 
+            ? `<div class="flex flex-col items-center justify-center h-full gap-sm">
+                 <div class="animate-pulse">${icon('clock', 32)}</div>
+                 <div class="text-xs opacity-70">Generando...</div>
+               </div>` 
+            : v.image_url
+              ? `<img src="${v.image_url}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
+              : v.status === 'error'
+                ? `<div class="flex flex-col items-center justify-center h-full text-danger">
+                     ${icon('alertTriangle', 32)}
+                     <div class="text-xs">Error de Gen</div>
+                   </div>`
+                : `<div class="flex flex-col items-center justify-center h-full p-md text-center">
+                     <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:0.5; margin-bottom:var(--space-xs);">Concepto Visual</div>
+                     <div style="font-size:11px; opacity:0.8; line-height:1.4;">${v.ai_metadata?.prompt?.slice(0, 80)}...</div>
+                   </div>`
+          }
           <div style="position:absolute;bottom:0;left:0;right:0;padding:8px;background:linear-gradient(transparent,rgba(0,0,0,0.8));">
             <div style="font-family:var(--font-impact);font-size:18px;color:white;letter-spacing:2px;">${v.overlay_text || ''}</div></div></div>
         <div class="thumb-info">
@@ -164,25 +179,46 @@ export async function renderEngine(container) {
           .single();
         if (error) throw error;
 
-        // Create placeholder variants
-        const selectedAngle = angleList.find(a => a.id === angleId);
-        const hookText = title.toUpperCase().slice(0, 30); // Simple hook extraction
+        // High Level AI Logic: Generate 6 creative prompt variations using Gemini
+        const generationContext = {
+          title,
+          summary,
+          angle: angleList.find(a => a.id === angleId)
+        };
+        
+        btn.innerHTML = `<span class="animate-pulse">${icon('brain', 16)}</span> Ideando variantes...`;
+        
+        const aiVariations = await callAI('IMAGE_GEN', `Genera 6 variaciones de miniaturas para este video. Título: ${title}. Resumen: ${summary}. Ángulo: ${generationContext.angle?.name}`, generationContext);
+        const variantsToProcess = Array.isArray(aiVariations) ? aiVariations : (aiVariations.variations || []);
 
-        const variantData = Array.from({ length: 6 }, (_, i) => ({
+        // Insert variants as 'processing'
+        const variantData = variantsToProcess.slice(0, 6).map((v, i) => ({
           project_id: project.id,
           angle_id: angleId,
-          overlay_text: i === 0 ? hookText : `${hookText} [V${i + 1}]`,
-          style_preset: ['tech', 'minimal', 'dramatic', 'neon', 'clean', 'bold'][i],
-          impact_score: Math.floor(Math.random() * 20) + 75,
+          overlay_text: v.overlay_text || title.toUpperCase(),
+          style_preset: v.style || ['tech', 'minimal', 'dramatic', 'neon', 'clean', 'bold'][i],
+          impact_score: Math.floor(Math.random() * 20) + 80,
+          status: 'processing',
           ai_metadata: {
-            angle_name: selectedAngle?.name || '',
-            prompt: selectedAngle?.logic_prompt || '',
-            expression_used: document.getElementById('select-expression')?.value || 'none'
+            prompt: v.visual_prompt || v.prompt || title,
+            angle_name: generationContext.angle?.name
           }
         }));
 
-        await supabase.from('thumbnail_variants').insert(variantData);
+        const { data: insertedVariants, error: vError } = await supabase.from('thumbnail_variants').insert(variantData).select();
+        if (vError) throw vError;
+
+        renderEngine(container); // Show cards with loaders
+
+        // Update variants to 'ready' immediately since we are focusing on Strategy/Concepts now
+        await supabase.from('thumbnail_variants')
+          .update({ status: 'ready' })
+          .eq('project_id', project.id);
+        
         renderEngine(container);
+
+        btn.innerHTML = `${icon('rocket', 16)} Generar`;
+        btn.disabled = false;
       } catch (err) {
         alert('Error: ' + err.message);
         btn.innerHTML = `${icon('rocket', 16)} Generar`;

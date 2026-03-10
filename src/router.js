@@ -1,4 +1,5 @@
 // Simple hash-based SPA router
+import { icon } from './icons.js';
 const routes = {};
 let currentWorkspace = null;
 let currentHashChangeHandler = null;
@@ -37,24 +38,40 @@ function showLoader(workspace) {
 
 /**
  * Re-renders the current route without transitions.
- * Useful for state updates (e.g. channel switch, login).
  */
 export async function reRenderCurrentRoute(workspace) {
     if (workspace) currentWorkspace = workspace;
+    
+    // If we are already rendering, don't pile up more renders.
+    // The current render will use the latest state anyway.
     if (isRendering) return;
 
     const route = getCurrentRoute();
     const renderFn = routes[route];
 
-    updateNavHighlights(route);
-
     if (renderFn && currentWorkspace) {
         isRendering = true;
+        updateNavHighlights(route);
+        
         try {
-            await renderFn(currentWorkspace);
+            // Safety timeout for panels: 15s
+            const renderPromise = renderFn(currentWorkspace);
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Panel Render Timeout (15s)')), 15000)
+            );
+
+            await Promise.race([renderPromise, timeoutPromise]);
         } catch (err) {
             console.error(`Error re-rendering ${route}:`, err);
-            currentWorkspace.innerHTML = `<div style="padding:40px;text-align:center;color:red;font-size:16px;">Error de renderizado: ${err.message}</div>`;
+            if (currentWorkspace) {
+                currentWorkspace.innerHTML = `
+                    <div style="padding:40px;text-align:center;background:rgba(220,38,38,0.05);border-radius:12px;margin:20px;border:1px solid var(--danger);">
+                        <div style="font-size:32px;margin-bottom:12px;">${icon('alertTriangle', 32)}</div>
+                        <h3 style="color:var(--danger);">Error en el Panel</h3>
+                        <p style="font-size:13px;opacity:0.7;">Hubo un problema al cargar esta sección. Refresca la página o intenta de nuevo.</p>
+                        <p style="font-size:10px;margin-top:10px;font-family:monospace;opacity:0.5;">${err.message}</p>
+                    </div>`;
+            }
         } finally {
             isRendering = false;
         }
@@ -77,18 +94,29 @@ export function initRouter(workspace) {
         const route = getCurrentRoute();
         const renderFn = routes[route];
 
-        updateNavHighlights(route);
-
         if (renderFn) {
             isRendering = true;
-            // Provide visual feedback instead of black screen
+            updateNavHighlights(route);
             showLoader(workspace);
 
             try {
-                await renderFn(workspace);
+                // Safety timeout for new route: 15s
+                const renderPromise = renderFn(workspace);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Router Render Timeout (15s)')), 15000)
+                );
+
+                await Promise.race([renderPromise, timeoutPromise]);
             } catch (err) {
                 console.error(`Error rendering ${route}:`, err);
-                workspace.innerHTML = `<div style="padding:40px;text-align:center;color:red;font-size:16px;font-weight:bold;">Error crítico: ${err.message}</div>`;
+                workspace.innerHTML = `
+                    <div style="padding:40px;text-align:center;background:rgba(220,38,38,0.05);border-radius:12px;margin:20px;border:1px solid var(--danger);">
+                        <div style="font-size:32px;margin-bottom:12px;">${icon('alertTriangle', 32)}</div>
+                        <h3 style="color:var(--danger);">Error Crítico de Navegación</h3>
+                        <p style="font-size:13px;opacity:0.7;">No se pudo cargar la vista "${route}".</p>
+                        <p style="font-size:10px;margin-top:10px;font-family:monospace;opacity:0.5;">${err.message}</p>
+                        <button onclick="window.location.reload()" class="btn btn-primary btn-sm" style="margin-top:20px;">Refrescar App</button>
+                    </div>`;
             } finally {
                 isRendering = false;
             }
