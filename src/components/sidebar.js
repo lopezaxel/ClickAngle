@@ -186,10 +186,7 @@ function showCreateChannelModal() {
           <label class="form-label">Nombre del Canal</label>
           <input type="text" class="form-input" id="modal-channel-name" placeholder="Ej: Mi Canal Tech" required />
         </div>
-        <div class="form-group">
-          <label class="form-label">Handle de YouTube (opcional)</label>
-          <input type="text" class="form-input" id="modal-channel-handle" placeholder="@micanal" />
-        </div>
+
         <div class="form-group">
           <label class="form-label">Nicho</label>
           <select class="form-select" id="modal-channel-niche">
@@ -224,7 +221,6 @@ function showCreateChannelModal() {
   document.getElementById('modal-create-channel')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('modal-channel-name').value;
-    const handle = document.getElementById('modal-channel-handle').value;
     const niche = document.getElementById('modal-channel-niche').value;
     const btn = document.getElementById('modal-btn-create');
 
@@ -232,7 +228,7 @@ function showCreateChannelModal() {
     btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Creando...`;
 
     try {
-      await createChannel(name, handle, niche);
+      await createChannel(name, niche);
       overlay.classList.add('hidden');
       overlay.innerHTML = '';
     } catch (err) {

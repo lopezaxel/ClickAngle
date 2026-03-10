@@ -59,6 +59,14 @@ export async function checkApiKey() {
         }
 
         const cleanKey = apiKeyData.trim();
+        
+        // Basic format validation for Google AI Key (starts with AIza... and roughly 39 chars)
+        if (!cleanKey.startsWith('AIza') || cleanKey.length < 30) {
+            console.log('Skipping API check: Invalid key format.');
+            setState({ apiKeyStatus: 'disconnected' });
+            return false;
+        }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 

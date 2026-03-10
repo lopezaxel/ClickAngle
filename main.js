@@ -166,7 +166,17 @@ function initApp() {
 
   // Initialize auth
   initAuth(() => {
-    if (!window.location.hash) window.location.hash = '#dashboard';
+    const { session } = getState();
+    if (session) {
+      if (!window.location.hash || window.location.hash === '#login') {
+        window.location.hash = '#dashboard';
+      }
+    } else {
+      // Clear hash if at root and not logged in (to avoid showing #dashboard)
+      if (window.location.hash === '#dashboard') {
+        window.location.hash = '';
+      }
+    }
   });
 }
 

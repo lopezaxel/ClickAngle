@@ -25,10 +25,7 @@ export function renderEmptyState(container) {
             <label class="form-label">Nombre del Canal</label>
             <input type="text" class="form-input" id="channel-name" placeholder="Ej: Mi Canal Tech" required />
           </div>
-          <div class="form-group">
-            <label class="form-label">Handle de YouTube (opcional)</label>
-            <input type="text" class="form-input" id="channel-handle" placeholder="@micanal" />
-          </div>
+
           <div class="form-group">
             <label class="form-label">Nicho</label>
             <select class="form-select" id="channel-niche">
@@ -52,7 +49,6 @@ export function renderEmptyState(container) {
   document.getElementById('create-channel-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('channel-name').value;
-    const handle = document.getElementById('channel-handle').value;
     const niche = document.getElementById('channel-niche').value;
     const btn = document.getElementById('btn-create-channel');
 
@@ -60,7 +56,7 @@ export function renderEmptyState(container) {
     btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Creando...`;
 
     try {
-      await createChannel(name, handle, niche);
+      await createChannel(name, niche);
       // State change will trigger re-render via main.js
     } catch (err) {
       alert('Error al crear canal: ' + err.message);

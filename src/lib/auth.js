@@ -30,18 +30,20 @@ export async function signOut() {
 }
 
 export async function loadUserProfile(userId) {
-    const fetchPromise = supabase
-        .from('profiles')
-        .select('id, email, full_name, avatar_url, subscription_tier, created_at')
-        .eq('id', userId)
-        .single();
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(new Error('Strict Timeout: Perfil (15s)')), 15000);
     
-    const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout cargando perfil (30s)')), 30000)
-    );
-
+    console.time('DB_Fetch_Profile');
     try {
-        const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, email, full_name, avatar_url, subscription_tier, created_at')
+            .eq('id', userId)
+            .abortSignal(abortController.signal)
+            .single();
+        
+        clearTimeout(timeoutId);
+        console.timeEnd('DB_Fetch_Profile');
         
         if (error) {
             // If RLS fails or profile is missing (PGRST116), don't crash.
@@ -68,20 +70,28 @@ export async function loadUserProfile(userId) {
 }
 
 export async function loadUserChannels(userId) {
-    const channelsPromise = (async () => {
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(new Error('Strict Timeout: Canales (15s)')), 15000);
+    
+    console.time('DB_Fetch_Channels');
+    try {
         // Channels the user owns
         const { data: owned, error: e1 } = await supabase
             .from('channels')
             .select('*')
             .eq('owner_id', userId)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true })
+            .abortSignal(abortController.signal);
+        
         if (e1) throw e1;
 
         // Channels the user is a member of
         const { data: memberships, error: e2 } = await supabase
             .from('channel_members')
             .select('channel_id, role, channels(*)')
-            .eq('user_id', userId);
+            .eq('user_id', userId)
+            .abortSignal(abortController.signal);
+        
         if (e2) throw e2;
 
         const memberChannels = (memberships || []).map(m => ({ ...m.channels, role: m.role }));
@@ -94,14 +104,15 @@ export async function loadUserChannels(userId) {
                 allChannels.push(mc);
             }
         });
+        
+        clearTimeout(timeoutId);
+        console.timeEnd('DB_Fetch_Channels');
         return allChannels;
-    })();
-
-    const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout cargando canales (45s)')), 45000)
-    );
-
-    return await Promise.race([channelsPromise, timeoutPromise]);
+    } catch (err) {
+        clearTimeout(timeoutId);
+        console.timeEnd('DB_Fetch_Channels');
+        throw err;
+    }
 }
 
 export async function deleteChannel(channelId) {
@@ -140,13 +151,13 @@ export async function deleteChannel(channelId) {
     return true;
 }
 
-export async function createChannel(name, youtubeHandle = '', niche = 'Tech/IA') {
+export async function createChannel(name, niche = 'Tech/IA') {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('No autenticado');
 
     const { data, error } = await supabase
         .from('channels')
-        .insert({ owner_id: user.id, name, youtube_handle: youtubeHandle, niche })
+        .insert({ owner_id: user.id, name, niche })
         .select()
         .single();
     if (error) throw error;
@@ -187,11 +198,18 @@ async function loadUserData(session) {
             };
             setState({ currentUser: placeholderUser, session });
 
+            // Load profile and channels in parallel but with individual catch blocks for resilience
             const [profile, channels] = await Promise.all([
-                loadUserProfile(session.user.id),
-                loadUserChannels(session.user.id)
+                loadUserProfile(session.user.id).catch(err => {
+                    console.warn('Non-critical Profile Load Error:', err);
+                    return { id: session.user.id, email: session.user.email, full_name: 'Usuario (Offline)' };
+                }),
+                loadUserChannels(session.user.id).catch(err => {
+                    console.warn('Non-critical Channel Load Error:', err);
+                    return [];
+                })
             ]);
-
+            
             const activeChannelId = restoreActiveChannel(channels);
             
             setState({ 
@@ -205,8 +223,7 @@ async function loadUserData(session) {
             console.error('Error loading user data:', err);
             const isAuthError = err.message?.includes('JSON objectRequested') || 
                                err.status === 401 || 
-                               err.status === 403 ||
-                               err.message?.includes('PGRST116');
+                               err.status === 403;
 
             if (isAuthError) {
                 await signOut();
@@ -230,7 +247,7 @@ export async function initAuth(onReady) {
         }
     };
 
-    // Emergency Timeout: Increased to 35s to allow for the parallel loading
+    // Emergency Timeout: Reduced to 20s as requests should be faster now
     const emergencyTimeout = setTimeout(() => {
         const { isAuthInitializing } = getState();
         if (isAuthInitializing) {
@@ -238,11 +255,10 @@ export async function initAuth(onReady) {
             setState({ isAuthInitializing: false });
             finish();
         }
-    }, 35000);
+    }, 20000);
 
     // Listen for auth events IMMEDIATELY
     supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('Auth Event:', event);
         if (event === 'SIGNED_OUT') {
             setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false });
         } else if (session) {
@@ -252,29 +268,27 @@ export async function initAuth(onReady) {
     });
 
     try {
-        // Use getUser() instead of getSession() to force a sync check with the server
-        // and ensure the internal auth client has the correct headers/tokens for RLS.
-        const sessionPromise = supabase.auth.getUser();
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('User Recovery Timeout (15s)')), 15000)
-        );
+        // First check if a session exists at all to avoid unnecessary errors
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (!initialSession) {
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false });
+            return;
+        }
 
-        const { data: { user }, error } = await Promise.race([sessionPromise, timeoutPromise]);
+        // If session exists, use getUser() to force a sync check with the server
+        const { data: { user }, error } = await supabase.auth.getUser();
 
         if (error) throw error;
         
-        // After getUser succeeds, the client headers are guaranteed to be set correctly.
-        // Now fetch full session for loadUserData.
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-            await loadUserData(session);
-        } else {
-            console.log('No active session.');
-            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false });
-        }
+        await loadUserData(initialSession);
     } catch (err) {
-        console.warn('InitAuth strategy fallback:', err.message);
+        // Silence the warning if it's just a missing session or expected recovery failure
+        if (err.message?.includes('Auth session missing') || err.message?.includes('no session')) {
+            setState({ isAuthInitializing: false });
+        } else {
+            console.warn('InitAuth strategy fallback:', err.message);
+        }
         
         if (err.message?.includes('Lock') || err.message?.includes('Abort') || err.message?.includes('Timeout')) {
             console.warn('Protocolo Experto-Supabase: Limpieza de sesion por error critico.');
