@@ -6,6 +6,7 @@ const state = {
     channels: [],           // user's channels list
     apiKeyStatus: 'not_connected', // 'connected', 'not_connected', 'disconnected'
     isAuthInitializing: true, // true while Supabase recovers session
+    isLoadingChannels: true,  // true while channels haven't been fetched yet
 };
 
 const listeners = new Set();

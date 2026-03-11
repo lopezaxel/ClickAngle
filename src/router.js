@@ -49,10 +49,10 @@ async function performRender(workspace, showRouteLoader = true) {
     if (showRouteLoader) showLoader(workspace);
 
     try {
-        // Safety timeout: 20s
+        // Safety timeout: 8s (panels should render fast; Hub is synchronous)
         const renderPromise = renderFn(workspace);
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Panel Render Timeout (20s)')), 20000)
+            setTimeout(() => reject(new Error('Panel Render Timeout (8s)')), 8000)
         );
 
         await Promise.race([renderPromise, timeoutPromise]);

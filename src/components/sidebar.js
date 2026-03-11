@@ -1,8 +1,7 @@
 import { navigateTo, getCurrentRoute } from '../router.js';
 import { icon } from '../icons.js';
-import { getState, setActiveChannel, subscribe } from '../lib/state.js';
-import { signOut, createChannel, loadUserChannels } from '../lib/auth.js';
-import { setState } from '../lib/state.js';
+import { getState, setState } from '../lib/state.js';
+import { signOut } from '../lib/auth.js';
 
 const NAV_ITEMS = [
   { route: 'dashboard', icon: 'barChart', label: 'Dashboard', section: 'Principal' },
@@ -34,40 +33,20 @@ export function renderSidebar(container) {
       </div>
     </div>
 
-    <!-- Channel Selector -->
+    <!-- Active Channel Display (read-only) -->
     <div class="sidebar-section" style="padding: 0 var(--space-md);">
-      <div class="channel-selector" id="channel-selector">
-        <div class="channel-selector-current" id="channel-selector-toggle">
-          <div class="channel-avatar">
-            ${activeChannel ? (activeChannel.name || 'C').charAt(0).toUpperCase() : '?'}
-          </div>
-          <div class="channel-info">
-            <div class="channel-name">${activeChannel ? activeChannel.name : 'Sin canal'}</div>
-            <div class="channel-niche">${activeChannel ? activeChannel.niche : 'Seleccionar canal'}</div>
-          </div>
-          <span class="channel-chevron">${icon('chevronDown', 14)}</span>
+      <div class="sidebar-channel-display" id="sidebar-go-hub">
+        <div class="channel-avatar">
+          ${activeChannel?.image_url 
+            ? `<img src="${activeChannel.image_url}" alt="${activeChannel.name}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
+            : (activeChannel ? (activeChannel.name || 'C').charAt(0).toUpperCase() : '?')
+          }
         </div>
-        <div class="channel-dropdown hidden" id="channel-dropdown">
-          ${channels.map(ch => `
-            <div class="channel-dropdown-item ${ch.id === activeChannelId ? 'active' : ''}" data-channel-id="${ch.id}">
-              <div class="channel-avatar-sm">${(ch.name || 'C').charAt(0).toUpperCase()}</div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-size:13px;font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${ch.name}</div>
-                <div style="font-size:10px;color:var(--text-tertiary);">${ch.niche}</div>
-              </div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                ${ch.id === activeChannelId ? `<span style="color:var(--accent);">${icon('check', 14)}</span>` : ''}
-                <button class="btn-delete-channel" data-id="${ch.id}" title="Eliminar canal" style="background:none; border:none; color:var(--text-tertiary); cursor:pointer; padding:4px; border-radius:4px; display:flex; align-items:center;">
-                  ${icon('trash', 14)}
-                </button>
-              </div>
-            </div>
-          `).join('')}
-          <div class="channel-dropdown-item channel-add-btn" id="btn-add-channel-dropdown">
-            <span style="color:var(--accent);">${icon('plus', 16)}</span>
-            <span style="font-size:13px;font-weight:600;color:var(--accent-light);">Agregar Canal</span>
-          </div>
+        <div class="channel-info">
+          <div class="channel-name">${activeChannel ? activeChannel.name : 'Sin canal'}</div>
+          <div class="channel-niche">${activeChannel ? activeChannel.niche : 'Ir al Hub'}</div>
         </div>
+        <span class="sidebar-hub-icon" title="Cambiar proyecto">${icon('grid', 14)}</span>
       </div>
     </div>
   `;
@@ -112,129 +91,25 @@ export function renderSidebar(container) {
     });
   });
 
-  // Channel selector toggle
-  const toggle = document.getElementById('channel-selector-toggle');
-  const dropdown = document.getElementById('channel-dropdown');
-  if (toggle && dropdown) {
-    toggle.addEventListener('click', () => {
-      dropdown.classList.toggle('hidden');
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('#channel-selector')) {
-        dropdown.classList.add('hidden');
-      }
-    });
-  }
-
-  // Channel selection
-  container.querySelectorAll('.channel-dropdown-item[data-channel-id]').forEach(item => {
-    item.addEventListener('click', (e) => {
-      // If delete button was clicked, don't select the channel
-      if (e.target.closest('.btn-delete-channel')) return;
-      
-      setActiveChannel(item.dataset.channelId);
-      dropdown?.classList.add('hidden');
-    });
+  // Go to Hub (channel selector)
+  document.getElementById('sidebar-go-hub')?.addEventListener('click', () => {
+    localStorage.removeItem('clickangles_active_channel');
+    navigateTo('channel-selector');
   });
 
-  // Delete channel
-  container.querySelectorAll('.btn-delete-channel').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const channelId = btn.dataset.id;
-      const channelName = channels.find(c => c.id === channelId)?.name || 'este canal';
-      
-      if (window.confirm(`¿Estás seguro de que quieres eliminar "${channelName}"? Esta acción no se puede deshacer.`)) {
-        try {
-          const { deleteChannel } = await import('../lib/auth.js');
-          await deleteChannel(channelId);
-          // Sidebar will re-render due to state subscription
-        } catch (err) {
-          alert('Error al eliminar el canal: ' + err.message);
-        }
-      }
-    });
-  });
-
-  // Add channel button
-  document.getElementById('btn-add-channel-dropdown')?.addEventListener('click', () => {
-    dropdown?.classList.add('hidden');
-    showCreateChannelModal();
-  });
-
-  // Logout
-  document.getElementById('btn-logout')?.addEventListener('click', async () => {
-    await signOut();
-  });
-}
-
-function showCreateChannelModal() {
-  const overlay = document.getElementById('modal-overlay');
-  if (!overlay) return;
-
-  overlay.classList.remove('hidden');
-  overlay.innerHTML = `
-    <div class="modal animate-in" style="max-width:420px;">
-      <div class="card-header">
-        <div class="card-title">${icon('plus', 16)} Nuevo Canal</div>
-        <button class="btn btn-ghost btn-sm" id="modal-close">${icon('x', 16)}</button>
-      </div>
-      <form id="modal-create-channel">
-        <div class="form-group">
-          <label class="form-label">Nombre del Canal</label>
-          <input type="text" class="form-input" id="modal-channel-name" placeholder="Ej: Mi Canal Tech" required />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Nicho</label>
-          <select class="form-select" id="modal-channel-niche">
-            <option value="Tech/IA" selected>Tech/IA</option>
-            <option value="Gaming">Gaming</option>
-            <option value="Educación">Educación</option>
-            <option value="Entretenimiento">Entretenimiento</option>
-            <option value="Lifestyle">Lifestyle</option>
-            <option value="Negocios">Negocios</option>
-            <option value="Otro">Otro</option>
-          </select>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;" id="modal-btn-create">
-          ${icon('rocket', 16)} Crear Canal
-        </button>
-      </form>
-    </div>
-  `;
-
-  document.getElementById('modal-close')?.addEventListener('click', () => {
-    overlay.classList.add('hidden');
-    overlay.innerHTML = '';
-  });
-
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-    }
-  });
-
-  document.getElementById('modal-create-channel')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = document.getElementById('modal-channel-name').value;
-    const niche = document.getElementById('modal-channel-niche').value;
-    const btn = document.getElementById('modal-btn-create');
-
+  // Logout — use delegation on container to avoid document.getElementById issues
+  container.addEventListener('click', async (e) => {
+    if (!e.target.closest('#btn-logout')) return;
+    
+    const btn = e.target.closest('#btn-logout');
     btn.disabled = true;
-    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Creando...`;
+    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span>`;
 
-    try {
-      await createChannel(name, niche);
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-    } catch (err) {
-      alert('Error: ' + err.message);
-      btn.disabled = false;
-      btn.innerHTML = `${icon('rocket', 16)} Crear Canal`;
-    }
+    // 1. Clear local state immediately for instant feedback
+    localStorage.removeItem('clickangles_active_channel');
+    setState({ currentUser: null, session: null, activeChannelId: null, channels: [], isLoadingChannels: true });
+
+    // 2. Tell Supabase (fire-and-forget, don't block the UI)
+    signOut().catch(err => console.warn('SignOut error (ignored):', err));
   });
 }

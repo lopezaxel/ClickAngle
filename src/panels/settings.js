@@ -10,20 +10,26 @@ export async function renderSettings(container) {
     return;
   }
 
-  // Show a local loader while fetching keys
-  container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
+  // RENDER IMMEDIATELY (synchronous) with a placeholder for the key field
+  // Then fetch the masked key in the background — avoids the 8s Panel Render Timeout
+  renderSettingsUI(container, null);
 
-  // Fetch masked keys via secure RPC
-  let maskedKeys = { google_ai_key_masked: '', google_ai_key_set: false };
+  // Fetch masked keys in background (non-blocking)
   try {
     const { data, error } = await supabase.rpc('get_masked_api_keys');
-    if (error) throw error;
-    if (data) maskedKeys = data;
+    if (!error && data) {
+      // Re-render with real key data (only replaces the placeholders)
+      renderSettingsUI(container, data);
+    }
   } catch (err) {
     console.error('Error fetching masked keys:', err);
   }
+}
 
-  const googlePlaceholder = (maskedKeys && maskedKeys.google_ai_key_set) ? maskedKeys.google_ai_key_masked : 'AIza...';
+function renderSettingsUI(container, maskedKeys) {
+  const googlePlaceholder = (maskedKeys?.google_ai_key_set) ? maskedKeys.google_ai_key_masked : 'AIza...';
+  const keyStatus = maskedKeys?.google_ai_key_set;
+
 
   const html = `<div class="animate-in">
     <div class="section-header">
@@ -56,7 +62,7 @@ export async function renderSettings(container) {
             data-lpignore="true"
             data-1p-ignore="true" />
           <p class="text-xs text-muted mt-xs">
-            ${maskedKeys.google_ai_key_set
+            ${keyStatus
       ? `${icon('check', 12)} Clave configurada — dejá el campo vacío para mantenerla, o ingresá una nueva para reemplazarla.`
       : `Obtenla en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-accent">Google AI Studio</a>`}
           </p>
@@ -145,7 +151,11 @@ export async function renderSettings(container) {
               </div>`;
             }
             // Re-render settings after a short delay to update placeholders
-            setTimeout(() => renderSettings(container), 2000);
+            setTimeout(() => {
+              const { data } = supabase.rpc('get_masked_api_keys').then(r => {
+                if (!r.error && r.data) renderSettingsUI(container, r.data);
+              });
+            }, 2000);
         } else {
             if (feedback) {
               feedback.innerHTML = `<div class="card" style="border-left: 3px solid var(--danger); background: rgba(220, 38, 38, 0.05); padding: var(--space-sm) var(--space-md);">

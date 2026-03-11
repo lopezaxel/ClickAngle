@@ -26,7 +26,7 @@ export async function signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     localStorage.removeItem('clickangles_active_channel');
-    setState({ currentUser: null, session: null, activeChannelId: null, channels: [] });
+    setState({ currentUser: null, session: null, activeChannelId: null, channels: [], isLoadingChannels: true });
 }
 
 export async function loadUserProfile(userId) {
@@ -69,50 +69,51 @@ export async function loadUserProfile(userId) {
     }
 }
 
+let channelsPromise = null; // Deduplication: concurrent callers share one in-flight request
+
 export async function loadUserChannels(userId) {
+    // If already fetching, return the same promise to avoid duplicate requests
+    if (channelsPromise) return channelsPromise;
+
     const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(new Error('Strict Timeout: Canales (15s)')), 15000);
+    const timeoutId = setTimeout(() => abortController.abort(new Error('Timeout: Canales (8s)')), 8000);
     
-    console.time('DB_Fetch_Channels');
-    try {
-        // Channels the user owns
-        const { data: owned, error: e1 } = await supabase
-            .from('channels')
-            .select('*')
-            .eq('owner_id', userId)
-            .order('created_at', { ascending: true })
-            .abortSignal(abortController.signal);
-        
-        if (e1) throw e1;
+    channelsPromise = (async () => {
+        try {
+            // Run both queries concurrently
+            const [ownedResult, membershipsResult] = await Promise.all([
+                supabase
+                    .from('channels')
+                    .select('*')
+                    .eq('owner_id', userId)
+                    .order('created_at', { ascending: true })
+                    .abortSignal(abortController.signal),
+                supabase
+                    .from('channel_members')
+                    .select('channel_id, role, channels(*)')
+                    .eq('user_id', userId)
+                    .abortSignal(abortController.signal)
+            ]);
 
-        // Channels the user is a member of
-        const { data: memberships, error: e2 } = await supabase
-            .from('channel_members')
-            .select('channel_id, role, channels(*)')
-            .eq('user_id', userId)
-            .abortSignal(abortController.signal);
-        
-        if (e2) throw e2;
+            if (ownedResult.error) throw ownedResult.error;
+            if (membershipsResult.error) throw membershipsResult.error;
 
-        const memberChannels = (memberships || []).map(m => ({ ...m.channels, role: m.role }));
-        const ownedWithRole = (owned || []).map(c => ({ ...c, role: 'owner' }));
+            const memberChannels = (membershipsResult.data || []).map(m => ({ ...m.channels, role: m.role }));
+            const ownedWithRole = (ownedResult.data || []).map(c => ({ ...c, role: 'owner' }));
 
-        // Merge, avoiding duplicates
-        const allChannels = [...ownedWithRole];
-        memberChannels.forEach(mc => {
-            if (!allChannels.find(c => c.id === mc.id)) {
-                allChannels.push(mc);
-            }
-        });
-        
-        clearTimeout(timeoutId);
-        console.timeEnd('DB_Fetch_Channels');
-        return allChannels;
-    } catch (err) {
-        clearTimeout(timeoutId);
-        console.timeEnd('DB_Fetch_Channels');
-        throw err;
-    }
+            const allChannels = [...ownedWithRole];
+            memberChannels.forEach(mc => {
+                if (!allChannels.find(c => c.id === mc.id)) allChannels.push(mc);
+            });
+
+            return allChannels;
+        } finally {
+            clearTimeout(timeoutId);
+            channelsPromise = null;
+        }
+    })();
+
+    return channelsPromise;
 }
 
 export async function deleteChannel(channelId) {
@@ -151,13 +152,16 @@ export async function deleteChannel(channelId) {
     return true;
 }
 
-export async function createChannel(name, niche = 'Tech/IA') {
+export async function createChannel(name, niche = 'Tech/IA', imageUrl = null) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('No autenticado');
 
+    const insertPayload = { owner_id: user.id, name, niche };
+    if (imageUrl) insertPayload.image_url = imageUrl;
+
     const { data, error } = await supabase
         .from('channels')
-        .insert({ owner_id: user.id, name, niche })
+        .insert(insertPayload)
         .select()
         .single();
     if (error) throw error;
@@ -217,7 +221,8 @@ async function loadUserData(session) {
                 session, 
                 channels, 
                 activeChannelId,
-                isAuthInitializing: false 
+                isAuthInitializing: false,
+                isLoadingChannels: false
             });
         } catch (err) {
             console.error('Error loading user data:', err);
@@ -228,7 +233,7 @@ async function loadUserData(session) {
             if (isAuthError) {
                 await signOut();
             } else {
-                setState({ session, isAuthInitializing: false });
+                setState({ session, isAuthInitializing: false, isLoadingChannels: false });
             }
         } finally {
             userDataPromise = null;
@@ -252,7 +257,7 @@ export async function initAuth(onReady) {
         const { isAuthInitializing } = getState();
         if (isAuthInitializing) {
             console.warn('Auth initialization slow, proceeding to unlock UI...');
-            setState({ isAuthInitializing: false });
+            setState({ isAuthInitializing: false, isLoadingChannels: false });
             finish();
         }
     }, 20000);
@@ -260,7 +265,7 @@ export async function initAuth(onReady) {
     // Listen for auth events IMMEDIATELY
     supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
-            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false });
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: true });
         } else if (session) {
             await loadUserData(session);
         }
@@ -272,7 +277,7 @@ export async function initAuth(onReady) {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         
         if (!initialSession) {
-            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false });
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
             return;
         }
 
@@ -285,7 +290,7 @@ export async function initAuth(onReady) {
     } catch (err) {
         // Silence the warning if it's just a missing session or expected recovery failure
         if (err.message?.includes('Auth session missing') || err.message?.includes('no session')) {
-            setState({ isAuthInitializing: false });
+            setState({ isAuthInitializing: false, isLoadingChannels: false });
         } else {
             console.warn('InitAuth strategy fallback:', err.message);
         }
@@ -300,7 +305,7 @@ export async function initAuth(onReady) {
             });
             setTimeout(() => window.location.reload(), 500);
         } else {
-            setState({ isAuthInitializing: false });
+            setState({ isAuthInitializing: false, isLoadingChannels: false });
         }
     } finally {
         clearTimeout(emergencyTimeout);
