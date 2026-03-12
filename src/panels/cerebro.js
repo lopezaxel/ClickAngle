@@ -73,10 +73,10 @@ export async function renderCerebro(container) {
           <div class="mt-lg">
             <div class="card-title mb-md" style="font-size:14px; color:var(--text-primary);">${icon('crosshair', 16)} Ángulos Recomendados</div>
             <div class="grid-1 gap-sm">
-              ${analysisResult.recommended_angles.map(ang => `
+              ${(analysisResult.recommended_angles || []).map(ang => `
                 <div class="card bg-tertiary" style="padding:var(--space-md); border: 1px solid var(--border);">
-                  <div class="text-xs font-bold text-accent mb-xs">${ang.name}</div>
-                  <div class="text-xs text-muted">${ang.reason}</div>
+                  <div class="text-xs font-bold text-accent mb-xs">${ang.name || 'Ángulo'}</div>
+                  <div class="text-xs text-muted">${ang.reason || ''}</div>
                 </div>
               `).join('')}
             </div>

@@ -12,6 +12,13 @@ export async function renderEngine(container) {
   // Fetch angles for selector
   const { data: angles } = await supabase.from('click_angles').select('*').order('name');
 
+  // Fetch brand kit for face analysis info
+  const { data: brandKit } = await supabase
+    .from('brand_kits')
+    .select('*')
+    .eq('channel_id', activeChannelId)
+    .maybeSingle();
+
   // Fetch face vault for expression selector
   const { data: faces } = await supabase
     .from('face_vault')
@@ -74,6 +81,13 @@ export async function renderEngine(container) {
         </select></div>
         <div class="form-group"><label class="form-label">Resolución</label>
         <select class="form-select"><option selected>1280×720</option><option>1920×1080</option></select></div>
+        <div class="form-group mt-sm">
+          <label class="flex items-center gap-sm cursor-pointer" style="font-size:12px; font-weight:bold;">
+            <input type="checkbox" id="check-include-face" ${brandKit?.face_analysis ? '' : 'disabled'} />
+            Incluir mi rostro en las variantes
+          </label>
+          ${!brandKit?.face_analysis ? '<p class="text-xs text-muted" style="margin-left:22px;">Primero analiza tu rostro en Brand Kit</p>' : ''}
+        </div>
       </div>
     </div>
 
@@ -188,7 +202,22 @@ export async function renderEngine(container) {
         
         btn.innerHTML = `<span class="animate-pulse">${icon('brain', 16)}</span> Ideando variantes...`;
         
-        const aiVariations = await callAI('IMAGE_GEN', `Genera 6 variaciones de miniaturas para este video. Título: ${title}. Resumen: ${summary}. Ángulo: ${generationContext.angle?.name}`, generationContext);
+        const includeFace = document.getElementById('check-include-face')?.checked;
+        const faceAnalysis = brandKit?.face_analysis;
+        const selectedExpressionId = document.getElementById('select-expression')?.value;
+        const selectedFace = faceList.find(f => f.id === selectedExpressionId);
+
+        let aiPrompt = `Genera 6 variaciones de miniaturas para este video. Título: ${title}. Resumen: ${summary}. Ángulo: ${generationContext.angle?.name}`;
+        
+        if (includeFace && faceAnalysis) {
+            aiPrompt += `\n\nIMPORTANTE: El creador DEBE aparecer en la miniatura. 
+            RASGOS DEL CREADOR: ${JSON.stringify(faceAnalysis)}
+            EXPRESIÓN REQUERIDA: ${selectedFace?.expression_type || 'Normal'}
+            REFERENCIA VISUAL: ${selectedFace?.image_url || ''}
+            Instrucción: Integra el rostro del creador de forma que se vea natural pero con alto impacto visual siguiendo el ángulo seleccionado.`;
+        }
+
+        const aiVariations = await callAI('IMAGE_GEN', aiPrompt, generationContext);
         const variantsToProcess = Array.isArray(aiVariations) ? aiVariations : (aiVariations.variations || []);
 
         // Insert variants as 'processing'

@@ -17,20 +17,73 @@ function triggerFileInput(accept, callback) {
   input.click();
 }
 
+// Helper to compress image before uploading
+async function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height *= maxWidth / width));
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width *= maxHeight / height));
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          // Keep original file name but force jpg for consistency and size
+          const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          });
+          resolve(newFile);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+}
+
 async function uploadToStorage(bucket, file, channelId) {
   try {
+    const { session } = getState();
+    const userId = session?.user?.id;
+    if (!userId) throw new Error('Usuario no autenticado');
+
     const ext = file.name.split('.').pop();
-    const fileName = `${channelId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(bucket).upload(fileName, file, {
+    // Path must start with userId to satisfy RLS update/delete policies
+    const fileName = `${userId}/channels/${channelId}/${Date.now()}.${ext}`;
+    
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, file, {
       cacheControl: '3600',
-      upsert: true
+      upsert: false // Use false to avoid update permission issues on initial upload
     });
-    if (error) throw error;
+    
+    if (uploadError) throw uploadError;
+    
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
     return urlData.publicUrl;
   } catch (err) {
-    console.error('Storage Upload Error:', err);
-    throw new Error('Error al subir a almacenamiento: ' + err.message);
+    console.error(`Storage Upload Error (${bucket}):`, err);
+    throw new Error(`Error al subir a ${bucket}: ` + (err.message || 'Error desconocido'));
   }
 }
 
@@ -110,7 +163,12 @@ export async function renderBrand(container) {
           <div class="card mb-md">
             <div class="card-header">
               <div class="card-title">${icon('camera', 16)} Face Vault</div>
-              <span class="badge badge-accent">${faceList.length} Fotos</span>
+              <div class="flex gap-xs items-center">
+                <button class="btn btn-secondary btn-xs" id="btn-analyze-faces" title="Analizar rasgos faciales con IA" ${faceList.length === 0 ? 'disabled' : ''}>
+                  ${icon('brain', 12)} Analizar
+                </button>
+                <span class="badge ${brandKit?.face_analysis ? 'badge-accent' : 'badge-neutral'}">${brandKit?.face_analysis ? 'Analizado' : 'Pendiente'}</span>
+              </div>
             </div>
             <div class="grid-4 mb-md" style="grid-template-columns: repeat(4, 1fr);">
               ${faceList.map(f => `
@@ -196,44 +254,164 @@ export async function renderBrand(container) {
             const btn = document.getElementById('btn-upload-creator-thumb');
             const originalHtml = btn.innerHTML;
             try {
-              btn.innerHTML = `<span class="animate-pulse">${icon('clock', 12)}</span>`;
-              const url = await uploadToStorage('references', file, activeChannelId);
-              await supabase.from('creator_thumbnails').insert({ channel_id: activeChannelId, image_url: url });
+              btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span><span class="text-xs ml-xs">Procesando...</span>`;
+              btn.style.opacity = '1';
+              btn.style.transform = 'none'; // prevent hover scale during upload
+              
+              const compressedFile = await compressImage(file);
+              btn.innerHTML = `<span class="animate-pulse">${icon('upload', 16)}</span><span class="text-xs ml-xs">Subiendo...</span>`;
+              
+              const url = await uploadToStorage('references', compressedFile, activeChannelId);
+              const { error: dbError } = await supabase.from('creator_thumbnails').insert({ 
+                channel_id: activeChannelId, 
+                image_url: url 
+              });
+              
+              if (dbError) throw dbError;
               renderBrand(container);
-            } catch (err) { alert('Error: ' + err.message); }
-            finally { if (btn) { btn.innerHTML = originalHtml; } }
+            } catch (err) { 
+              console.error('Upload Error:', err);
+              alert('No se pudo guardar la miniatura: ' + err.message); 
+              if (btn) btn.innerHTML = originalHtml; // Revert only on error, otherwise renderBrand replaces it
+            }
           });
         });
 
         document.getElementById('btn-upload-face')?.addEventListener('click', () => uploadFace());
         container.querySelectorAll('.empty-face-slot').forEach(slot => {
-            slot.addEventListener('click', () => uploadFace(slot.dataset.suggested));
+            slot.addEventListener('click', () => {
+              if (slot.classList.contains('uploading')) return; // Prevent double clicks
+              uploadFace(slot.dataset.suggested, slot);
+            });
         });
 
-        const uploadFace = (suggested) => {
+        const uploadFace = (suggested, slotElement = null) => {
             triggerFileInput('image/*', async (file) => {
+                const btn = document.getElementById('btn-upload-face');
+                const originalBtnHtml = btn ? btn.innerHTML : '';
+                const originalSlotHtml = slotElement ? slotElement.innerHTML : '';
+
                 try {
                     const expression = prompt('Tipo de expresión:', suggested || 'Normal');
                     if (!expression) return;
-                    const url = await uploadToStorage('faces', file, activeChannelId);
-                    await supabase.from('face_vault').insert({ channel_id: activeChannelId, expression_type: expression, image_url: url });
+                    
+                    // UI Feedback
+                    if (btn && !slotElement) {
+                        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Procesando imagen...`;
+                        btn.disabled = true;
+                    }
+                    if (slotElement) {
+                        slotElement.classList.add('uploading');
+                        slotElement.innerHTML = `<div style="width:48px;height:48px;border-radius:50%;background:var(--bg-tertiary);margin:0 auto var(--space-sm);display:flex;align-items:center;justify-content:center;color:var(--accent);" class="animate-pulse">${icon('clock', 18)}</div>
+                                                 <div class="text-xs font-bold text-muted">Subiendo...</div>`;
+                    }
+                    
+                    const compressedFile = await compressImage(file);
+
+                    if (btn && !slotElement) {
+                         btn.innerHTML = `<span class="animate-pulse">${icon('upload', 14)}</span> Subiendo a la nube...`;
+                    }
+
+                    const url = await uploadToStorage('faces', compressedFile, activeChannelId);
+                    const { error: dbError } = await supabase.from('face_vault').insert({ 
+                        channel_id: activeChannelId, 
+                        expression_type: expression, 
+                        image_url: url 
+                    });
+                    
+                    if (dbError) throw dbError;
+                    
+                    // Success! Re-render to show new face
                     renderBrand(container);
-                } catch (err) { alert('Error: ' + err.message); }
+                } catch (err) { 
+                    console.error('Face Upload Error:', err);
+                    alert('No se pudo guardar el rostro: ' + err.message); 
+                    // Revert UI on error
+                    if (btn && !slotElement) {
+                        btn.innerHTML = originalBtnHtml;
+                        btn.disabled = false;
+                    }
+                    if (slotElement) {
+                        slotElement.classList.remove('uploading');
+                        slotElement.innerHTML = originalSlotHtml;
+                    }
+                }
             });
         };
 
+        // Face Analysis Logic
+        document.getElementById('btn-analyze-faces')?.addEventListener('click', async () => {
+          const btn = document.getElementById('btn-analyze-faces');
+          if (faceList.length === 0) return;
+          const originalHtml = btn.innerHTML;
+          try {
+            btn.innerHTML = `<span class="animate-pulse">${icon('clock', 12)}</span>...`;
+            btn.disabled = true;
+            
+            const faceUrls = faceList.map(f => f.image_url);
+            const analysis = await callAI('FACE_ANALYSIS', `Analiza los rasgos físicos y estilo de estas fotos del creador: ${faceUrls.join(', ')}`, { faces: faceList });
+            
+            const { error } = await supabase.from('brand_kits').upsert({ 
+              channel_id: activeChannelId, 
+              face_analysis: analysis 
+            }, { onConflict: 'channel_id' });
+            
+            if (error) throw error;
+            renderBrand(container);
+          } catch (err) { 
+            console.error('Face Analysis error:', err);
+            alert('Error al analizar rostros: ' + err.message); 
+          }
+          finally { if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; } }
+        });
+
         container.querySelectorAll('.btn-delete-face').forEach(btn => {
           btn.addEventListener('click', async () => {
-            if (!confirm('¿Eliminar rostro?')) return;
-            await supabase.from('face_vault').delete().eq('id', btn.dataset.faceId);
-            renderBrand(container);
+            if (!confirm('¿Eliminar rostro permanentemente?')) return;
+            try {
+              const faceId = btn.dataset.faceId;
+              const face = faceList.find(f => f.id === faceId);
+              
+              // 1. Delete from Storage if we have a URL
+              if (face && face.image_url) {
+                try {
+                  // Extract path from public URL
+                  // URL format: .../storage/v1/object/public/faces/USER_ID/channels/CHANNEL_ID/FILE.ext
+                  const urlParts = face.image_url.split('/public/faces/');
+                  if (urlParts.length > 1) {
+                    const storagePath = urlParts[1];
+                    await supabase.storage.from('faces').remove([storagePath]);
+                  }
+                } catch (storageErr) {
+                  console.warn('Could not delete file from storage:', storageErr);
+                }
+              }
+
+              // 2. Delete from DB
+              const { error } = await supabase.from('face_vault').delete().eq('id', faceId);
+              if (error) throw error;
+              
+              renderBrand(container);
+            } catch (err) {
+              alert('Error al eliminar: ' + err.message);
+            }
           });
         });
 
         container.querySelectorAll('.btn-delete-thumb').forEach(btn => {
           btn.addEventListener('click', async () => {
             if (!confirm('¿Eliminar miniatura?')) return;
-            await supabase.from('creator_thumbnails').delete().eq('id', btn.dataset.thumbId);
+            const thumbId = btn.dataset.thumbId;
+            const thumb = thumbList.find(t => t.id === thumbId);
+            
+            if (thumb && thumb.image_url) {
+                const urlParts = thumb.image_url.split('/public/references/');
+                if (urlParts.length > 1) {
+                    await supabase.storage.from('references').remove([urlParts[1]]).catch(e => console.warn(e));
+                }
+            }
+
+            await supabase.from('creator_thumbnails').delete().eq('id', thumbId);
             renderBrand(container);
           });
         });

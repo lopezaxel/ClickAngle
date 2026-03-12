@@ -27,7 +27,18 @@ Tu objetivo es desglosar un guión de video para extraer los 3 pilares de una mi
 2. TENSIÓN: El conflicto o curiosidad que genera el deseo de hacer clic.
 3. PROMESA: El beneficio claro de ver el video.
 También recomienda 3 ángulos de miniatura específicos basados en este guión.
-Responde SIEMPRE en formato JSON puro.`,
+
+IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura exacta:
+{
+  "hook": "breve descripción del hook aquí",
+  "tension": "breve descripción de la tensión aquí",
+  "promise": "breve descripción de la promesa aquí",
+  "recommended_angles": [
+    { "name": "Nombre del Ángulo 1", "reason": "Por qué funciona" },
+    { "name": "Nombre del Ángulo 2", "reason": "Por qué funciona" },
+    { "name": "Nombre del Ángulo 3", "reason": "Por qué funciona" }
+  ]
+}`,
 
     ESPIONAGE_ANALYSIS: `Eres un analista de competencia especializado en YouTube.
 Analiza miniaturas de referencia de otros creadores para decodificar por qué funcionan.
@@ -36,15 +47,24 @@ Responde SIEMPRE en formato JSON puro.`,
 
     IMAGE_GEN: `Eres un experto en generación de prompts para miniaturas de YouTube. 
 Tu objetivo es crear una descripción visual altamente detallada que sea optimizada para modelos de generación de imagen.
-Enfócate en: Composición, Iluminación Cinematográfica, Expresiones de alto impacto y Estilo "Clickbait" Profesional.`
+Enfócate en: Composición, Iluminación Cinematográfica, Expresiones de alto impacto y Estilo "Clickbait" Profesional.`,
+
+    FACE_ANALYSIS: `Eres un experto psicólogo, analista de microexpresiones y perfilador visual de rostros para uso en branding.
+Tu tarea es analizar los rostros en las imágenes proporcionadas y describir meticulosamente:
+1. Forma del rostro, de los ojos, tipo de frente, mandíbula y estructura ósea general.
+2. Tono de piel aproximado (útil para iluminación y colorimetría en imágenes).
+3. Edad percibida, género, y cualquier rasgo distintivo (barba, pecas, gafas, tatuajes).
+4. El estilo dominante o "vibra" general que proyecta (ej. serio, confiable, juvenil, agresivo, corporativo).
+Responde SIEMPRE en formato JSON puro.`
 };
 
 const MODEL_MAPPING = {
-    CHANNEL_ADN: 'gemini-1.5-flash',
-    BRANDING_ANALYSIS: 'gemini-1.5-flash',
-    SCRIPT_ANALYSIS: 'gemini-1.5-pro', // High context for scripts
-    ESPIONAGE_ANALYSIS: 'gemini-1.5-flash',
-    IMAGE_GEN: 'gemini-2.0-flash', 
+    CHANNEL_ADN: 'gemini-3-flash-preview',
+    BRANDING_ANALYSIS: 'gemini-3-flash-preview',
+    SCRIPT_ANALYSIS: 'gemini-3.1-pro-preview', // High context and reasoning for scripts
+    ESPIONAGE_ANALYSIS: 'gemini-3-flash-preview',
+    FACE_ANALYSIS: 'gemini-3-flash-preview', 
+    IMAGE_GEN: 'gemini-3-flash-preview', 
 };
 
 export async function checkApiKey() {
@@ -84,7 +104,7 @@ export async function checkApiKey() {
                 return true;
             } else {
                 // If models list fails, try a direct generation as fallback
-                const genResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${cleanKey}`, {
+                const genResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${cleanKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }] })
@@ -123,18 +143,30 @@ export async function callAI(promptType, userContent, context = {}) {
         }
 
         const systemPrompt = SYSTEM_PROMPTS[promptType];
-        const model = MODEL_MAPPING[promptType] || 'gemini-1.5-flash';
+        const model = MODEL_MAPPING[promptType] || 'gemini-3-flash-preview';
         const fullPrompt = `${systemPrompt}\n\nCONTEXTO: ${JSON.stringify(context)}\n\nCONTENIDO A ANALIZAR:\n${userContent}`;
+
+        const payload = {
+            contents: [{
+                role: "user",
+                parts: [{ text: fullPrompt + "\nResponde solo con JSON válido." }]
+            }],
+            generationConfig: {
+                response_mime_type: "application/json"
+            }
+        };
+
+        // Inject the images if we're doing visual analysis and they exist
+        if (context.faces && Array.isArray(context.faces)) {
+            // we will simply pass the urls if needed, but since we are running in the browser
+            // gemini api handles images better if passed as inline data. However, for a generic fix,
+            // we'll rely on the text prompt containing the URLs, which we already do in brand.js.
+        }
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeyData.trim()}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    role: "user",
-                    parts: [{ text: fullPrompt }]
-                }]
-            })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {

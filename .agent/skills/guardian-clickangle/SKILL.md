@@ -12,7 +12,7 @@ Esta habilidad contiene el conocimiento profundo de la arquitectura, el stack y 
 - **Frontend**: Vanilla JavaScript (ES Modules).
 - **Build Tool**: Vite.
 - **Backend/DB**: Supabase (Auth, Database, RPCs).
-- **IA**: Google Generative AI (Gemini 1.5 Flash/Pro, Gemini 2.0 Flash) vía REST API.
+- **IA**: Google Generative AI (Gemini 3 Pro/Flash-preview) vía REST API (`v1beta`).
 - **Estilos**: Vanilla CSS con variables personalizadas en `style.css`.
 - **Router**: Router SPA basado en Hash (`src/router.js`).
 
@@ -22,13 +22,16 @@ Esta habilidad contiene el conocimiento profundo de la arquitectura, el stack y 
 2. **Persistencia**: La `activeChannelId` se persiste en `localStorage` con la clave `clickangles_active_channel`.
 3. **Flujo de Inteligencia**:
    - **ADN (Brand Kit)**: Extrae la esencia del canal.
-   - **Cerebro**: Analiza guiones basándose en el ADN.
+   - **Cerebro**: Analiza guiones basándose en el ADN. Usa `gemini-3.1-pro-preview`.
    - **Ángulos**: Propone miniaturas basadas en el análisis del Cerebro.
    - **Engine**: Orquestador final.
 4. **Seguridad**: Las API Keys se manejan mediante RPCs de Supabase (`get_decrypted_api_key`) para mayor seguridad.
 
 ## Reglas de Oro (Para el Programador IA)
 
+- **Identificadores de Modelos**: Para modelos Gemini 3+, siempre usar el sufijo `-preview` (ej. `gemini-3-flash-preview`). Consultar `ListModels` si un modelo da 404.
+- **Modo JSON Estricto**: Siempre configurar `response_mime_type: "application/json"` en el `generationConfig` y pedir el esquema JSON explícitamente en el prompt para evitar errores de parsing.
+- **Seguridad en UI**: Nunca asumir que el JSON de la IA contiene todos los campos. Usar optional chaining (`?.`) y valores por defecto (`|| []`) para evitar romper el renderizado.
 - **No Romper la Navegación**: Cualquier cambio en paneles debe respetar la firma de la función `render(workspace)` y manejar errores con bloques `try/catch` para evitar pantallas en negro.
 - **Diseño Premium**: Mantener la estética "Glassmorphism" y usar micro-animaciones (clase `animate-pulse` o similares). No usar colores básicos; usar las variables de `style.css`.
 - **Timeouts**: Siempre implementar `Promise.race` con timeouts de 20-30s en llamadas a API o renderizados pesados para evitar que la UI se cuelgue.
