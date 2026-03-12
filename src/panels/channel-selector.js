@@ -1,5 +1,5 @@
 import { getState, setActiveChannel } from '../lib/state.js';
-import { deleteChannel } from '../lib/auth.js';
+import { deleteChannel, reloadChannels } from '../lib/auth.js';
 import { navigateTo } from '../router.js';
 import { icon } from '../icons.js';
 
@@ -62,9 +62,14 @@ function buildHubHTML(channels, user, isLoading) {
         <div class="hub-empty-icon">${icon('crosshair', 48)}</div>
         <h2>¡Empezá tu primer proyecto!</h2>
         <p>Creá un canal para diseñar miniaturas de alto impacto con ángulos psicológicos.</p>
-        <button class="btn btn-primary btn-lg" id="hub-btn-create-empty">
-          ${icon('rocket', 18)} Crear mi primer canal
-        </button>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn btn-primary btn-lg" id="hub-btn-create-empty">
+            ${icon('rocket', 18)} Crear mi primer canal
+          </button>
+          <button class="btn btn-ghost btn-lg" id="hub-btn-retry" title="Volver a cargar canales desde Supabase">
+            ${icon('refresh', 18)} Reintentar
+          </button>
+        </div>
       </div>`;
   }
 
@@ -81,6 +86,26 @@ function buildHubHTML(channels, user, isLoading) {
       </button>
     </div>
     ${mainContent}
+  </div>
+
+  <!-- Delete Channel Confirmation Modal (hidden) -->
+  <div class="hub-modal-overlay hidden" id="hub-delete-overlay">
+    <div class="hub-modal animate-in" style="max-width:420px;">
+      <div class="card-header">
+        <div class="card-title" style="color:var(--error, #ef4444);">${icon('trash', 16)} Eliminar Canal</div>
+        <button class="btn btn-ghost btn-sm" id="hub-delete-close">${icon('x', 16)}</button>
+      </div>
+      <div style="padding:0 0 20px;">
+        <p style="color:var(--text-secondary);margin:0 0 8px;">¿Estás seguro de que querés eliminar <strong id="hub-delete-channel-name" style="color:var(--text-primary);"></strong>?</p>
+        <p style="color:var(--text-tertiary);font-size:13px;margin:0 0 24px;">Esto borrará <strong>TODOS</strong> los datos asociados: proyectos, miniaturas, brand kit, etc. <br/><span style="color:var(--error,#ef4444);">Esta acción no se puede deshacer.</span></p>
+        <div style="display:flex;gap:12px;">
+          <button class="btn btn-ghost" id="hub-delete-cancel" style="flex:1;">Cancelar</button>
+          <button class="btn" id="hub-delete-confirm" style="flex:1;background:var(--error,#ef4444);color:#fff;border-color:var(--error,#ef4444);">
+            ${icon('trash', 16)} Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Create Channel Modal (hidden) -->
@@ -133,22 +158,48 @@ function bindHubEvents(container) {
       const channelId = deleteBtn.dataset.id;
       const channelName = deleteBtn.dataset.name || 'este canal';
 
-      if (!window.confirm(`¿Estás seguro de que querés eliminar "${channelName}"?\n\nEsto borrará TODOS los datos asociados (proyectos, miniaturas, brand kit, etc.).\n\nEsta acción no se puede deshacer.`)) {
-        return;
-      }
+      // Show custom confirmation modal
+      const deleteOverlay = document.getElementById('hub-delete-overlay');
+      const nameEl = document.getElementById('hub-delete-channel-name');
+      if (nameEl) nameEl.textContent = `"${channelName}"`;
+      if (deleteOverlay) deleteOverlay.classList.remove('hidden');
 
-      deleteBtn.disabled = true;
-      deleteBtn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span>`;
+      // Store pending delete info on the overlay for confirm handler
+      deleteOverlay._pendingId = channelId;
+      deleteOverlay._pendingBtn = deleteBtn;
+      return;
+    }
+
+    // --- CONFIRM DELETE ---
+    if (e.target.closest('#hub-delete-confirm')) {
+      const deleteOverlay = document.getElementById('hub-delete-overlay');
+      const channelId = deleteOverlay?._pendingId;
+      const deleteBtn = deleteOverlay?._pendingBtn;
+      if (!channelId) return;
+
+      deleteOverlay.classList.add('hidden');
+      if (deleteBtn) {
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span>`;
+      }
 
       try {
         await deleteChannel(channelId);
-        // Re-render with updated state (deleteChannel updates state internally)
         renderChannelSelector(container);
       } catch (err) {
         alert('Error al eliminar: ' + err.message);
-        deleteBtn.disabled = false;
-        deleteBtn.innerHTML = icon('trash', 16);
+        if (deleteBtn) {
+          deleteBtn.disabled = false;
+          deleteBtn.innerHTML = icon('trash', 16);
+        }
       }
+      return;
+    }
+
+    // --- CANCEL DELETE ---
+    if (e.target.closest('#hub-delete-cancel') || e.target.closest('#hub-delete-close') || e.target.id === 'hub-delete-overlay') {
+      const deleteOverlay = document.getElementById('hub-delete-overlay');
+      if (deleteOverlay) deleteOverlay.classList.add('hidden');
       return;
     }
 
@@ -158,6 +209,15 @@ function bindHubEvents(container) {
       const channelId = card.dataset.channelId;
       setActiveChannel(channelId);
       navigateTo('dashboard');
+      return;
+    }
+
+    // --- RETRY LOADING CHANNELS ---
+    if (e.target.closest('#hub-btn-retry')) {
+      const btn = e.target.closest('#hub-btn-retry');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 18)}</span> Cargando...`;
+      reloadChannels(); // state update will trigger re-render automatically
       return;
     }
 

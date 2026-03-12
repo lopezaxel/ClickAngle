@@ -22,32 +22,43 @@ export async function signUp(email, password, fullName) {
     return data;
 }
 
-export async function signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+export function signOut() {
+    // 1. Clear local app state and ALL Supabase tokens IMMEDIATELY
+    //    This prevents zombie sessions on F5 even if the server call fails
     localStorage.removeItem('clickangles_active_channel');
-    setState({ currentUser: null, session: null, activeChannelId: null, channels: [], isLoadingChannels: true });
+    Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-') || key.includes('supabase.auth')) {
+            localStorage.removeItem(key);
+        }
+    });
+    setState({ currentUser: null, session: null, activeChannelId: null, channels: [], isLoadingChannels: false });
+
+    // 2. Fire-and-forget server-side sign out (don't block, don't throw)
+    supabase.auth.signOut().catch(err => console.warn('Sign out server-side error (non-critical):', err));
 }
 
 export async function loadUserProfile(userId) {
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(new Error('Strict Timeout: Perfil (15s)')), 15000);
-    
     console.time('DB_Fetch_Profile');
     try {
-        const { data, error } = await supabase
+        // Promise.race is the ONLY reliable timeout mechanism for Supabase queries.
+        // .abortSignal() does NOT reliably cancel underlying fetches in supabase-js v2.
+        const queryPromise = supabase
             .from('profiles')
             .select('id, email, full_name, avatar_url, subscription_tier, created_at')
             .eq('id', userId)
-            .abortSignal(abortController.signal)
             .single();
-        
-        clearTimeout(timeoutId);
+
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout: Perfil (20s)')), 20000)
+        );
+
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
         console.timeEnd('DB_Fetch_Profile');
-        
+
         if (error) {
             // If RLS fails or profile is missing (PGRST116), don't crash.
-            // Try to recover from Auth Session as a backup.
+            // Recover from Auth Session as a backup.
             if (error.code === 'PGRST116') {
                 console.warn('Profile not found in DB, using session metadata backup.');
                 const { data: { user } } = await supabase.auth.getUser();
@@ -75,25 +86,28 @@ export async function loadUserChannels(userId) {
     // If already fetching, return the same promise to avoid duplicate requests
     if (channelsPromise) return channelsPromise;
 
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(new Error('Timeout: Canales (8s)')), 8000);
-    
     channelsPromise = (async () => {
         try {
-            // Run both queries concurrently
-            const [ownedResult, membershipsResult] = await Promise.all([
+            // Promise.race is the ONLY reliable timeout mechanism for Supabase queries.
+            // .abortSignal() does NOT reliably cancel underlying fetches in supabase-js v2.
+            // This guarantees we unblock after 20s regardless of Supabase cold start behavior.
+            const queryPromise = Promise.all([
                 supabase
                     .from('channels')
                     .select('*')
                     .eq('owner_id', userId)
-                    .order('created_at', { ascending: true })
-                    .abortSignal(abortController.signal),
+                    .order('created_at', { ascending: true }),
                 supabase
                     .from('channel_members')
                     .select('channel_id, role, channels(*)')
                     .eq('user_id', userId)
-                    .abortSignal(abortController.signal)
             ]);
+
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout: Canales (20s)')), 20000)
+            );
+
+            const [ownedResult, membershipsResult] = await Promise.race([queryPromise, timeoutPromise]);
 
             if (ownedResult.error) throw ownedResult.error;
             if (membershipsResult.error) throw membershipsResult.error;
@@ -108,7 +122,6 @@ export async function loadUserChannels(userId) {
 
             return allChannels;
         } finally {
-            clearTimeout(timeoutId);
             channelsPromise = null;
         }
     })();
@@ -116,8 +129,25 @@ export async function loadUserChannels(userId) {
     return channelsPromise;
 }
 
+export async function reloadChannels() {
+    const { session } = getState();
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    setState({ isLoadingChannels: true });
+    try {
+        const channels = await loadUserChannels(userId);
+        const activeChannelId = restoreActiveChannel(channels);
+        setState({ channels, activeChannelId, isLoadingChannels: false });
+    } catch (err) {
+        console.error('reloadChannels error:', err);
+        setState({ isLoadingChannels: false });
+    }
+}
+
 export async function deleteChannel(channelId) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { session } = getState();
+    const user = session?.user;
     if (!user) throw new Error('No autenticado');
 
     // 1. Delete from DB (The policy should handle cascading or check ownership)
@@ -153,7 +183,8 @@ export async function deleteChannel(channelId) {
 }
 
 export async function createChannel(name, niche = 'Tech/IA', imageUrl = null) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { session } = getState();
+    const user = session?.user;
     if (!user) throw new Error('No autenticado');
 
     const insertPayload = { owner_id: user.id, name, niche };
@@ -252,20 +283,31 @@ export async function initAuth(onReady) {
         }
     };
 
-    // Emergency Timeout: Reduced to 20s as requests should be faster now
+    // Emergency Timeout: 12s — only unlocks the initial loading SCREEN.
+    // Does NOT set isLoadingChannels: false — the hub shows its own spinner while channels load.
+    // A secondary timeout at 35s total gives up and shows empty state if Supabase never responds.
     const emergencyTimeout = setTimeout(() => {
         const { isAuthInitializing } = getState();
         if (isAuthInitializing) {
             console.warn('Auth initialization slow, proceeding to unlock UI...');
-            setState({ isAuthInitializing: false, isLoadingChannels: false });
+            setState({ isAuthInitializing: false }); // Unlock screen — keep isLoadingChannels as-is
             finish();
+
+            // Safety net: if channels STILL haven't loaded after 35s total, stop waiting
+            setTimeout(() => {
+                const { isLoadingChannels } = getState();
+                if (isLoadingChannels) {
+                    console.warn('Channel load timeout (35s), showing empty state');
+                    setState({ isLoadingChannels: false });
+                }
+            }, 23000); // 12 + 23 = 35s total
         }
-    }, 20000);
+    }, 12000);
 
     // Listen for auth events IMMEDIATELY
     supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
-            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: true });
+            setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
         } else if (session) {
             await loadUserData(session);
         }
@@ -281,11 +323,16 @@ export async function initAuth(onReady) {
             return;
         }
 
-        // If session exists, use getUser() to force a sync check with the server
-        const { data: { user }, error } = await supabase.auth.getUser();
+        // Validate session in background — don't block the UI
+        // If the token is invalid (401/403), sign out after the fact
+        supabase.auth.getUser().then(({ error }) => {
+            if (error && (error.status === 401 || error.status === 403)) {
+                console.warn('Invalid session detected, signing out...');
+                signOut();
+            }
+        }).catch(() => {}); // Ignore network errors — data queries will catch auth issues
 
-        if (error) throw error;
-        
+        // Start loading user data IMMEDIATELY (no waiting for getUser)
         await loadUserData(initialSession);
     } catch (err) {
         // Silence the warning if it's just a missing session or expected recovery failure

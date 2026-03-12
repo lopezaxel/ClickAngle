@@ -3,7 +3,7 @@ import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { checkApiKey } from '../lib/intelligence.js';
 
-export async function renderSettings(container) {
+export function renderSettings(container) {
   const { currentUser } = getState();
   if (!currentUser) {
     container.innerHTML = '<div class="loading-spinner">Inicia sesión para configurar</div>';
@@ -14,16 +14,12 @@ export async function renderSettings(container) {
   // Then fetch the masked key in the background — avoids the 8s Panel Render Timeout
   renderSettingsUI(container, null);
 
-  // Fetch masked keys in background (non-blocking)
-  try {
-    const { data, error } = await supabase.rpc('get_masked_api_keys');
+  // Fire-and-forget: fetch real key data in background (never blocks the router)
+  supabase.rpc('get_masked_api_keys').then(({ data, error }) => {
     if (!error && data) {
-      // Re-render with real key data (only replaces the placeholders)
       renderSettingsUI(container, data);
     }
-  } catch (err) {
-    console.error('Error fetching masked keys:', err);
-  }
+  }).catch(err => console.error('Error fetching masked keys:', err));
 }
 
 function renderSettingsUI(container, maskedKeys) {

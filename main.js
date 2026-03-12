@@ -41,9 +41,10 @@ function initApp() {
   let lastUserId = null;
   let lastSessionId = null;
   let lastLoadingChannels = true;
+  let lastChannelCount = -1;
 
   function renderApp() {
-    const { session, currentUser, activeChannelId, isAuthInitializing, isLoadingChannels } = getState();
+    const { session, currentUser, activeChannelId, isAuthInitializing, isLoadingChannels, channels } = getState();
 
     // 0. Handle Initialization (Prevent flicker to login)
     if (isAuthInitializing) {
@@ -135,11 +136,13 @@ function initApp() {
     // Trigger a full re-render on: user change, channel change, session change, or channels loading state change
     const userId = currentUser?.id;
     const sessionId = session?.access_token;
+    const channelCount = channels?.length ?? 0;
 
     const significantChange = (userId !== lastUserId)
       || (activeChannelId !== lastChannelId)
       || (sessionId !== lastSessionId)
-      || (isLoadingChannels !== lastLoadingChannels);
+      || (isLoadingChannels !== lastLoadingChannels)
+      || (channelCount !== lastChannelCount);
 
     if (!routerInitialized) {
       initRouter(workspace);
@@ -157,6 +160,7 @@ function initApp() {
     lastChannelId = activeChannelId;
     lastSessionId = sessionId;
     lastLoadingChannels = isLoadingChannels;
+    lastChannelCount = channelCount;
   }
 
   // Subscribe to state changes

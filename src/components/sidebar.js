@@ -105,11 +105,7 @@ export function renderSidebar(container) {
     btn.disabled = true;
     btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span>`;
 
-    // 1. Clear local state immediately for instant feedback
-    localStorage.removeItem('clickangles_active_channel');
-    setState({ currentUser: null, session: null, activeChannelId: null, channels: [], isLoadingChannels: true });
-
-    // 2. Tell Supabase (fire-and-forget, don't block the UI)
-    signOut().catch(err => console.warn('SignOut error (ignored):', err));
+    // signOut() handles everything: clears local state, sb-* tokens, and fires server signout
+    signOut();
   });
 }
