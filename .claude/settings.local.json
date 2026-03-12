@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://ahbrflukfncghlyscogq.supabase.co/storage/v1/bucket\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM\")"
+    ]
+  }
+}

@@ -277,14 +277,6 @@ export async function renderBrand(container) {
           });
         });
 
-        document.getElementById('btn-upload-face')?.addEventListener('click', () => uploadFace());
-        container.querySelectorAll('.empty-face-slot').forEach(slot => {
-            slot.addEventListener('click', () => {
-              if (slot.classList.contains('uploading')) return; // Prevent double clicks
-              uploadFace(slot.dataset.suggested, slot);
-            });
-        });
-
         const uploadFace = (suggested, slotElement = null) => {
             triggerFileInput('image/*', async (file) => {
                 const btn = document.getElementById('btn-upload-face');
@@ -338,6 +330,14 @@ export async function renderBrand(container) {
                 }
             });
         };
+
+        document.getElementById('btn-upload-face')?.addEventListener('click', () => uploadFace());
+        container.querySelectorAll('.empty-face-slot').forEach(slot => {
+            slot.addEventListener('click', () => {
+              if (slot.classList.contains('uploading')) return;
+              uploadFace(slot.dataset.suggested, slot);
+            });
+        });
 
         // Face Analysis Logic
         document.getElementById('btn-analyze-faces')?.addEventListener('click', async () => {
