@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -s \"https://ahbrflukfncghlyscogq.supabase.co/storage/v1/bucket\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM\")"
+      "Bash(curl -s \"https://ahbrflukfncghlyscogq.supabase.co/storage/v1/bucket\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM\")",
+      "Bash(curl -s \"https://api.supabase.com/v1/projects/ahbrflukfncghlyscogq/database/policies\" -H \"Authorization: Bearer sbp_1419d35e5fec23be5d28204ec6f46751ce150dd9\")",
+      "Bash(curl -s \"https://api.supabase.com/v1/projects/ahbrflukfncghlyscogq/secrets\" -H \"Authorization: Bearer sbp_1419d35e5fec23be5d28204ec6f46751ce150dd9\")",
+      "Bash(SERVICE_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjYzMjY0OSwiZXhwIjoyMDg4MjA4NjQ5fQ.VAN9bXc0DxmngyLRcno8hvHnoP1MyPPXu7EfCYcHHyU\")",
+      "Bash(__NEW_LINE_32b36d4dc0983ef4__ echo:*)",
+      "Bash(curl -s \"https://ahbrflukfncghlyscogq.supabase.co/rest/v1/profiles?select=id,email,full_name&limit=5\" -H \"apikey: $SERVICE_KEY\" -H \"Authorization: Bearer $SERVICE_KEY\")",
+      "Bash(curl -s \"https://ahbrflukfncghlyscogq.supabase.co/rest/v1/channels?select=id,name,owner_id&limit=5\" -H \"apikey: $SERVICE_KEY\" -H \"Authorization: Bearer $SERVICE_KEY\")"
     ]
   }
 }

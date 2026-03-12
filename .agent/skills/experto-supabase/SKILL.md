@@ -32,6 +32,9 @@ Esta habilidad dota al agente de un conocimiento profundo sobre la plataforma Su
 ### 3. Autenticación y Sesión
 - **Persistencia**: Manejo correcto del estado local sincronizado con `supabase.auth.onAuthStateChange`.
 - **Errores de Token**: Protocolo de limpieza de `localStorage` ante errores de refresco de token ("Stuck transitions").
+- **CRÍTICO - flowType**: SIEMPRE usar `flowType: 'implicit'` y `detectSessionInUrl: false` en el cliente Supabase para apps SPA sin OAuth redirect. El `flowType: 'pkce'` usa `navigator.locks` internamente y cuando hay llamadas concurrentes (onAuthStateChange + refreshSession + signIn), el lock queda atascado bloqueando TODO: login falla con "Timeout 30s", queries fallan con "Timeout 20s", y aparece el warning `Lock "lock:sb-...-auth-token" was not released within 5000ms`.
+- **CRÍTICO - No forzar refreshSession**: Nunca llamar `supabase.auth.refreshSession()` manualmente dentro de `loadUserData`. Esto agrega una llamada concurrente que compite por el mismo lock y empeora el problema de timeouts.
+- **Cold Start Supabase Free**: Los proyectos en plan Free se duermen. La primera conexión puede tardar 10-30s. La solución es recuperar `activeChannelId` desde `localStorage` cuando los canales fallan por timeout, para que la UI no quede en "Selecciona un canal".
 
 ## Resolución de Errores Críticos
 

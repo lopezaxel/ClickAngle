@@ -304,14 +304,23 @@ export async function renderBrand(container) {
                          btn.innerHTML = `<span class="animate-pulse">${icon('upload', 14)}</span> Subiendo a la nube...`;
                     }
 
+                    const { session } = getState();
+                    console.log('[Face Upload] userId:', session?.user?.id, 'channelId:', activeChannelId, 'file:', compressedFile.name, compressedFile.size + 'bytes');
+
                     const url = await uploadToStorage('faces', compressedFile, activeChannelId);
-                    const { error: dbError } = await supabase.from('face_vault').insert({ 
-                        channel_id: activeChannelId, 
-                        expression_type: expression, 
-                        image_url: url 
+                    console.log('[Face Upload] Storage OK, url:', url);
+
+                    const { error: dbError } = await supabase.from('face_vault').insert({
+                        channel_id: activeChannelId,
+                        expression_type: expression,
+                        image_url: url
                     });
-                    
-                    if (dbError) throw dbError;
+
+                    if (dbError) {
+                        console.error('[Face Upload] DB Error:', dbError);
+                        throw dbError;
+                    }
+                    console.log('[Face Upload] DB insert OK');
                     
                     // Success! Re-render to show new face
                     renderBrand(container);
