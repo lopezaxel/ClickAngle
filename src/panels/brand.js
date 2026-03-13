@@ -64,25 +64,37 @@ async function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 
 
 async function uploadToStorage(bucket, file, channelId) {
   try {
-    const { session } = getState();
-    const userId = session?.user?.id;
+    // Always get a fresh session before uploading
+    const { data: { session: freshSession } } = await supabase.auth.getSession();
+    const userId = freshSession?.user?.id;
     if (!userId) throw new Error('Usuario no autenticado');
 
     const ext = file.name.split('.').pop();
     // Path must start with userId to satisfy RLS update/delete policies
     const fileName = `${userId}/channels/${channelId}/${Date.now()}.${ext}`;
-    
-    const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, file, {
+
+    console.log(`[Storage] Uploading to ${bucket}/${fileName}, size: ${file.size} bytes, type: ${file.type}`);
+
+    const { data: uploadData, error: uploadError } = await supabase.storage.from(bucket).upload(fileName, file, {
       cacheControl: '3600',
-      upsert: false // Use false to avoid update permission issues on initial upload
+      upsert: false,
+      contentType: file.type,
     });
-    
-    if (uploadError) throw uploadError;
-    
+
+    if (uploadError) {
+      console.error(`[Storage] Upload error:`, uploadError);
+      throw uploadError;
+    }
+
+    console.log(`[Storage] Upload OK:`, uploadData);
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
     return urlData.publicUrl;
   } catch (err) {
     console.error(`Storage Upload Error (${bucket}):`, err);
+    // Give a more descriptive error for network failures
+    if (err instanceof TypeError && err.message === 'Failed to fetch') {
+      throw new Error('Error de red al subir imagen. Verifica tu conexión e inténtalo de nuevo.');
+    }
     throw new Error(`Error al subir a ${bucket}: ` + (err.message || 'Error desconocido'));
   }
 }
@@ -180,12 +192,17 @@ export async function renderBrand(container) {
                   <div class="text-xs font-bold">${f.expression_type}</div>
                 </div>
               `).join('')}
-              ${faceList.length < 4 ? ['Sorpresa', 'Señalando'].map(label => `
-                <div class="card empty-face-slot" data-suggested="${label}" style="text-align:center; padding: var(--space-md); opacity:0.6; cursor:pointer; border: 1px dashed var(--border);">
-                  <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-tertiary);margin:0 auto var(--space-sm);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);">${icon('plus', 18)}</div>
-                  <div class="text-xs font-bold">${label}</div>
-                </div>
-              `).join('') : ''}
+              ${(() => {
+                const allLabels = ['Normal', 'Sorpresa', 'Señalando', 'Emocionado'];
+                const usedLabels = faceList.map(f => f.expression_type);
+                const emptySlots = allLabels.filter(l => !usedLabels.includes(l)).slice(0, 4 - faceList.length);
+                return emptySlots.map(label => `
+                  <div class="card empty-face-slot" data-suggested="${label}" style="text-align:center; padding: var(--space-md); opacity:0.6; cursor:pointer; border: 1px dashed var(--border);">
+                    <div style="width:48px;height:48px;border-radius:50%;background:var(--bg-tertiary);margin:0 auto var(--space-sm);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);">${icon('plus', 18)}</div>
+                    <div class="text-xs font-bold">${label}</div>
+                  </div>
+                `).join('');
+              })()}
             </div>
             <button class="btn btn-secondary btn-sm w-full" id="btn-upload-face">${icon('upload', 14)} Subir Rostro</button>
           </div>

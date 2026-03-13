@@ -1,7 +1,84 @@
 import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
-import { callAI } from '../lib/intelligence.js';
+import { callAI, generateImage } from '../lib/intelligence.js';
+
+// ─── Creative Config ────────────────────────────────────────────────────────
+
+const FORMATS = [
+  {
+    id: 'versus',
+    label: 'Duelo de Titanes',
+    subtitle: 'Versus',
+    emoji: '⚔️',
+    desc: 'Composición dividida 50/50, dos conceptos enfrentados con contraste visual extremo.',
+    prompt: 'COMPOSITION: Split-screen 50/50 layout, two contrasting elements facing each other separated by a glowing dividing line, versus battle style composition, dramatic confrontation framing.',
+  },
+  {
+    id: 'authority',
+    label: 'Autoridad Tech',
+    subtitle: 'Objeto de Deseo',
+    emoji: '🖥️',
+    desc: 'Objeto tecnológico o código en primer plano con el creador al costado proyectando autoridad.',
+    prompt: 'COMPOSITION: Hero tech object or glowing code in extreme foreground, creator positioned to the side in confident authority pose, depth of field with bokeh background, professional studio lighting.',
+  },
+  {
+    id: 'shock',
+    label: 'Shock / Caja Negra',
+    subtitle: 'Misterio',
+    emoji: '🖤',
+    desc: 'Elemento clave oculto o censurado, genera curiosidad extrema e impulso de clic.',
+    prompt: 'COMPOSITION: Key element deliberately hidden, blurred, censored or covered with a black box/redacted bar, mystery and tension framing, dark moody atmosphere, curiosity-gap visual composition.',
+  },
+  {
+    id: 'breaking',
+    label: 'Alerta IA / Breaking News',
+    subtitle: 'Urgencia Total',
+    emoji: '🚨',
+    desc: 'Estética de noticia urgente con texto masivo, colores de alerta y alto contraste.',
+    prompt: 'COMPOSITION: Breaking news broadcast aesthetic, massive bold alert text overlays, red/yellow warning color accents, urgent broadcast framing, high contrast newsroom visual style, TV chyron elements.',
+  },
+];
+
+const STYLES = [
+  {
+    id: 'hyperrealist',
+    label: 'Hiper-Realista',
+    subtitle: 'Studio',
+    emoji: '📸',
+    keywords: 'hyperrealistic studio photography, extreme sharpness, professional studio lighting, shallow depth of field bokeh, 8K ultra-detailed, photorealistic render.',
+  },
+  {
+    id: 'cyberpunk',
+    label: 'Cyberpunk Tech',
+    subtitle: 'Futurista',
+    emoji: '🌆',
+    keywords: 'cyberpunk aesthetic, neon blue and magenta lights, circuit board textures, dark futuristic atmosphere, holographic elements, neon glow reflections, synthwave colors.',
+  },
+  {
+    id: 'minimal',
+    label: 'Minimalista Bold',
+    subtitle: 'Impacto Limpio',
+    emoji: '◼️',
+    keywords: 'bold minimalist design, single vibrant solid color background, hard drop shadows, single focused object, ultra-clean composition, Swiss design influence, negative space.',
+  },
+  {
+    id: 'cinematic',
+    label: 'Cinematográfico',
+    subtitle: 'Epic',
+    emoji: '🎬',
+    keywords: 'cinematic epic lighting, dramatic film-quality shadows, highly saturated colors, fine film grain, anamorphic lens flares, Hollywood movie poster composition, golden ratio framing.',
+  },
+  {
+    id: 'digital',
+    label: 'Ilustrado Digital',
+    subtitle: '3D / Vector',
+    emoji: '🎨',
+    keywords: 'modern digital illustration, vibrant 3D render Pixar-style, vector art aesthetic, vivid saturated colors, smooth gradients, clean digital art, stylized character design.',
+  },
+];
+
+// ─── Main Panel ─────────────────────────────────────────────────────────────
 
 export async function renderEngine(container) {
   const { activeChannelId } = getState();
@@ -9,250 +86,646 @@ export async function renderEngine(container) {
 
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
-  // Fetch angles for selector
-  const { data: angles } = await supabase.from('click_angles').select('*').order('name');
+  const [projectsRes, brandKitRes, facesRes] = await Promise.all([
+    supabase.from('projects').select('*, thumbnail_variants(*)').eq('channel_id', activeChannelId).order('created_at', { ascending: false }),
+    supabase.from('brand_kits').select('*').eq('channel_id', activeChannelId).maybeSingle(),
+    supabase.from('face_vault').select('*').eq('channel_id', activeChannelId),
+  ]);
 
-  // Fetch brand kit for face analysis info
-  const { data: brandKit } = await supabase
-    .from('brand_kits')
-    .select('*')
-    .eq('channel_id', activeChannelId)
-    .maybeSingle();
+  const projects = projectsRes.data || [];
+  const brandKit = brandKitRes.data;
+  const faceList = facesRes.data || [];
 
-  // Fetch face vault for expression selector
-  const { data: faces } = await supabase
-    .from('face_vault')
-    .select('*')
-    .eq('channel_id', activeChannelId);
+  // UI State
+  let selectedProjectId = projects[0]?.id || null;
+  let workflowStep = 1;          // 1, 2, 3
+  let selectedFormats = [];      // array of format ids (multi-select)
+  let selectedStyleId = null;
+  let selectedAngleId = null;
+  let isGenerating = false;
+  let expandingVariantId = null; // variant being expanded with more variations
 
-  // Fetch recent projects with variants
-  const { data: projects } = await supabase
-    .from('projects')
-    .select('*, thumbnail_variants(*)')
-    .eq('channel_id', activeChannelId)
-    .order('created_at', { ascending: false })
-    .limit(1);
+  function getProject() { return projects.find(p => p.id === selectedProjectId); }
 
-  const lastProject = projects?.[0];
-  const variants = lastProject?.thumbnail_variants || [];
-  const faceList = faces || [];
-  const angleList = angles || [];
+  // ─── RENDER ROOT ──────────────────────────────────────────────────────────
 
-  let html = `<div class="animate-in">
-    <div class="section-header">
-      <div>
-        <h2 class="section-title">${icon('cog', 22)} Fábrica Creativa</h2>
-        <p class="section-subtitle">Generación por lotes de miniaturas de alto impacto</p>
-      </div>
-      <div class="flex gap-sm">
-        <button class="btn btn-secondary btn-sm">${icon('grid', 14)} Historial</button>
-        <button class="btn btn-primary" id="btn-generate">${icon('rocket', 16)} Generar</button>
-      </div>
-    </div>
+  function render() {
+    const project = getProject();
+    const selectedAngles = project?.logic_dna?.selected_angles || [];
+    const variants = project?.thumbnail_variants || [];
 
-    <div class="grid-3 mb-lg">
-      <div class="card">
-        <div class="card-title mb-md">${icon('file', 16)} Script</div>
-        <div class="form-group"><label class="form-label">Título</label>
-        <input type="text" class="form-input" id="project-title" placeholder="Título del video" /></div>
-        <div class="form-group"><label class="form-label">Resumen</label>
-        <textarea class="form-textarea" id="project-summary" style="min-height:80px;" placeholder="Descripción breve del contenido"></textarea></div>
+    container.innerHTML = `<div class="animate-in">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">${icon('cog', 22)} Fábrica Creativa</h2>
+          <p class="section-subtitle">Construí tu miniatura maestra en 3 pasos</p>
+        </div>
       </div>
 
-      <div class="card">
-        <div class="card-title mb-md">${icon('crosshair', 16)} Ángulo</div>
-        <div class="form-group"><label class="form-label">Ángulo</label>
-        <select class="form-select" id="select-angle">
-          ${angleList.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
-        </select></div>
-        <div class="form-group mt-md"><label class="form-label">Estilo</label>
-        <div class="tabs"><button class="tab active">Tech</button><button class="tab">Minimal</button><button class="tab">Dramático</button></div></div>
-      </div>
+      <div style="display:grid; grid-template-columns:280px 1fr; gap:var(--space-lg);">
 
-      <div class="card">
-        <div class="card-title mb-md">${icon('sliders', 16)} Parámetros</div>
-        <div class="form-group"><label class="form-label">Variantes</label>
-        <div class="tabs" style="margin-bottom:0;"><button class="tab">3</button><button class="tab active">6</button><button class="tab">10</button></div></div>
-        <div class="form-group"><label class="form-label">Expresión</label>
-        <select class="form-select" id="select-expression">
-          ${faceList.length > 0
-      ? faceList.map(f => `<option value="${f.id}">${f.expression_type}</option>`).join('')
-      : '<option disabled selected>Sin expresiones — sube en Brand Kit</option>'}
-        </select></div>
-        <div class="form-group"><label class="form-label">Resolución</label>
-        <select class="form-select"><option selected>1280×720</option><option>1920×1080</option></select></div>
-        <div class="form-group mt-sm">
-          <label class="flex items-center gap-sm cursor-pointer" style="font-size:12px; font-weight:bold;">
-            <input type="checkbox" id="check-include-face" ${brandKit?.face_analysis ? '' : 'disabled'} />
-            Incluir mi rostro en las variantes
-          </label>
-          ${!brandKit?.face_analysis ? '<p class="text-xs text-muted" style="margin-left:22px;">Primero analiza tu rostro en Brand Kit</p>' : ''}
+        <!-- ── LEFT: Project folders ── -->
+        <div>
+          <div class="text-xs font-bold text-muted mb-sm" style="letter-spacing:1px; text-transform:uppercase;">${icon('folder', 12)} Proyectos</div>
+          ${projects.length === 0 ? `
+            <div class="card" style="text-align:center; padding:var(--space-xl); opacity:0.6;">
+              ${icon('brain', 32)}
+              <p class="text-sm text-muted mt-sm">Sin proyectos aún.<br/>Procesá un guión en El Cerebro.</p>
+            </div>
+          ` : projects.map(p => {
+            const pAngles = p.logic_dna?.selected_angles || [];
+            const pVariants = p.thumbnail_variants || [];
+            const isActive = p.id === selectedProjectId;
+            return `
+            <div class="card project-folder" data-project-id="${p.id}"
+              style="cursor:pointer; margin-bottom:var(--space-sm); padding:var(--space-md); transition:all 0.15s;
+                ${isActive ? 'border-color:var(--accent); background:rgba(220,38,38,0.05);' : ''}">
+              <div class="flex items-center gap-sm mb-xs">
+                <span style="color:${isActive ? 'var(--accent)' : 'var(--text-tertiary)'};">${icon('folder', 16)}</span>
+                <div class="text-sm font-bold" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.title}">${p.title}</div>
+              </div>
+              <div class="flex gap-xs" style="flex-wrap:wrap;">
+                <span class="badge badge-neutral" style="font-size:9px;">${pAngles.length} ángulo${pAngles.length !== 1 ? 's' : ''}</span>
+                <span class="badge ${pVariants.length > 0 ? 'badge-accent' : 'badge-neutral'}" style="font-size:9px;">${pVariants.length} miniatura${pVariants.length !== 1 ? 's' : ''}</span>
+                <span class="badge badge-neutral" style="font-size:9px;">${new Date(p.created_at).toLocaleDateString('es', { day:'2-digit', month:'short' })}</span>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <!-- ── RIGHT: Workflow ── -->
+        <div>
+          ${!project ? `
+            <div class="card" style="text-align:center; padding:var(--space-2xl); opacity:0.5;">
+              ${icon('folder', 48)}
+              <p class="text-sm text-muted mt-md">Seleccioná un proyecto</p>
+            </div>
+          ` : renderWorkflow(project, selectedAngles, variants)}
+        </div>
+
+      </div>
+    </div>`;
+
+    bindEvents();
+  }
+
+  // ─── WORKFLOW ─────────────────────────────────────────────────────────────
+
+  function renderWorkflow(project, selectedAngles, variants) {
+    const canGoStep2 = selectedFormats.length > 0;
+    const canGoStep3 = canGoStep2 && selectedStyleId;
+    const canGenerate = canGoStep3 && selectedAngleId;
+
+    return `
+    <!-- Project header -->
+    <div class="card mb-md" style="background:var(--bg-tertiary); border:none; padding:var(--space-md);">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="font-bold">${project.title}</div>
+          ${project.logic_dna?.hook ? `<div class="text-xs text-muted mt-xs">${icon('bolt', 10)} ${project.logic_dna.hook}</div>` : ''}
+        </div>
+        <div class="flex gap-xs">
+          <span class="badge badge-neutral">${selectedAngles.length} ángulos</span>
+          <span class="badge badge-neutral">${new Date(project.created_at).toLocaleDateString('es')}</span>
         </div>
       </div>
     </div>
 
-    ${variants.length > 0 ? `
-    <div class="card mb-lg" style="border-color:var(--accent);background:rgba(220,38,38,0.03);">
-      <div class="flex items-center justify-between mb-sm">
-        <div class="flex items-center gap-sm"><span class="status-dot online"></span><span class="text-sm font-bold">${variants.length} variantes — "${lastProject.title}"</span></div>
-        <span class="text-xs text-muted">${new Date(lastProject.created_at).toLocaleDateString('es')}</span></div>
-      <div class="progress-bar"><div class="progress-bar-fill" style="width:100%;"></div></div>
+    ${selectedAngles.length === 0 ? `
+      <div class="card" style="text-align:center; padding:var(--space-xl); opacity:0.6;">
+        ${icon('crosshair', 32)}
+        <p class="text-sm text-muted mt-sm">Este proyecto no tiene ángulos seleccionados.<br/>Volvé a El Cerebro y elegí ángulos.</p>
+      </div>
+    ` : `
+
+    <!-- Step tabs -->
+    <div class="flex gap-xs mb-lg" style="border-bottom:1px solid var(--border); padding-bottom:var(--space-md);">
+      ${[
+        { n: 1, label: 'Formato Creativo', ok: canGoStep2 },
+        { n: 2, label: 'Estilo Visual', ok: canGoStep3 },
+        { n: 3, label: 'Ángulo & Generar', ok: canGenerate },
+      ].map(s => `
+        <button class="btn btn-sm step-tab ${workflowStep === s.n ? 'btn-primary' : (s.ok || workflowStep > s.n ? 'btn-secondary' : 'btn-secondary')}"
+          data-step="${s.n}" style="opacity:${workflowStep < s.n && !(s.n === 2 && canGoStep2) && !(s.n === 3 && canGoStep3) ? '0.45' : '1'};"
+          ${s.n === 2 && !canGoStep2 ? 'disabled' : ''}
+          ${s.n === 3 && !canGoStep2 ? 'disabled' : ''}>
+          <span style="background:${workflowStep === s.n ? 'rgba(255,255,255,0.25)' : (workflowStep > s.n ? 'var(--success)' : 'var(--bg-tertiary)')};
+            color:white; border-radius:50%; width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; margin-right:6px;">
+            ${workflowStep > s.n ? icon('check', 10) : s.n}
+          </span>
+          ${s.label}
+        </button>
+      `).join('')}
     </div>
 
-    <div class="section-header"><div class="card-title">${icon('image', 16)} Variantes</div></div>
-    <div class="grid-3">
-      ${variants.map((v, i) => `<div class="thumbnail-card" style="animation:fadeIn 0.4s ease both;animation-delay:${i * 0.1}s;">
-        <div class="thumb-img" style="background:linear-gradient(${135 + i * 30}deg,#0a0a1a,#1a0a2e);position:relative;">
-          ${v.status === 'processing' 
-            ? `<div class="flex flex-col items-center justify-center h-full gap-sm">
-                 <div class="animate-pulse">${icon('clock', 32)}</div>
-                 <div class="text-xs opacity-70">Generando...</div>
-               </div>` 
-            : v.image_url
-              ? `<img src="${v.image_url}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
-              : v.status === 'error'
-                ? `<div class="flex flex-col items-center justify-center h-full text-danger">
-                     ${icon('alertTriangle', 32)}
-                     <div class="text-xs">Error de Gen</div>
+    <!-- Step content -->
+    ${workflowStep === 1 ? renderStep1() : workflowStep === 2 ? renderStep2() : renderStep3(project, selectedAngles, variants)}
+
+    <!-- Bottom nav -->
+    <div class="flex justify-between items-center mt-lg">
+      <button class="btn btn-secondary btn-sm" id="btn-prev-step" ${workflowStep === 1 ? 'disabled' : ''}>
+        ${icon('arrowLeft', 14)} Anterior
+      </button>
+      ${workflowStep < 3 ? `
+        <button class="btn btn-primary btn-sm" id="btn-next-step"
+          ${workflowStep === 1 && !canGoStep2 ? 'disabled' : ''}
+          ${workflowStep === 2 && !canGoStep3 ? 'disabled' : ''}>
+          Siguiente ${icon('arrowRight', 14)}
+        </button>
+      ` : `
+        <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate || isGenerating ? 'disabled' : ''}
+          style="background:linear-gradient(135deg, var(--accent), #9333ea); font-size:14px; padding:10px 24px; font-weight:800; letter-spacing:0.5px;">
+          ${isGenerating
+            ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando Miniatura...`
+            : `${icon('rocket', 16)} GENERAR MINIATURA MAESTRA`}
+        </button>
+      `}
+    </div>
+    `}
+
+    <!-- Generated variants (shown below workflow if any) -->
+    ${renderVariantsHistory(project, variants)}
+    `;
+  }
+
+  // ─── STEP 1: Formato ──────────────────────────────────────────────────────
+
+  function renderStep1() {
+    return `
+    <div>
+      <div class="text-xs font-bold text-muted mb-md" style="letter-spacing:1px; text-transform:uppercase;">${icon('layout', 12)} Elegí el formato de composición (podés seleccionar varios)</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
+        ${FORMATS.map(f => {
+          const isSelected = selectedFormats.includes(f.id);
+          return `
+          <div class="card format-card" data-format-id="${f.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
+            ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
+            <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
+              border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
+              background:${isSelected ? 'var(--accent)' : 'transparent'};
+              display:flex; align-items:center; justify-content:center; color:white; font-size:11px;">
+              ${isSelected ? icon('check', 10) : ''}
+            </div>
+            <div style="font-size:28px; margin-bottom:var(--space-sm);">${f.emoji}</div>
+            <div class="font-bold" style="font-size:14px;">${f.label}</div>
+            <div class="text-xs text-accent mb-xs">${f.subtitle}</div>
+            <div class="text-xs text-muted" style="line-height:1.5;">${f.desc}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      ${selectedFormats.length === 0 ? `<p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná al menos un formato para continuar</p>` : `
+        <p class="text-xs text-accent mt-md" style="text-align:center;">${icon('check', 12)} ${selectedFormats.length} formato${selectedFormats.length > 1 ? 's' : ''} seleccionado${selectedFormats.length > 1 ? 's' : ''}</p>
+      `}
+    </div>`;
+  }
+
+  // ─── STEP 2: Estilo ───────────────────────────────────────────────────────
+
+  function renderStep2() {
+    return `
+    <div>
+      <div class="text-xs font-bold text-muted mb-md" style="letter-spacing:1px; text-transform:uppercase;">${icon('palette', 12)} Elegí el estilo visual</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
+        ${STYLES.map(s => {
+          const isSelected = selectedStyleId === s.id;
+          return `
+          <div class="card style-card" data-style-id="${s.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
+            ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
+            <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
+              border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
+              background:${isSelected ? 'var(--accent)' : 'transparent'};
+              display:flex; align-items:center; justify-content:center; color:white; font-size:11px;">
+              ${isSelected ? icon('check', 10) : ''}
+            </div>
+            <div style="font-size:28px; margin-bottom:var(--space-sm);">${s.emoji}</div>
+            <div class="font-bold" style="font-size:14px;">${s.label}</div>
+            <div class="text-xs text-accent mb-xs">${s.subtitle}</div>
+            <div class="text-xs text-muted" style="line-height:1.5; font-style:italic;">"${s.keywords.split(',').slice(0, 3).join(', ')}..."</div>
+          </div>`;
+        }).join('')}
+      </div>
+      ${!selectedStyleId ? `<p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná un estilo visual para continuar</p>` : `
+        <p class="text-xs text-accent mt-md" style="text-align:center;">${icon('check', 12)} Estilo: <strong>${STYLES.find(s => s.id === selectedStyleId)?.label}</strong></p>
+      `}
+    </div>`;
+  }
+
+  // ─── STEP 3: Ángulo + Generar ─────────────────────────────────────────────
+
+  function renderStep3(project, selectedAngles, variants) {
+    const selectedFaceId = document.getElementById?.('select-expression-step3')?.value || '';
+    return `
+    <div>
+      <!-- Summary of selections -->
+      <div class="card mb-md" style="background:var(--bg-tertiary); border:none; padding:var(--space-md);">
+        <div class="text-xs font-bold text-muted mb-sm" style="letter-spacing:1px; text-transform:uppercase;">Resumen de tu configuración</div>
+        <div class="flex gap-md" style="flex-wrap:wrap;">
+          <div>
+            <span class="text-xs text-muted">Formatos:</span>
+            <div class="flex gap-xs mt-xs" style="flex-wrap:wrap;">
+              ${selectedFormats.map(fid => {
+                const f = FORMATS.find(x => x.id === fid);
+                return `<span class="badge badge-neutral" style="font-size:9px;">${f?.emoji} ${f?.label}</span>`;
+              }).join('')}
+            </div>
+          </div>
+          <div>
+            <span class="text-xs text-muted">Estilo:</span>
+            <div class="mt-xs">
+              ${(() => { const s = STYLES.find(x => x.id === selectedStyleId); return `<span class="badge badge-accent" style="font-size:9px;">${s?.emoji} ${s?.label}</span>`; })()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Face selector -->
+      <div class="flex gap-md mb-md items-end" style="flex-wrap:wrap;">
+        <div class="form-group" style="flex:1; min-width:180px; margin-bottom:0;">
+          <label class="form-label">${icon('camera', 12)} Expresión del Creador (opcional)</label>
+          <select class="form-select" id="select-expression-step3" style="font-size:12px;">
+            <option value="">Sin rostro</option>
+            ${faceList.map(f => `<option value="${f.id}">${f.expression_type}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Angle cards -->
+      <div class="text-xs font-bold text-muted mb-sm" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} Seleccioná el Ángulo Psicológico</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:var(--space-sm); margin-bottom:var(--space-md);">
+        ${selectedAngles.map(a => {
+          const isSelected = selectedAngleId === a.id;
+          const angleVariants = variants.filter(v => v.angle_id === a.id);
+          return `
+          <div class="card angle-select-card" data-angle-id="${a.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
+            ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
+            <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
+              border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
+              background:${isSelected ? 'var(--accent)' : 'transparent'};
+              display:flex; align-items:center; justify-content:center; color:white; font-size:11px;">
+              ${isSelected ? icon('check', 10) : ''}
+            </div>
+            <div style="color:var(--accent); margin-bottom:var(--space-xs);">${icon('crosshair', 18)}</div>
+            <div class="font-bold" style="font-size:13px; padding-right:24px;">${a.name}</div>
+            ${a.title ? `<div class="text-xs text-muted" style="font-style:italic; margin-top:2px;">"${a.title}"</div>` : ''}
+            ${angleVariants.length > 0 ? `<div class="text-xs text-accent mt-sm">${icon('image', 10)} ${angleVariants.length} generada${angleVariants.length > 1 ? 's' : ''}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+
+      ${!selectedAngleId ? `<p class="text-xs text-muted" style="text-align:center; opacity:0.6;">Seleccioná un ángulo para activar la generación</p>` : `
+        <p class="text-xs text-accent" style="text-align:center;">${icon('check', 12)} Ángulo listo — podés generar tu miniatura maestra</p>
+      `}
+    </div>`;
+  }
+
+  // ─── Variants history ─────────────────────────────────────────────────────
+
+  function renderVariantsHistory(project, variants) {
+    if (variants.length === 0) return '';
+    const generating = variants.filter(v => v.ai_metadata?.generating).length;
+    // Group: master variants (no parent_id) first, then their children
+    const masters = variants.filter(v => !v.ai_metadata?.parent_id);
+    const children = variants.filter(v => !!v.ai_metadata?.parent_id);
+
+    const renderCard = (v, i, isChild = false) => {
+      const isGen = v.ai_metadata?.generating;
+      const hasError = v.ai_metadata?.error;
+      const isExpanding = expandingVariantId === v.id;
+      const imgSrc = v.image_url || v.ai_metadata?.data_url || null;
+      const childCount = children.filter(c => c.ai_metadata?.parent_id === v.id).length;
+      const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
+
+      return `
+      <div class="thumbnail-card${isChild ? ' variant-child' : ''}" style="animation:fadeIn 0.35s ease both; animation-delay:${i * 0.05}s;${isChild ? 'margin-left:var(--space-sm); border-left:2px solid var(--accent);' : ''}">
+        <div class="thumb-img" style="background:linear-gradient(${135 + i * 30}deg,#0a0a1a,#1a0a2e); position:relative; aspect-ratio:16/9;">
+          <button class="btn-delete-variant" data-variant-id="${v.id}" title="Eliminar miniatura"
+            style="position:absolute;top:6px;right:6px;z-index:10;background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.15);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,0.7);transition:all 0.15s;"
+            onmouseover="this.style.background='rgba(220,38,38,0.85)';this.style.color='white';"
+            onmouseout="this.style.background='rgba(0,0,0,0.65)';this.style.color='rgba(255,255,255,0.7)';">
+            ${icon('trash', 12)}
+          </button>
+          ${imgSrc
+            ? `<img src="${imgSrc}" alt="Miniatura" style="width:100%;height:100%;object-fit:cover;" />`
+            : isGen
+              ? `<div class="flex flex-col items-center justify-center h-full gap-sm">
+                   <div class="animate-pulse" style="color:var(--accent);">${icon('clock', 32)}</div>
+                   <div class="text-xs text-muted">Generando imagen...</div>
+                 </div>`
+              : hasError
+                ? `<div class="flex flex-col items-center justify-center h-full p-md text-center gap-xs">
+                     <span style="color:var(--danger);">${icon('alertTriangle', 24)}</span>
+                     <div class="text-xs text-muted" style="font-size:10px;">${v.ai_metadata.error.slice(0, 60)}</div>
                    </div>`
                 : `<div class="flex flex-col items-center justify-center h-full p-md text-center">
-                     <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:0.5; margin-bottom:var(--space-xs);">Concepto Visual</div>
-                     <div style="font-size:11px; opacity:0.8; line-height:1.4;">${v.ai_metadata?.prompt?.slice(0, 80)}...</div>
-                   </div>`
-          }
-          <div style="position:absolute;bottom:0;left:0;right:0;padding:8px;background:linear-gradient(transparent,rgba(0,0,0,0.8));">
-            <div style="font-family:var(--font-impact);font-size:18px;color:white;letter-spacing:2px;">${v.overlay_text || ''}</div></div></div>
+                     <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:0.4; margin-bottom:4px;">Concepto Visual</div>
+                     <div style="font-size:11px; opacity:0.75; line-height:1.4;">${(v.ai_metadata?.prompt || '').slice(0, 80)}...</div>
+                   </div>`}
+          ${imgSrc ? `
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));">
+            <div style="font-family:var(--font-impact);font-size:14px;color:white;letter-spacing:2px;">${v.overlay_text || ''}</div>
+          </div>` : ''}
+        </div>
         <div class="thumb-info">
-          <div class="flex items-center justify-between mb-sm">
-            <span class="badge badge-accent">${v.style_preset || 'default'}</span>
-            <span class="font-bold ${v.impact_score >= 90 ? 'text-success' : 'text-accent'}">${v.impact_score || 0}</span></div></div>
-      </div>`).join('')}
-    </div>` : `
-    <div class="card" style="text-align:center;padding:var(--space-2xl);color:var(--text-tertiary);">
-      ${icon('image', 48)}
-      <p class="text-sm text-muted mt-md">Aún no hay variantes generadas. Configura los parámetros y haz clic en "Generar".</p>
-    </div>`}
-  </div>`;
+          <div class="flex gap-xs mb-xs" style="flex-wrap:wrap;">
+            <span class="badge badge-accent" style="font-size:9px;">${v.style_preset || 'default'}</span>
+            ${v.ai_metadata?.angle_name ? `<span class="badge badge-neutral" style="font-size:9px;">${v.ai_metadata.angle_name}</span>` : ''}
+            ${isChild ? `<span class="badge badge-neutral" style="font-size:9px;">Variación</span>` : ''}
+            <span class="font-bold ${(v.impact_score || 0) >= 90 ? 'text-success' : 'text-accent'}" style="font-size:12px; margin-left:auto;">${v.impact_score || 0}</span>
+          </div>
+          ${imgSrc && !isGen ? `
+          <div class="flex gap-xs">
+            <button class="btn btn-secondary btn-xs btn-download" data-src="${imgSrc}" data-name="miniatura-${safeTitle}-${i+1}.png"
+              title="Descargar" style="flex:0;">
+              ${icon('download', 12)} Descargar
+            </button>
+            ${!isChild ? `
+            <div class="flex gap-xs" style="flex:1; align-items:center;">
+              <select class="form-select" id="expand-count-${v.id}" style="font-size:10px; padding:3px 6px; flex:1; height:26px;">
+                ${[1,2,3,4,5,6,7,8].map(n => `<option value="${n}"${n===3?' selected':''}>${n} variación${n>1?'es':''}</option>`).join('')}
+              </select>
+              <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${v.id}" data-count="3"
+                ${isExpanding || expandingVariantId ? 'disabled' : ''} style="white-space:nowrap;">
+                ${isExpanding ? `<span class="animate-pulse">${icon('clock', 10)}</span>` : icon('plus', 10)} Variar
+              </button>
+            </div>` : ''}
+          </div>
+          ${childCount > 0 && !isChild ? `<div class="text-xs text-muted mt-xs" style="font-size:10px;">${icon('image', 10)} ${childCount} variación${childCount > 1 ? 'es' : ''} generada${childCount > 1 ? 's' : ''}</div>` : ''}
+          ` : ''}
+        </div>
+      </div>`;
+    };
 
-  container.innerHTML = html;
+    // Interleave masters with their children
+    let cards = '';
+    masters.forEach((m, i) => {
+      cards += renderCard(m, i, false);
+      const mChildren = children.filter(c => c.ai_metadata?.parent_id === m.id);
+      mChildren.forEach((c, j) => { cards += renderCard(c, j, true); });
+    });
 
-  // Auto-select expression based on angle (Phase 3 automation)
-  document.getElementById('select-angle')?.addEventListener('change', (e) => {
-    const angleId = e.target.value;
-    const angle = angleList.find(a => a.id === angleId);
-    const expressionSelect = document.getElementById('select-expression');
+    return `
+    <div class="mt-lg">
+      <div class="flex items-center justify-between mb-sm">
+        <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">${icon('image', 12)} Miniaturas (${variants.length})</div>
+        ${generating > 0 ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando ${generating}...</span>` : ''}
+      </div>
+      <div class="grid-3">${cards}</div>
+    </div>`;
+  }
 
-    if (angle && expressionSelect) {
-      // Mapping logic: Keywords in angle description/name -> Expression type
-      const mapping = {
-        'ERROR': ['preocupado', 'sorpresa', 'pensando'],
-        'CONTRASTE': ['sorpresa', 'confianza'],
-        'RECOMPENSA': ['confianza', 'señalando'],
-        'CURIOSIDAD': ['pensando', 'sorpresa']
-      };
+  // ─── EVENTS ───────────────────────────────────────────────────────────────
 
-      const normalizedAngle = angle.name.toUpperCase();
-      let targetExpression = 'confianza'; // default
-
-      for (const [key, exprs] of Object.entries(mapping)) {
-        if (normalizedAngle.includes(key)) {
-          // Find first matching expression in user's vault
-          const found = faceList.find(f => exprs.includes(f.expression_type.toLowerCase()));
-          if (found) {
-            targetExpression = found.id;
-            break;
-          }
+  function bindEvents() {
+    // Project folder
+    container.querySelectorAll('.project-folder').forEach(el => {
+      el.addEventListener('click', () => {
+        if (selectedProjectId !== el.dataset.projectId) {
+          selectedProjectId = el.dataset.projectId;
+          workflowStep = 1;
+          selectedFormats = [];
+          selectedStyleId = null;
+          selectedAngleId = null;
         }
-      }
+        render();
+      });
+    });
 
-      if (expressionSelect.querySelector(`option[value="${targetExpression}"]`)) {
-        expressionSelect.value = targetExpression;
-      }
-    }
-  });
+    // Step tabs
+    container.querySelectorAll('.step-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const n = parseInt(btn.dataset.step);
+        if (!btn.disabled) { workflowStep = n; render(); }
+      });
+    });
 
-  // Generate button
-  const btn = document.getElementById('btn-generate');
-  if (btn) {
-    btn.addEventListener('click', async () => {
-      const title = document.getElementById('project-title')?.value;
-      const summary = document.getElementById('project-summary')?.value;
-      const angleId = document.getElementById('select-angle')?.value;
+    // Prev / Next
+    document.getElementById('btn-prev-step')?.addEventListener('click', () => {
+      if (workflowStep > 1) { workflowStep--; render(); }
+    });
+    document.getElementById('btn-next-step')?.addEventListener('click', () => {
+      if (workflowStep < 3) { workflowStep++; render(); }
+    });
 
-      if (!title) { alert('Ingresa un título'); return; }
+    // Format cards (multi-select)
+    container.querySelectorAll('.format-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const fid = card.dataset.formatId;
+        if (selectedFormats.includes(fid)) {
+          selectedFormats = selectedFormats.filter(x => x !== fid);
+        } else {
+          selectedFormats.push(fid);
+        }
+        render();
+      });
+    });
 
-      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Creando proyecto...`;
-      btn.disabled = true;
+    // Style cards (single-select)
+    container.querySelectorAll('.style-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedStyleId = selectedStyleId === card.dataset.styleId ? null : card.dataset.styleId;
+        render();
+      });
+    });
+
+    // Angle cards (single-select)
+    container.querySelectorAll('.angle-select-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedAngleId = selectedAngleId === card.dataset.angleId ? null : card.dataset.angleId;
+        render();
+      });
+    });
+
+    // Delete variant buttons
+    container.querySelectorAll('.btn-delete-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const variantId = btn.dataset.variantId;
+        const project = getProject();
+        if (!project) return;
+
+        // Find variant to also delete from storage
+        const variant = (project.thumbnail_variants || []).find(v => v.id === variantId);
+
+        try {
+          // Delete from storage if we have a URL
+          if (variant?.image_url) {
+            const urlParts = variant.image_url.split('/public/thumbnails/');
+            if (urlParts.length > 1) {
+              await supabase.storage.from('thumbnails').remove([urlParts[1]]).catch(() => {});
+            }
+          }
+          const { error } = await supabase.from('thumbnail_variants').delete().eq('id', variantId);
+          if (error) throw error;
+          await reloadProjects();
+          render();
+        } catch (err) {
+          console.error('Delete variant error:', err);
+          alert('Error al eliminar: ' + err.message);
+        }
+      });
+    });
+
+    // Download buttons
+    container.querySelectorAll('.btn-download').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const src = btn.dataset.src;
+        const name = btn.dataset.name;
+        const a = document.createElement('a');
+        a.href = src;
+        a.download = name;
+        a.click();
+      });
+    });
+
+    // ── GENERATE MASTER (1 image) ──
+    document.getElementById('btn-generate-master')?.addEventListener('click', async () => {
+      const project = getProject();
+      if (!project || !selectedAngleId || !selectedStyleId || selectedFormats.length === 0) return;
+
+      const angle = (project.logic_dna?.selected_angles || []).find(a => a.id === selectedAngleId);
+      const style = STYLES.find(s => s.id === selectedStyleId);
+      const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
+      const expressionId = document.getElementById('select-expression-step3')?.value;
+      const selectedFace = faceList.find(f => f.id === expressionId);
+      const includeFace = !!selectedFace && !!brandKit?.face_analysis;
+
+      isGenerating = true;
+      render();
 
       try {
-        // Create project
-        const { data: project, error } = await supabase
-          .from('projects')
-          .insert({ channel_id: activeChannelId, title, summary, status: 'draft' })
-          .select()
-          .single();
-        if (error) throw error;
-
-        // High Level AI Logic: Generate 6 creative prompt variations using Gemini
-        const generationContext = {
-          title,
-          summary,
-          angle: angleList.find(a => a.id === angleId)
-        };
-        
-        btn.innerHTML = `<span class="animate-pulse">${icon('brain', 16)}</span> Ideando variantes...`;
-        
-        const includeFace = document.getElementById('check-include-face')?.checked;
-        const faceAnalysis = brandKit?.face_analysis;
-        const selectedExpressionId = document.getElementById('select-expression')?.value;
-        const selectedFace = faceList.find(f => f.id === selectedExpressionId);
-
-        let aiPrompt = `Genera 6 variaciones de miniaturas para este video. Título: ${title}. Resumen: ${summary}. Ángulo: ${generationContext.angle?.name}`;
-        
-        if (includeFace && faceAnalysis) {
-            aiPrompt += `\n\nIMPORTANTE: El creador DEBE aparecer en la miniatura. 
-            RASGOS DEL CREADOR: ${JSON.stringify(faceAnalysis)}
-            EXPRESIÓN REQUERIDA: ${selectedFace?.expression_type || 'Normal'}
-            REFERENCIA VISUAL: ${selectedFace?.image_url || ''}
-            Instrucción: Integra el rostro del creador de forma que se vea natural pero con alto impacto visual siguiendo el ángulo seleccionado.`;
-        }
-
-        const aiVariations = await callAI('IMAGE_GEN', aiPrompt, generationContext);
-        const variantsToProcess = Array.isArray(aiVariations) ? aiVariations : (aiVariations.variations || []);
-
-        // Insert variants as 'processing'
-        const variantData = variantsToProcess.slice(0, 6).map((v, i) => ({
-          project_id: project.id,
-          angle_id: angleId,
-          overlay_text: v.overlay_text || title.toUpperCase(),
-          style_preset: v.style || ['tech', 'minimal', 'dramatic', 'neon', 'clean', 'bold'][i],
-          impact_score: Math.floor(Math.random() * 20) + 80,
-          status: 'processing',
-          ai_metadata: {
-            prompt: v.visual_prompt || v.prompt || title,
-            angle_name: generationContext.angle?.name
-          }
-        }));
-
-        const { data: insertedVariants, error: vError } = await supabase.from('thumbnail_variants').insert(variantData).select();
-        if (vError) throw vError;
-
-        renderEngine(container); // Show cards with loaders
-
-        // Update variants to 'ready' immediately since we are focusing on Strategy/Concepts now
-        await supabase.from('thumbnail_variants')
-          .update({ status: 'ready' })
-          .eq('project_id', project.id);
-        
-        renderEngine(container);
-
-        btn.innerHTML = `${icon('rocket', 16)} Generar`;
-        btn.disabled = false;
+        const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, includeFace, brandKit });
+        await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: project.title.toUpperCase() });
       } catch (err) {
-        alert('Error: ' + err.message);
-        btn.innerHTML = `${icon('rocket', 16)} Generar`;
-        btn.disabled = false;
+        console.error('Generate error:', err);
+        alert('Error al generar: ' + err.message);
+      } finally {
+        isGenerating = false;
+        render();
       }
     });
+
+    // ── EXPAND: generate N more variations from a base variant ──
+    container.querySelectorAll('.btn-expand-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const variantId = btn.dataset.variantId;
+        // Read count from the sibling select
+        const countSelect = document.getElementById(`expand-count-${variantId}`);
+        const count = parseInt(countSelect?.value || '3');
+        const project = getProject();
+        if (!project || expandingVariantId) return;
+
+        const allVariants = project.thumbnail_variants || [];
+        const baseVariant = allVariants.find(v => v.id === variantId);
+        if (!baseVariant) return;
+
+        expandingVariantId = variantId;
+        render();
+
+        try {
+          const basePrompt = baseVariant.ai_metadata?.prompt || project.title;
+          for (let i = 0; i < count; i++) {
+            const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle and video context. Change composition, color treatment, or focal element.`;
+            await generateAndSaveVariant({
+              project,
+              angle: { id: baseVariant.angle_id, name: baseVariant.ai_metadata?.angle_name || '' },
+              style: { label: baseVariant.style_preset },
+              formats: [],
+              imagePrompt: variationPrompt,
+              overlayText: baseVariant.overlay_text,
+              parentId: variantId,
+            });
+          }
+        } catch (err) {
+          console.error('Expand error:', err);
+          alert('Error al generar variaciones: ' + err.message);
+        } finally {
+          expandingVariantId = null;
+          render();
+        }
+      });
+    });
   }
+
+  // ── Helper: build master prompt ──────────────────────────────────────────
+  function buildMasterPrompt({ project, angle, style, formats, selectedFace, includeFace, brandKit }) {
+    const formatInstructions = formats.map(f => f.prompt).join(' COMBINED WITH: ');
+    return `High-impact YouTube thumbnail, 16:9 aspect ratio.
+PSYCHOLOGICAL ANGLE: "${angle.name}"${angle.title ? ` — "${angle.title}"` : ''}
+VIDEO TITLE: "${project.title}"
+HOOK: ${project.logic_dna?.hook || ''}
+CONFLICT: ${project.logic_dna?.tension || ''}
+PROMISE: ${project.logic_dna?.promise || ''}
+FORMAT: ${formatInstructions}
+VISUAL STYLE: ${style.keywords}
+${includeFace ? `CREATOR must appear in thumbnail with expression "${selectedFace.expression_type}". Face traits: ${JSON.stringify(brandKit.face_analysis)}` : ''}
+Large bold readable text overlay: "${project.title.toUpperCase()}"
+Fill entire frame, no borders, professional YouTube CTR-optimized composition.`;
+  }
+
+  // ── Helper: generate one image and save to DB ─────────────────────────────
+  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText, parentId = null }) {
+    // Insert placeholder
+    const { data: inserted, error: insertErr } = await supabase
+      .from('thumbnail_variants')
+      .insert({
+        project_id: project.id,
+        angle_id: angle.id,
+        overlay_text: overlayText,
+        style_preset: style.label,
+        impact_score: Math.floor(Math.random() * 20) + 80,
+        ai_metadata: {
+          prompt: imagePrompt.slice(0, 300),
+          angle_name: angle.name,
+          format: formats.map(f => f.label).join(' + '),
+          style: style.label,
+          generating: true,
+          parent_id: parentId,
+        }
+      })
+      .select()
+      .single();
+    if (insertErr) throw insertErr;
+
+    // Reload to show placeholder immediately
+    await reloadProjects();
+    render();
+
+    try {
+      const dataUrl = await generateImage(imagePrompt);
+
+      // Upload to storage
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      const blob = await fetch(dataUrl).then(r => r.blob());
+      const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.png`;
+      await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: 'image/png', upsert: true });
+      const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(fileName);
+
+      await supabase.from('thumbnail_variants').update({
+        image_url: urlData.publicUrl,
+        ai_metadata: { ...inserted.ai_metadata, generating: false, data_url: dataUrl }
+      }).eq('id', inserted.id);
+
+    } catch (imgErr) {
+      console.error('Image gen failed:', imgErr);
+      await supabase.from('thumbnail_variants').update({
+        ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message }
+      }).eq('id', inserted.id);
+    }
+
+    await reloadProjects();
+    render();
+  }
+
+  async function reloadProjects() {
+    const { data: updated } = await supabase
+      .from('projects').select('*, thumbnail_variants(*)')
+      .eq('channel_id', activeChannelId).order('created_at', { ascending: false });
+    projects.length = 0;
+    (updated || []).forEach(p => projects.push(p));
+  }
+
+  render();
 }

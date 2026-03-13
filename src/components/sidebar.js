@@ -8,7 +8,6 @@ const NAV_ITEMS = [
   { route: 'brand', icon: 'palette', label: 'Brand Kit', section: 'Workflow' },
   { route: 'cerebro', icon: 'brain', label: 'El Cerebro', section: 'Workflow' },
   { route: 'espionaje', icon: 'eye', label: 'Espionaje', section: 'Workflow' },
-  { route: 'angulos', icon: 'crosshair', label: 'Ángulos de Click', badge: '22', section: 'Workflow' },
   { route: 'engine', icon: 'cog', label: 'Fábrica Creativa', section: 'Workflow' },
   { route: 'editor', icon: 'scissors', label: 'Editor & Simulador', section: 'Workflow' },
 ];

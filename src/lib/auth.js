@@ -35,13 +35,31 @@ async function fetchWithTimeout(promise, ms, label) {
     ]);
 }
 
+async function fetchWithRetry(fn, label, maxAttempts = 3) {
+    const delays = [0, 5000, 10000]; // immediate, 5s, 10s
+    const timeout = 25000;
+    let lastError;
+    for (let i = 0; i < maxAttempts; i++) {
+        if (delays[i] > 0) {
+            console.warn(`${label}: retry ${i}/${maxAttempts - 1} in ${delays[i] / 1000}s...`);
+            await new Promise(r => setTimeout(r, delays[i]));
+        }
+        try {
+            return await fetchWithTimeout(fn(), timeout, label);
+        } catch (err) {
+            lastError = err;
+            if (!err.message.startsWith('Timeout:')) throw err; // non-timeout errors: fail fast
+        }
+    }
+    throw lastError;
+}
+
 export async function loadUserProfile(userId) {
-    const { data, error } = await fetchWithTimeout(
-        supabase.from('profiles')
+    const { data, error } = await fetchWithRetry(
+        () => supabase.from('profiles')
             .select('id, email, full_name, avatar_url, subscription_tier, created_at')
             .eq('id', userId)
             .single(),
-        20000,
         'Perfil'
     );
     if (error) {
@@ -61,12 +79,11 @@ export async function loadUserChannels(userId) {
 
     channelsPromise = (async () => {
         try {
-            const [ownedResult, membershipsResult] = await fetchWithTimeout(
-                Promise.all([
+            const [ownedResult, membershipsResult] = await fetchWithRetry(
+                () => Promise.all([
                     supabase.from('channels').select('*').eq('owner_id', userId).order('created_at', { ascending: true }),
                     supabase.from('channel_members').select('channel_id, role, channels(*)').eq('user_id', userId)
                 ]),
-                20000,
                 'Canales'
             );
 
@@ -207,15 +224,16 @@ export async function initAuth(onReady) {
         if (!resolved) { resolved = true; if (onReady) onReady(); }
     };
 
-    // Emergency unlock: if everything stalls, unblock the UI after 15s
+    // Emergency unlock: give retries time to complete (3 attempts × 25s + delays = ~75s max)
+    // but unlock UI early at 60s if still stuck
     const emergencyTimeout = setTimeout(() => {
         const { isAuthInitializing } = getState();
         if (isAuthInitializing) {
-            console.warn('Auth initialization slow, proceeding to unlock UI...');
+            console.warn('Auth initialization timeout, unlocking UI...');
             setState({ isAuthInitializing: false, isLoadingChannels: false });
             finish();
         }
-    }, 15000);
+    }, 60000);
 
     // onAuthStateChange handles TOKEN_REFRESHED, SIGNED_IN, SIGNED_OUT, etc.
     // We only act on SIGNED_OUT here — initial load is handled by getSession() below

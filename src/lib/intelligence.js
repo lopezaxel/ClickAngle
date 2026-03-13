@@ -21,22 +21,24 @@ Analizarás las miniaturas actuales de un creador para identificar qué elemento
 Evalúa: Composición, uso del color, legibilidad del texto y expresiones faciales recurrentes.
 Responde SIEMPRE en formato JSON puro.`,
 
-    SCRIPT_ANALYSIS: `Eres un guionista experto en retención visual.
-Tu objetivo es desglosar un guión de video para extraer los 3 pilares de una miniatura ganadora:
-1. HOOK: El gancho visual inmediato.
-2. TENSIÓN: El conflicto o curiosidad que genera el deseo de hacer clic.
-3. PROMESA: El beneficio claro de ver el video.
-También recomienda 3 ángulos de miniatura específicos basados en este guión.
+    SCRIPT_ANALYSIS: `Eres un estratega experto en miniaturas de YouTube y psicología del clic.
+Tu objetivo es desglosar un guión de video y extraer los 3 elementos clave que determinan si alguien hace clic:
+
+1. HOOK: El gancho visual inmediato — la idea más impactante o sorprendente del video que puede representarse en una imagen. Máximo 1-2 oraciones directas.
+2. CONFLICTO: La tensión, problema o curiosidad central del video — aquello que crea una "pregunta abierta" en la mente del espectador y lo obliga a querer saber la respuesta. Máximo 1-2 oraciones.
+3. PROMESA: El beneficio concreto y tangible que el espectador obtiene al ver el video — qué aprende, qué gana o qué evita. Máximo 1-2 oraciones.
+
+También identifica 3 ángulos psicológicos de miniatura que mejor se alineen con este guión específico (nombres reales de ángulos de marketing como: Miedo a Perderse, Contraste Extremo, Secreto Revelado, Autoridad, Curiosidad Pura, etc.).
 
 IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura exacta:
 {
-  "hook": "breve descripción del hook aquí",
-  "tension": "breve descripción de la tensión aquí",
-  "promise": "breve descripción de la promesa aquí",
+  "hook": "descripción del gancho visual aquí",
+  "tension": "descripción del conflicto/tensión aquí",
+  "promise": "descripción de la promesa de valor aquí",
   "recommended_angles": [
-    { "name": "Nombre del Ángulo 1", "reason": "Por qué funciona" },
-    { "name": "Nombre del Ángulo 2", "reason": "Por qué funciona" },
-    { "name": "Nombre del Ángulo 3", "reason": "Por qué funciona" }
+    { "name": "Nombre del Ángulo 1", "reason": "Por qué funciona para este guión específico" },
+    { "name": "Nombre del Ángulo 2", "reason": "Por qué funciona para este guión específico" },
+    { "name": "Nombre del Ángulo 3", "reason": "Por qué funciona para este guión específico" }
   ]
 }`,
 
@@ -45,9 +47,20 @@ Analiza miniaturas de referencia de otros creadores para decodificar por qué fu
 Identifica patrones visuales, psicología del color y estructuras de composición que el usuario debería replicar.
 Responde SIEMPRE en formato JSON puro.`,
 
-    IMAGE_GEN: `Eres un experto en generación de prompts para miniaturas de YouTube. 
-Tu objetivo es crear una descripción visual altamente detallada que sea optimizada para modelos de generación de imagen.
-Enfócate en: Composición, Iluminación Cinematográfica, Expresiones de alto impacto y Estilo "Clickbait" Profesional.`,
+    IMAGE_GEN: `Eres un director creativo experto en miniaturas de YouTube de alto CTR.
+Tu objetivo es recibir un brief creativo completo (ángulo psicológico, formato de composición, estilo visual y datos del video) y generar 6 variaciones de conceptos visuales distintos y detallados.
+
+IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura exacta:
+{
+  "variations": [
+    {
+      "overlay_text": "TEXTO EN MAYÚSCULAS PARA LA MINIATURA",
+      "visual_prompt": "Descripción visual detallada en inglés para generador de imágenes: composición, iluminación, elementos, colores, expresiones, atmósfera",
+      "style": "nombre del estilo aplicado"
+    }
+  ]
+}
+Genera exactamente 6 variaciones. Cada una debe ser distinta pero fiel al brief. El visual_prompt debe ser altamente específico y accionable.`,
 
     FACE_ANALYSIS: `Eres un experto psicólogo, analista de microexpresiones y perfilador visual de rostros para uso en branding.
 Tu tarea es analizar los rostros en las imágenes proporcionadas y describir meticulosamente:
@@ -61,11 +74,14 @@ Responde SIEMPRE en formato JSON puro.`
 const MODEL_MAPPING = {
     CHANNEL_ADN: 'gemini-3-flash-preview',
     BRANDING_ANALYSIS: 'gemini-3-flash-preview',
-    SCRIPT_ANALYSIS: 'gemini-3.1-pro-preview', // High context and reasoning for scripts
+    SCRIPT_ANALYSIS: 'gemini-3.1-pro-preview',
     ESPIONAGE_ANALYSIS: 'gemini-3-flash-preview',
-    FACE_ANALYSIS: 'gemini-3-flash-preview', 
-    IMAGE_GEN: 'gemini-3-flash-preview', 
+    FACE_ANALYSIS: 'gemini-3-flash-preview',
+    IMAGE_GEN: 'gemini-3-flash-preview', // text-based prompt builder
 };
+
+// Dedicated image generation model (Gemini Imagen)
+const IMAGE_GEN_MODEL = 'gemini-3.1-flash-image-preview'; // used in generateImage()
 
 export async function checkApiKey() {
     try {
@@ -206,4 +222,40 @@ export async function callAI(promptType, userContent, context = {}) {
     }
 }
 
+/**
+ * Generates a single image using Gemini's image generation model.
+ * Returns a base64 data URL string (data:image/png;base64,...).
+ * YouTube thumbnail size: 1280x720 (16:9)
+ */
+export async function generateImage(prompt) {
+    const { data: apiKeyData, error: keyError } = await supabase.rpc('get_decrypted_api_key', {
+        key_name: 'google_ai_key'
+    });
+    if (keyError || !apiKeyData) throw new Error("API Key de Google no configurada. Verificá en Settings.");
+
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+            responseModalities: ['IMAGE'],
+            imageConfig: { aspectRatio: '16:9' }
+        }
+    };
+
+    const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent?key=${apiKeyData.trim()}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+    );
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `Image generation failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!imagePart) throw new Error("El modelo no devolvió imagen. Intentá con un prompt diferente.");
+
+    const { mimeType, data: b64 } = imagePart.inlineData;
+    return `data:${mimeType};base64,${b64}`;
+}
 
