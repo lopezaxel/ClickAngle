@@ -62,6 +62,22 @@ async function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 
   });
 }
 
+const CURATED_PALETTES = [
+  { id: 'crimson', name: 'Crimson Rush', colors: ['#DC2626', '#FFFFFF', '#1A1A1A'], description: 'Estilo MrBeast: Alto contraste y urgencia.' },
+  { id: 'midnight', name: 'Neon Midnight', colors: ['#06B6D4', '#8B5CF6', '#0F172A'], description: 'Gaming & Tech: Vibras futuristas y profundas.' },
+  { id: 'golden', name: 'Golden Authority', colors: ['#F59E0B', '#F5F5F5', '#171717'], description: 'Negocios & Lujo: Elegancia y autoridad.' },
+  { id: 'vibrant', name: 'Vibrant Nature', colors: ['#84CC16', '#ECFCCB', '#14532D'], description: 'Vlogs & Salud: Energía y frescura.' },
+  { id: 'classic', name: 'Classic Impact', colors: ['#FFFFFF', '#000000', '#DC2626'], description: 'Contraste Absoluto: Legibilidad máxima.' }
+];
+
+const PRO_FONTS = [
+  { id: 'Bangers', name: 'Bangers', style: 'font-family: Bangers, cursive;' },
+  { id: 'Luckiest Guy', name: 'Luckiest Guy', style: 'font-family: "Luckiest Guy", cursive;' },
+  { id: 'Anton', name: 'Anton', style: 'font-family: Anton, sans-serif;' },
+  { id: 'Russo One', name: 'Russo One', style: 'font-family: "Russo One", sans-serif;' },
+  { id: 'Inter', name: 'Inter', style: 'font-family: Inter, sans-serif;' }
+];
+
 async function uploadToStorage(bucket, file, channelId) {
   try {
     // Always get a fresh session before uploading
@@ -138,37 +154,63 @@ export async function renderBrand(container) {
           <p class="section-subtitle">Define el ADN de tu canal y tus mejores miniaturas</p>
         </div>
         <div class="flex gap-sm">
-          <button class="btn btn-secondary btn-sm" id="btn-analyze-adn">${icon('brain', 14)} Analizar ADN Detallado</button>
           <button class="btn btn-primary btn-sm" id="btn-save-brand">${icon('save', 14)} Guardar Configuración</button>
         </div>
       </div>
 
       <div class="grid-2" style="grid-template-columns: 1fr 1fr;">
         <div>
-          <!-- ADN DEL CANAL -->
+          <!-- ADN DEL CANAL (SIDE-BY-SIDE) -->
           <div class="card mb-md">
             <div class="card-header">
-              <div class="card-title">${icon('dna', 16)} ADN del Canal</div>
-              <span class="badge ${adn ? 'badge-accent' : 'badge-neutral'}">${adn ? 'Analizado' : 'Pendiente'}</span>
+              <div class="card-title">${icon('dna', 16)} ADN Estratégico</div>
+              <span class="badge ${adn ? 'badge-accent' : 'badge-neutral'}">${adn ? 'Definido' : 'Pendiente'}</span>
             </div>
-            ${adn ? `
-              <div class="adn-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-sm); margin-top:var(--space-sm);">
-                 <div class="card p-sm bg-tertiary">
-                   <div class="text-xs font-bold text-accent">Branding</div>
-                   <div class="text-xs text-muted">${adn.branding || 'N/A'}</div>
-                 </div>
-                 <div class="card p-sm bg-tertiary">
-                   <div class="text-xs font-bold text-accent">Tono</div>
-                   <div class="text-xs text-muted">${adn.tone || adn.tone_of_voice || 'N/A'}</div>
-                 </div>
-                 <div class="card p-sm bg-tertiary" style="grid-column: span 2;">
-                   <div class="text-xs font-bold text-accent">Temas/Nichos</div>
-                   <div class="text-xs text-muted">${adn.themes || adn.niche || 'N/A'}</div>
-                 </div>
+            
+            <div class="grid-2 p-md" style="grid-template-columns: 240px 1fr; gap:var(--space-lg); align-items: start;">
+              <!-- Left: Hero/Status -->
+              <div class="adn-hero-container" style="padding:var(--space-md); min-height:auto;">
+                <div style="font-size:24px; color:var(--accent); margin-bottom:var(--space-xs);">${icon('brain', 24)}</div>
+                <h3 style="font-size:14px; margin-bottom:4px;">${adn ? 'Estrategia Activa' : 'Sin Analizar'}</h3>
+                <p class="text-xs text-muted" style="margin-bottom:var(--space-md);">
+                  ${adn ? 'Tu ADN está alimentando a la IA.' : 'Inicia la entrevista para definir tu canal.'}
+                </p>
+                <button class="btn btn-primary btn-sm w-full" id="btn-start-adn-interview" style="font-size:11px;">
+                  ${icon('zap', 12)} ${adn ? 'Reiniciar Análisis' : 'Iniciar Análisis'}
+                </button>
               </div>
-            ` : `
-              <p class="text-sm text-muted p-md text-center">Analiza tu canal para definir su tono y estilo visual</p>
-            `}
+
+              <!-- Right: Answers (Editable) -->
+              <div id="adn-answers-panel">
+                ${adn?.interview ? `
+                  <div class="text-xs font-bold text-accent mb-sm" style="letter-spacing:1px;">RESPUESTAS ACTUALES</div>
+                  <div class="flex flex-col gap-sm">
+                    ${adn.interview.map((item, idx) => `
+                      <div class="adn-answer-item group" data-index="${idx}">
+                        <div class="text-xs text-muted mb-xs" style="opacity:0.7;">Q: ${item.q}</div>
+                        <div class="adn-answer-text" contenteditable="true" style="
+                          background: var(--bg-tertiary);
+                          padding: var(--space-sm);
+                          border-radius: var(--radius-sm);
+                          border: 1px solid var(--border);
+                          font-size: 13px;
+                          line-height: 1.4;
+                          transition: all var(--transition-fast);
+                        ">${item.a}</div>
+                      </div>
+                    `).join('')}
+                    <button class="btn btn-secondary btn-xs mt-xs hidden" id="btn-save-adn-answers">
+                      ${icon('save', 12)} Guardar Cambios y Re-Sintetizar
+                    </button>
+                  </div>
+                ` : `
+                  <div class="flex flex-col items-center justify-center h-full text-muted py-md border-dashed" style="border:1px dashed var(--border); border-radius:var(--radius-md);">
+                    <div style="font-size:24px; opacity:0.3; margin-bottom:var(--space-xs);">${icon('messageSquare', 24)}</div>
+                    <div class="text-xs">Aquí aparecerá tu entrevista</div>
+                  </div>
+                `}
+              </div>
+            </div>
           </div>
 
           <!-- FACE VAULT -->
@@ -206,16 +248,91 @@ export async function renderBrand(container) {
             </div>
             <button class="btn btn-secondary btn-sm w-full" id="btn-upload-face">${icon('upload', 14)} Subir Rostro</button>
           </div>
-        </div>
-
-        <div>
-          <!-- CREATOR THUMBNAILS (NUEVO SECTOR) -->
-          <div class="card mb-md">
+               <div>
+          <!-- MINIATURE STUDIO (PREVIEW) -->
+          <div class="card mb-md" style="background: var(--bg-tertiary); border: 1px solid var(--border-accent);">
             <div class="card-header">
-              <div class="card-title">${icon('image', 16)} Mis Mejores Miniaturas</div>
-              <span class="badge badge-success">${thumbList.length} Éxitos</span>
+              <div class="card-title">${icon('monitor', 16)} Miniature Studio</div>
+              <span class="badge badge-accent">Live Preview</span>
             </div>
-            <p class="text-xs text-muted mb-sm">Sube tus miniaturas con mejor CTR para que la IA aprenda tu estilo.</p>
+            
+            <div id="miniature-studio-preview" class="studio-preview-box" style="
+              width: 100%; aspect-ratio: 16/9; 
+              background: ${brandKit?.visual_config?.palette?.colors?.[2] || '#1A1A1A'}; 
+              border-radius: var(--radius-md); position: relative; overflow: hidden;
+              box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+              border: 1px solid var(--border);
+            ">
+                <!-- Background Glow -->
+                <div id="studio-glow" style="
+                  position: absolute; top: 0; right: 0; 
+                  width: 50%; height: 100%; 
+                  background: radial-gradient(circle at center, ${brandKit?.visual_config?.palette?.colors?.[0] || '#DC2626'}44, transparent);
+                  filter: blur(40px);
+                "></div>
+                
+                <!-- Mockup Face -->
+                <div style="position: absolute; bottom: -10px; right: 20px; width: 45%; height: 90%; 
+                     background: url('${faceList[0]?.image_url || 'https://placehold.co/400x600/222/555?text=CREADOR'}');
+                     background-size: contain; background-repeat: no-repeat; background-position: bottom;
+                     filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+                "></div>
+
+                <!-- Mockup Text -->
+                <div id="studio-text-preview" style="
+                  position: absolute; top: 20%; left: 10%; width: 50%;
+                  font-family: ${brandKit?.visual_config?.font?.id || 'Bangers'}, sans-serif;
+                  font-size: 32px; font-weight: 800; line-height: 1.1;
+                  color: ${brandKit?.visual_config?.palette?.colors?.[1] || '#FFFFFF'};
+                  text-shadow: 4px 4px 0px ${brandKit?.visual_config?.palette?.colors?.[2] || '#000000'};
+                  text-transform: uppercase;
+                ">
+                  Tus Miniaturas<br/>
+                  <span style="color: ${brandKit?.visual_config?.palette?.colors?.[0] || '#DC2626'};">Explosivas</span>
+                </div>
+
+                <div style="position:absolute; bottom:10px; left:10px; font-size:9px; font-weight:700; color:white; background:rgba(0,0,0,0.5); padding:2px 6px; border-radius:4px;">
+                  10:45
+                </div>
+            </div>
+
+            <div class="mt-md">
+                <label class="form-label">Estilo Tipográfico Pro</label>
+                <div class="flex gap-xs" style="flex-wrap:wrap;">
+                  ${PRO_FONTS.map(f => `
+                    <button class="btn-font-select ${brandKit?.visual_config?.font?.id === f.id ? 'active' : ''}" 
+                            data-font-id="${f.id}" 
+                            style="${f.style} font-size:12px; padding:6px 12px; cursor:pointer;">
+                      ${f.name}
+                    </button>
+                  `).join('')}
+                </div>
+            </div>
+
+            <div class="mt-md">
+                <label class="form-label">Estudio de Color (Paletas Trend)</label>
+                <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap:var(--space-sm);">
+                  ${CURATED_PALETTES.map(p => `
+                    <div class="card p-sm palette-select ${brandKit?.visual_config?.palette?.id === p.id ? 'active' : ''}" 
+                         data-palette-id="${p.id}" 
+                         style="cursor:pointer; border: 1px solid var(--border);">
+                      <div class="flex gap-xs mb-xs">
+                        ${p.colors.map(c => `<div style="width:12px; height:12px; background:${c}; border-radius:3px; border:1px solid rgba(255,255,255,0.1);"></div>`).join('')}
+                      </div>
+                      <div style="font-size:10px; font-weight:700;">${p.name}</div>
+                      <div style="font-size:9px; color:var(--text-tertiary); line-height:1.2;">${p.description}</div>
+                    </div>
+                  `).join('')}
+                </div>
+            </div>
+          </div>
+
+          <!-- Mis Mejores Miniaturas -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">${icon('image', 16)} Ranking de Inspiración</div>
+              <span class="badge badge-success">${thumbList.length} / 6</span>
+            </div>
             <div class="grid-3 mb-md" style="grid-template-columns: repeat(3, 1fr);">
               ${thumbList.map(t => `
                  <div class="card p-0 overflow-hidden relative group" style="aspect-ratio:16/9;">
@@ -230,39 +347,60 @@ export async function renderBrand(container) {
               ` : ''}
             </div>
           </div>
-
-          <div class="card">
-            <div class="card-header"><div class="card-title">${icon('palette', 16)} Colores y Fuentes</div></div>
-            <div class="flex gap-sm mb-md">
-              ${colors.map(c => `
-                <div class="color-swatch" style="background: ${c}; width:32px; height:32px; border-radius:4px;"></div>
-              `).join('')}
-            </div>
-            <div class="form-group mb-sm">
-              <label class="text-xs font-bold">Fuente Miniaturas</label>
-              <div class="p-sm bg-tertiary rounded mt-xs" style="font-family: var(--font-impact); font-size:18px;">${brandKit?.font_thumbnails || 'BANGERS'}</div>
-            </div>
-          </div>
         </div>
+    </div>
       </div>
     </div>`;
 
     // --- Handlers --- (keeping existing logic but ensuring container is still valid)
     const setupHandlers = () => {
-        // ADN Analysis
-        document.getElementById('btn-analyze-adn')?.addEventListener('click', async () => {
-          const btn = document.getElementById('btn-analyze-adn');
-          const originalHtml = btn.innerHTML;
+        // ADN Analysis & Editing
+        document.getElementById('btn-start-adn-interview')?.addEventListener('click', () => {
+          showADNInterview(activeChannelId, () => renderBrand(container));
+        });
+
+        const adnAnswersPanel = document.getElementById('adn-answers-panel');
+        const saveAdnBtn = document.getElementById('btn-save-adn-answers');
+
+        if (adnAnswersPanel) {
+          adnAnswersPanel.addEventListener('input', (e) => {
+            if (e.target.classList.contains('adn-answer-text')) {
+              saveAdnBtn?.classList.remove('hidden');
+            }
+          });
+        }
+
+        saveAdnBtn?.addEventListener('click', async () => {
+          const originalHtml = saveAdnBtn.innerHTML;
           try {
-            btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Analizando...`;
-            btn.disabled = true;
+            saveAdnBtn.innerHTML = `<span class="animate-pulse">${icon('clock', 12)}</span> Re-Sintetizando...`;
+            saveAdnBtn.disabled = true;
+
+            const updatedAnswers = Array.from(adnAnswersPanel.querySelectorAll('.adn-answer-item')).map(div => ({
+              q: div.querySelector('.text-muted').innerText.replace('Q: ', ''),
+              a: div.querySelector('.adn-answer-text').innerText.trim()
+            }));
+
             const { data: channel } = await supabase.from('channels').select('*').eq('id', activeChannelId).single();
-            const content = `Canal: ${channel.name}\nDescripción: ${channel.description}\nNicho: ${channel.niche}`;
-            const analysis = await callAI('CHANNEL_ADN', content);
-            await supabase.from('brand_kits').upsert({ channel_id: activeChannelId, detailed_adn: analysis }, { onConflict: 'channel_id' });
+            
+            // Re-Synthesize
+            const synthesis = await callAI('ADN_SYNTHESIS', JSON.stringify({
+              channel_info: { name: channel.name, description: channel.description, niche: channel.niche },
+              interview: updatedAnswers
+            }));
+
+            await supabase.from('brand_kits').upsert({ 
+              channel_id: activeChannelId, 
+              detailed_adn: { synthesis, interview: updatedAnswers } 
+            }, { onConflict: 'channel_id' });
+
             renderBrand(container);
-          } catch (err) { alert('Error: ' + err.message); }
-          finally { if (btn) { btn.innerHTML = originalHtml; btn.disabled = false; } }
+          } catch (err) {
+            alert('Error: ' + err.message);
+          } finally {
+            saveAdnBtn.innerHTML = originalHtml;
+            saveAdnBtn.disabled = false;
+          }
         });
 
         // Other handlers... (truncated for brevity in explanation, but including them in output)
@@ -442,7 +580,76 @@ export async function renderBrand(container) {
           });
         });
 
-        document.getElementById('btn-save-brand')?.addEventListener('click', () => alert('Configuración guardada localmente.'));
+        // Local state for visual config
+        let visualConfig = brandKit?.visual_config || {
+            font: PRO_FONTS[0],
+            palette: CURATED_PALETTES[0]
+        };
+
+        const updateStudioPreview = () => {
+            const preview = document.getElementById('miniature-studio-preview');
+            const textPreview = document.getElementById('studio-text-preview');
+            const glow = document.getElementById('studio-glow');
+            if (!preview || !textPreview || !glow) return;
+
+            const p = visualConfig.palette;
+            const f = visualConfig.font;
+
+            preview.style.background = p.colors[2];
+            glow.style.background = `radial-gradient(circle at center, ${p.colors[0]}44, transparent)`;
+            textPreview.style.fontFamily = `'${f.id}', sans-serif`;
+            textPreview.style.color = p.colors[1];
+            textPreview.style.textShadow = `4px 4px 0px ${p.colors[2]}CC`;
+            
+            // Internal accent color
+            const accentSpan = textPreview.querySelector('span');
+            if (accentSpan) accentSpan.style.color = p.colors[0];
+        };
+
+        container.querySelectorAll('.btn-font-select').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const font = PRO_FONTS.find(f => f.id === btn.dataset.fontId);
+                visualConfig.font = font;
+                container.querySelectorAll('.btn-font-select').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                updateStudioPreview();
+            });
+        });
+
+        container.querySelectorAll('.palette-select').forEach(card => {
+            card.addEventListener('click', () => {
+                const palette = CURATED_PALETTES.find(p => p.id === card.dataset.paletteId);
+                visualConfig.palette = palette;
+                container.querySelectorAll('.palette-select').forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                updateStudioPreview();
+            });
+        });
+
+        document.getElementById('btn-save-brand')?.addEventListener('click', async () => {
+            const btn = document.getElementById('btn-save-brand');
+            const originalHtml = btn.innerHTML;
+            try {
+                btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Guardando...`;
+                btn.disabled = true;
+                
+                const { error } = await supabase.from('brand_kits').upsert({
+                    channel_id: activeChannelId,
+                    visual_config: visualConfig,
+                    colors: visualConfig.palette.colors, // fallback for compatibility
+                    font_thumbnails: visualConfig.font.id // fallback for compatibility
+                }, { onConflict: 'channel_id' });
+
+                if (error) throw error;
+                alert('✓ Identidad de marca guardada con éxito.');
+                renderBrand(container);
+            } catch (err) {
+                alert('Error al guardar: ' + err.message);
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        });
     };
 
     setupHandlers();
@@ -451,4 +658,104 @@ export async function renderBrand(container) {
     console.error('Brand Kit error:', err);
     container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-secondary);"><div style="font-size:32px;margin-bottom:12px;color:var(--danger);">${icon('alertTriangle', 32)}</div><h3>Error de Identidad</h3><p class="text-sm">${err.message}</p></div>`;
   }
+}
+
+// ── ADN Interview Modal ──────────────────────────────────────────────────
+async function showADNInterview(channelId, onComplete) {
+    const overlay = document.createElement('div');
+    overlay.className = 'interview-overlay';
+    document.body.appendChild(overlay);
+
+    const renderCard = (content) => {
+        overlay.innerHTML = `<div class="interview-card animate-in">${content}</div>`;
+    };
+
+    try {
+        renderCard(`
+            <div style="text-align:center;">
+                <div class="animate-pulse" style="font-size:40px; margin-bottom:var(--space-md);">${icon('brain', 40)}</div>
+                <h3 class="interview-question">Generando preguntas estratégicas...</h3>
+                <p class="text-sm text-muted">La IA está analizando tu canal para preparar la entrevista.</p>
+            </div>
+        `);
+
+        const { data: channel } = await supabase.from('channels').select('*').eq('id', channelId).single();
+        const interviewData = await callAI('ADN_INTERVIEW', `Canal: ${channel.name}\nDescripción: ${channel.description}\nNicho: ${channel.niche}`);
+        const questions = interviewData.questions || [];
+        const answers = [];
+
+        for (let i = 0; i < questions.length; i++) {
+            await new Promise((resolve, reject) => {
+                renderCard(`
+                    <div class="interview-step-indicator">Pregunta ${i + 1} de ${questions.length}</div>
+                    <div class="interview-question">${questions[i]}</div>
+                    <textarea class="interview-input" id="interview-answer" placeholder="Escribe tu respuesta aquí..."></textarea>
+                    <div class="interview-actions">
+                        <button class="btn btn-ghost" id="btn-cancel-interview">Cancelar</button>
+                        <button class="btn btn-primary" id="btn-next-question">
+                            ${i === questions.length - 1 ? 'Finalizar Análisis' : 'Siguiente Pregunta ' + icon('arrowRight', 14)}
+                        </button>
+                    </div>
+                `);
+
+                const input = document.getElementById('interview-answer');
+                input.focus();
+
+                document.getElementById('btn-cancel-interview').onclick = () => {
+                    overlay.remove();
+                    reject(new Error("Interview cancelled"));
+                };
+
+                document.getElementById('btn-next-question').onclick = () => {
+                    const val = input.value.trim();
+                    if (!val) {
+                        input.style.borderColor = 'var(--danger)';
+                        return;
+                    }
+                    answers.push({ q: questions[i], a: val });
+                    resolve();
+                };
+            });
+        }
+
+        // Final Synthesis
+        renderCard(`
+            <div style="text-align:center;">
+                <div class="animate-pulse" style="font-size:40px; color:var(--success); margin-bottom:var(--space-md);">${icon('zap', 40)}</div>
+                <h3 class="interview-question">Sintetizando tu ADN de Marca...</h3>
+                <p class="text-sm text-muted">Casi listo. Estamos extrayendo los pilares visuales de tu canal.</p>
+            </div>
+        `);
+
+        const synthesis = await callAI('ADN_SYNTHESIS', JSON.stringify({
+            channel_info: { name: channel.name, description: channel.description, niche: channel.niche },
+            interview: answers
+        }));
+
+        await supabase.from('brand_kits').upsert({ 
+            channel_id: channelId, 
+            detailed_adn: { synthesis, interview: answers } 
+        }, { onConflict: 'channel_id' });
+
+        renderCard(`
+            <div style="text-align:center;">
+                <div style="font-size:40px; color:var(--success); margin-bottom:var(--space-md);">${icon('checkCircle', 40)}</div>
+                <h3 class="interview-question">¡Análisis Completado!</h3>
+                <p class="text-sm text-muted mb-lg">Tu ADN estratégico ha sido actualizado con éxito.</p>
+                <button class="btn btn-primary w-full" id="btn-finish-interview">Volver al Panel</button>
+            </div>
+        `);
+
+        document.getElementById('btn-finish-interview').onclick = () => {
+            overlay.remove();
+            onComplete();
+        };
+
+    } catch (err) {
+        if (err.message !== "Interview cancelled") {
+            console.error(err);
+            alert("Error: " + err.message);
+        }
+        overlay.remove();
+    }
 }

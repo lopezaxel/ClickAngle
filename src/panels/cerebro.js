@@ -101,6 +101,16 @@ export async function renderCerebro(container) {
             <div style="font-size:11px; font-weight:800; color: var(--success); letter-spacing:1px; text-transform:uppercase;">PROMESA (Valor)</div>
             <div style="font-size:13px; color: var(--text-secondary); line-height:1.6; margin-top:var(--space-xs);">${analysisResult.promise}</div>
           </div>
+
+          <div class="card mb-md" style="background: var(--bg-tertiary); border: 1px dashed var(--accent);">
+            <div class="card-header"><div class="card-title" style="font-size:11px;">${icon('bolt', 12)} SUGERENCIAS DE TEXTO (CTR)</div></div>
+            <div class="flex gap-xs mt-xs" style="flex-wrap:wrap; padding: 0 var(--space-md) var(--space-md);">
+              ${(analysisResult.text_suggestions || []).map(txt => `
+                <span class="badge badge-accent" style="font-size:10px; padding:4px 8px;">${txt}</span>
+              `).join('')}
+            </div>
+          </div>
+
           <button class="btn btn-primary w-full" id="btn-go-step2">
             ${icon('crosshair', 16)} Generar Ángulos de Click
           </button>

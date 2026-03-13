@@ -831,6 +831,45 @@ body {
   padding: 0 var(--space-md) var(--space-md);
 }
 
+/* --- Thumbnail Preview Lightbox --- */
+#thumb-lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.0);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  transition: background 0.25s ease, backdrop-filter 0.25s ease;
+}
+#thumb-lightbox.active {
+  display: flex;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: lightboxIn 0.25s ease both;
+}
+@keyframes lightboxIn {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to   { opacity: 1; backdrop-filter: blur(12px); }
+}
+#thumb-lightbox img {
+  max-width: 90vw;
+  max-height: 85vh;
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  animation: lightboxImgIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both;
+  pointer-events: none;
+  user-select: none;
+}
+@keyframes lightboxImgIn {
+  from { transform: scale(0.88); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
 /* --- Angle Cards --- */
 .angle-card {
   background: var(--bg-card);
@@ -2017,5 +2056,176 @@ body {
 
 .sidebar-channel-display:hover .sidebar-hub-icon {
   color: var(--accent-light);
+}
+
+
+/* --- ADN Interview & Hero --- */
+.adn-hero-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xl) var(--space-md);
+  text-align: center;
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-tertiary));
+  border: 1px dashed var(--border-accent);
+  border-radius: var(--radius-lg);
+  min-height: 200px;
+}
+
+.btn-hero-adn {
+  padding: 16px 32px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: var(--space-md);
+}
+
+.interview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn var(--transition-normal);
+}
+
+.interview-card {
+  width: 100%;
+  max-width: 500px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  transform: translateY(0);
+  animation: slideUp var(--transition-normal);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.interview-step-indicator {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: var(--space-sm);
+}
+
+.interview-question {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: var(--space-lg);
+}
+
+.interview-input {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  margin-bottom: var(--space-lg);
+  outline: none;
+  min-height: 80px;
+  resize: none;
+}
+
+.interview-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.interview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+}
+
+
+/* --- Miniature Studio & Visual Identity --- */
+.studio-preview-box {
+  transition: all var(--transition-normal);
+}
+
+#studio-text-preview {
+  transition: all var(--transition-normal);
+}
+
+.btn-font-select {
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.btn-font-select:hover {
+  border-color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-font-select.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent-light);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.palette-select {
+  transition: all var(--transition-fast);
+}
+
+.palette-select:hover {
+  transform: translateY(-2px);
+  border-color: var(--text-tertiary) !important;
+}
+
+.palette-select.active {
+  border-color: var(--accent) !important;
+  background: var(--accent-subtle) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+
+/* --- Editable ADN Answers --- */
+.adn-answer-text:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  background: var(--bg-card) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.adn-answer-item {
+  position: relative;
+}
+
+.adn-answer-item::before {
+  content: " \270E\;
+ position: absolute;
+ top: 30px;
+ right: 10px;
+ font-size: 12px;
+ opacity: 0;
+ transition: opacity 0.2s;
+ pointer-events: none;
+ color: var(--accent);
+}
+
+.adn-answer-item:hover::before {
+ opacity: 0.5;
 }
 

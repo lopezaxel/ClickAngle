@@ -114,6 +114,18 @@ export async function renderEngine(container) {
     const selectedAngles = project?.logic_dna?.selected_angles || [];
     const variants = project?.thumbnail_variants || [];
 
+    // Ensure lightbox exists in the page (only once)
+    if (!document.getElementById('thumb-lightbox')) {
+      const lb = document.createElement('div');
+      lb.id = 'thumb-lightbox';
+      lb.innerHTML = '<img id="thumb-lightbox-img" src="" alt="Previsualización" />';
+      document.body.appendChild(lb);
+      lb.addEventListener('click', () => {
+        lb.classList.remove('active');
+        setTimeout(() => { lb.querySelector('img').src = ''; }, 260);
+      });
+    }
+
     container.innerHTML = `<div class="animate-in">
       <div class="section-header">
         <div>
@@ -338,13 +350,33 @@ export async function renderEngine(container) {
         </div>
       </div>
 
-      <!-- Face selector -->
-      <div class="flex gap-md mb-md items-end" style="flex-wrap:wrap;">
+      <!-- Text Suggestion Selector (NEW) -->
+      <div class="card mb-md" style="background:var(--bg-tertiary); border: 1px solid var(--accent); padding:var(--space-md);">
+        <label class="form-label">${icon('bolt', 12)} Texto Sugerido por IA</label>
+        <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
+          ${(project.logic_dna?.text_suggestions || []).map(txt => `
+            <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">
+              ${txt}
+            </button>
+          `).join('')}
+        </div>
+        <div class="form-group mb-0">
+          <input type="text" class="form-input" id="custom-overlay-text" placeholder="O escribe tu propio texto de impacto..." value="${project.title.toUpperCase()}" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
+        </div>
+      </div>
+
+      <!-- Face toggle & selector -->
+      <div class="flex gap-md mb-md items-end" style="flex-wrap:wrap; background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-md);">
+        <div class="flex items-center gap-sm" style="min-width: 150px; margin-bottom: var(--space-xs);">
+            <input type="checkbox" id="check-use-face" style="width:18px;height:18px;cursor:pointer;" checked />
+            <label for="check-use-face" class="text-xs font-bold cursor-pointer">Usar mi rostro en la miniatura</label>
+        </div>
+        
         <div class="form-group" style="flex:1; min-width:180px; margin-bottom:0;">
-          <label class="form-label">${icon('camera', 12)} Expresión del Creador (opcional)</label>
+          <label class="form-label">${icon('camera', 12)} Expresión Seleccionada</label>
           <select class="form-select" id="select-expression-step3" style="font-size:12px;">
-            <option value="">Sin rostro</option>
             ${faceList.map(f => `<option value="${f.id}">${f.expression_type}</option>`).join('')}
+            ${faceList.length === 0 ? '<option value="">Sin rostros en el Vault</option>' : ''}
           </select>
         </div>
       </div>
@@ -405,7 +437,7 @@ export async function renderEngine(container) {
             ${icon('trash', 12)}
           </button>
           ${imgSrc
-            ? `<img src="${imgSrc}" alt="Miniatura" style="width:100%;height:100%;object-fit:cover;" />`
+            ? `<img src="${imgSrc}" alt="Miniatura" class="thumb-preview-trigger" data-preview="${imgSrc}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
             : isGen
               ? `<div class="flex flex-col items-center justify-center h-full gap-sm">
                    <div class="animate-pulse" style="color:var(--accent);">${icon('clock', 32)}</div>
@@ -565,16 +597,54 @@ export async function renderEngine(container) {
       });
     });
 
-    // Download buttons
+    // Thumbnail image click → lightbox preview
+    container.querySelectorAll('.thumb-preview-trigger').forEach(img => {
+      img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const lb = document.getElementById('thumb-lightbox');
+        const lbImg = document.getElementById('thumb-lightbox-img');
+        if (!lb || !lbImg) return;
+        lbImg.src = img.dataset.preview;
+        lb.classList.add('active');
+      });
+    });
+
+    // Suggestion text buttons
+    container.querySelectorAll('.btn-suggestion-text').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById('custom-overlay-text');
+        if (input) input.value = btn.dataset.text.toUpperCase();
+        container.querySelectorAll('.btn-suggestion-text').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // Download buttons — direct PNG download
     container.querySelectorAll('.btn-download').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const src = btn.dataset.src;
         const name = btn.dataset.name;
-        const a = document.createElement('a');
-        a.href = src;
-        a.download = name;
-        a.click();
+        try {
+          const resp = await fetch(src);
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch {
+          // Fallback if fetch fails (e.g. data URL)
+          const a = document.createElement('a');
+          a.href = src;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
       });
     });
 
@@ -586,16 +656,19 @@ export async function renderEngine(container) {
       const angle = (project.logic_dna?.selected_angles || []).find(a => a.id === selectedAngleId);
       const style = STYLES.find(s => s.id === selectedStyleId);
       const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
+      
+      const useFace = document.getElementById('check-use-face')?.checked;
       const expressionId = document.getElementById('select-expression-step3')?.value;
       const selectedFace = faceList.find(f => f.id === expressionId);
-      const includeFace = !!selectedFace && !!brandKit?.face_analysis;
+      
+      const customText = document.getElementById('custom-overlay-text')?.value || project.title;
 
       isGenerating = true;
       render();
 
       try {
-        const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, includeFace, brandKit });
-        await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: project.title.toUpperCase() });
+        const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit });
+        await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase() });
       } catch (err) {
         console.error('Generate error:', err);
         alert('Error al generar: ' + err.message);
@@ -626,7 +699,7 @@ export async function renderEngine(container) {
         try {
           const basePrompt = baseVariant.ai_metadata?.prompt || project.title;
           for (let i = 0; i < count; i++) {
-            const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle and video context. Change composition, color treatment, or focal element.`;
+            const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle, branding ADN, and video context. Change composition or color treatment while keeping the face (if present) and core message.`;
             await generateAndSaveVariant({
               project,
               angle: { id: baseVariant.angle_id, name: baseVariant.ai_metadata?.angle_name || '' },
@@ -649,19 +722,42 @@ export async function renderEngine(container) {
   }
 
   // ── Helper: build master prompt ──────────────────────────────────────────
-  function buildMasterPrompt({ project, angle, style, formats, selectedFace, includeFace, brandKit }) {
+  function buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit }) {
     const formatInstructions = formats.map(f => f.prompt).join(' COMBINED WITH: ');
+    const adnData = brandKit?.detailed_adn?.synthesis || brandKit?.detailed_adn || {};
+    const visual = brandKit?.visual_config || {};
+    
     return `High-impact YouTube thumbnail, 16:9 aspect ratio.
-PSYCHOLOGICAL ANGLE: "${angle.name}"${angle.title ? ` — "${angle.title}"` : ''}
-VIDEO TITLE: "${project.title}"
-HOOK: ${project.logic_dna?.hook || ''}
-CONFLICT: ${project.logic_dna?.tension || ''}
-PROMISE: ${project.logic_dna?.promise || ''}
-FORMAT: ${formatInstructions}
+CHANNEL ADN:
+- Tone: ${adnData.tone || 'Professional'}
+- Branding: ${adnData.branding || 'Modern'}
+- Audience: ${adnData.audience_profile || 'Tech enthusiasts'}
+
+VISUAL IDENTITY (BRAND KIT):
+- Primary Font/Typography: "${visual.font?.id || 'Impact'}" (Bold, high readability)
+- Defined Color Palette: ${visual.palette?.colors?.join(', ') || 'Vivid Colors'} (${visual.palette?.name || 'High Contrast'})
+- Colors usage: Use ${visual.palette?.colors?.[0] || 'Red'} for accents and primary focus.
+
+VIDEO CONTEXT (SCRIPT DNA):
+- Hook: ${project.logic_dna?.hook || ''}
+- Tension: ${project.logic_dna?.tension || ''}
+- Promise: ${project.logic_dna?.promise || ''}
+
+PSYCHOLOGICAL ANGLE: "${angle.name}"
+${angle.psychology_text ? `Psychology: ${angle.psychology_text}` : ''}
+
+COMPOSITION FORMAT: ${formatInstructions}
 VISUAL STYLE: ${style.keywords}
-${includeFace ? `CREATOR must appear in thumbnail with expression "${selectedFace.expression_type}". Face traits: ${JSON.stringify(brandKit.face_analysis)}` : ''}
-Large bold readable text overlay: "${project.title.toUpperCase()}"
-Fill entire frame, no borders, professional YouTube CTR-optimized composition.`;
+
+${useFace && selectedFace && brandKit?.face_analysis ? `
+CREATOR FACE INTEGRATION:
+- Must feature the creator's real face.
+- Expression: "${selectedFace.expression_type}"
+- Facial Traits to respect: ${JSON.stringify(brandKit.face_analysis)}
+- High fidelity to these traits is mandatory for branding consistency.` : 'DO NOT include the creator face.'}
+
+Professional YouTube CTR-optimized composition. Cinematic lighting. No borders. Vibrant colors. High contrast.
+`;
   }
 
   // ── Helper: generate one image and save to DB ─────────────────────────────
