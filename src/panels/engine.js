@@ -11,70 +11,70 @@ const FORMATS = [
     label: 'Duelo de Titanes',
     subtitle: 'Versus',
     emoji: '⚔️',
-    desc: 'Composición dividida 50/50, dos conceptos enfrentados con contraste visual extremo.',
-    prompt: 'COMPOSITION: Split-screen 50/50 layout, two contrasting elements facing each other separated by a glowing dividing line, versus battle style composition, dramatic confrontation framing.',
+    desc: 'Contraste visual extremo. Composición simétrica con una línea de luz divisoria vibrante.',
+    prompt: 'COMPOSITION: Extreme contrast split-screen symmetry, aggressive 50/50 vertical division, electric glowing neon dividing line, dramatic face-to-face confrontation framing, wide angle, high action tension.',
   },
   {
     id: 'authority',
     label: 'Autoridad Tech',
     subtitle: 'Objeto de Deseo',
     emoji: '🖥️',
-    desc: 'Objeto tecnológico o código en primer plano con el creador al costado proyectando autoridad.',
-    prompt: 'COMPOSITION: Hero tech object or glowing code in extreme foreground, creator positioned to the side in confident authority pose, depth of field with bokeh background, professional studio lighting.',
+    desc: 'Foco en el objeto con profundidad de campo extrema. El creador proyecta liderazgo.',
+    prompt: 'COMPOSITION: Macro focus on hero technology object in extreme foreground with shallow depth of field, creator in background with confident power pose, sharp professional studio lighting, anamorphic bokeh.',
   },
   {
     id: 'shock',
     label: 'Shock / Caja Negra',
     subtitle: 'Misterio',
     emoji: '🖤',
-    desc: 'Elemento clave oculto o censurado, genera curiosidad extrema e impulso de clic.',
-    prompt: 'COMPOSITION: Key element deliberately hidden, blurred, censored or covered with a black box/redacted bar, mystery and tension framing, dark moody atmosphere, curiosity-gap visual composition.',
+    desc: 'Psicología de la curiosidad. Elementos censurados y atmósfera de suspense cinematográfica.',
+    prompt: 'COMPOSITION: Heavy curiosity-gap framing, key element redacted with high-contrast black bar, moody cinematic shadows, mysterious volumetric fog, extreme facial expression of shock and disbelief.',
   },
   {
     id: 'breaking',
-    label: 'Alerta IA / Breaking News',
+    label: 'Alerta / Breaking News',
     subtitle: 'Urgencia Total',
     emoji: '🚨',
-    desc: 'Estética de noticia urgente con texto masivo, colores de alerta y alto contraste.',
-    prompt: 'COMPOSITION: Breaking news broadcast aesthetic, massive bold alert text overlays, red/yellow warning color accents, urgent broadcast framing, high contrast newsroom visual style, TV chyron elements.',
+    desc: 'Estética de noticia de última hora. Colores de alerta y saturación máxima.',
+    prompt: 'COMPOSITION: High-urgency broadcast aesthetic, heavy TV news chyron overlays, vibrant red and yellow warning color grading, high-speed shutter look, intense broadcast lighting, saturated punchy colors.',
   },
 ];
 
 const STYLES = [
   {
     id: 'hyperrealist',
-    label: 'Hiper-Realista',
-    subtitle: 'Studio',
+    label: 'Master Studio (UHD)',
+    subtitle: '8K Realismo',
     emoji: '📸',
-    keywords: 'hyperrealistic studio photography, extreme sharpness, professional studio lighting, shallow depth of field bokeh, 8K ultra-detailed, photorealistic render.',
+    keywords: 'Ultra-photorealistic, 8k resolution, raw photography style, intricate skin textures, volumetric studio lighting, professional color grading, extreme sharpness, masterwork.',
+  },
+  {
+    id: 'mrbeast',
+    label: 'Estilo Explosivo',
+    subtitle: 'High CTR',
+    emoji: '🔥',
+    keywords: 'MrBeast aesthetic, extremely saturated vibrant colors, high micro-contrast, glowing rim lights, intense facial highlights, sharp cartoonish realism, super-punchy visual impact.',
   },
   {
     id: 'cyberpunk',
-    label: 'Cyberpunk Tech',
-    subtitle: 'Futurista',
+    label: 'Neon Future',
+    subtitle: 'Sci-Fi',
     emoji: '🌆',
-    keywords: 'cyberpunk aesthetic, neon blue and magenta lights, circuit board textures, dark futuristic atmosphere, holographic elements, neon glow reflections, synthwave colors.',
+    keywords: 'Cyberpunk cinematic lighting, neon cyan and magenta accents, deep blue shadows, futuristic tech textures, holographic glow, synthwave color palette, moody atmosphere.',
   },
   {
     id: 'minimal',
-    label: 'Minimalista Bold',
+    label: 'Meta Ads Bold',
     subtitle: 'Impacto Limpio',
     emoji: '◼️',
-    keywords: 'bold minimalist design, single vibrant solid color background, hard drop shadows, single focused object, ultra-clean composition, Swiss design influence, negative space.',
+    keywords: 'Clean commercial photography, bold minimalist design, solid vibrant background, sharp drop shadows, focused subjects, Swiss design influence, negative space authority.',
   },
   {
     id: 'cinematic',
-    label: 'Cinematográfico',
-    subtitle: 'Epic',
+    label: 'Epic Movie',
+    subtitle: 'Hollywood',
     emoji: '🎬',
-    keywords: 'cinematic epic lighting, dramatic film-quality shadows, highly saturated colors, fine film grain, anamorphic lens flares, Hollywood movie poster composition, golden ratio framing.',
-  },
-  {
-    id: 'digital',
-    label: 'Ilustrado Digital',
-    subtitle: '3D / Vector',
-    emoji: '🎨',
-    keywords: 'modern digital illustration, vibrant 3D render Pixar-style, vector art aesthetic, vivid saturated colors, smooth gradients, clean digital art, stylized character design.',
+    keywords: 'Cinematic film quality, Hollywood movie poster composition, anamorphic lens flares, dramatic shadows, highly saturated epic colors, 35mm film grain, golden ratio.',
   },
 ];
 
@@ -750,11 +750,13 @@ COMPOSITION FORMAT: ${formatInstructions}
 VISUAL STYLE: ${style.keywords}
 
 ${useFace && selectedFace && brandKit?.face_analysis ? `
-CREATOR FACE INTEGRATION:
-- Must feature the creator's real face.
-- Expression: "${selectedFace.expression_type}"
-- Facial Traits to respect: ${JSON.stringify(brandKit.face_analysis)}
-- High fidelity to these traits is mandatory for branding consistency.` : 'DO NOT include the creator face.'}
+CREATOR FACE INTEGRATION (CRITICAL):
+- You MUST perfectly feature the creator's exact real face.
+- Do NOT invent different facial features. You must take the creator's exact identity and embed it professionally into the thumbnail.
+- Facial Traits to respect absolutely: ${JSON.stringify(brandKit.face_analysis)}
+- EXPRESSION DIRECTIVE: The expression of the creator's face MUST adapt dynamically to the video's theme and psychological angle. If the video is shocking, the face MUST have a shocking expression. If the video is sad, the face MUST be sad. 
+- You must analyze the Hook, Tension, and Promise, and apply the perfect hyper-expressive emotion to the creator's face.
+- High fidelity to the creator's facial structure is mandatory for branding consistency.` : 'DO NOT include the creator face or any people. Focus purely on the objects and environment.'}
 
 Professional YouTube CTR-optimized composition. Cinematic lighting. No borders. Vibrant colors. High contrast.
 `;

@@ -8,6 +8,8 @@ export async function renderCerebro(container) {
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
 
   let scriptText = '';
+  let inputType = 'script'; // 'script' or 'context'
+  let contextText = '';
   let analysisResult = null;   // Step 1 result: hook, tension, promise
   let allAngles = [];          // All angles from DB
   let selectedAngleIds = [];   // Angles selected by user
@@ -56,6 +58,17 @@ export async function renderCerebro(container) {
     return `
     <div class="grid-2" style="grid-template-columns: 1fr 1fr;">
       <div>
+        <!-- Tabs for input type -->
+        <div class="flex gap-sm mb-md" style="padding-bottom:10px; border-bottom:1px solid var(--border);">
+          <button class="btn btn-sm ${inputType === 'script' ? 'btn-primary' : 'btn-secondary'}" id="tab-script">
+            ${icon('file', 14)} Subir Guión
+          </button>
+          <button class="btn btn-sm ${inputType === 'context' ? 'btn-primary' : 'btn-secondary'}" id="tab-context">
+            ${icon('bulb', 14)} Idea / Contexto
+          </button>
+        </div>
+
+        ${inputType === 'script' ? `
         <div class="card mb-md">
           <div class="card-header">
             <div class="card-title">${icon('upload', 16)} Subir Guión</div>
@@ -77,9 +90,22 @@ export async function renderCerebro(container) {
           <textarea class="form-textarea" id="script-input" placeholder="Pega aquí el guión completo del video..." style="min-height:250px; font-size:13px; line-height:1.5;">${scriptText}</textarea>
           <div class="flex justify-between items-center mt-md">
             <span class="text-xs text-muted" id="char-count">${scriptText.length} caracteres</span>
-            <button class="btn btn-primary" id="btn-process-script">${icon('dna', 16)} Procesar ADN del Video</button>
+            <button class="btn btn-primary" id="btn-process-script">${icon('dna', 16)} Procesar Guión</button>
           </div>
         </div>
+        ` : `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">${icon('bulb', 16)} ¿De qué trata tu video?</div>
+          </div>
+          <p class="text-xs text-muted mb-sm">Describe el concepto central, el valor que aporta y lo que quieres transmitir. La IA lo usará para inferir los mejores ángulos de click.</p>
+          <textarea class="form-textarea" id="context-input" placeholder="Ej: Es un video sobre cómo invertir en la bolsa siendo principiante, mostrando los errores comunes que hacen perder dinero y mi estrategia paso a paso..." style="min-height:350px; font-size:13px; line-height:1.5;">${contextText}</textarea>
+          <div class="flex justify-between items-center mt-md">
+            <span class="text-xs text-muted" id="char-count-context">${contextText.length} caracteres</span>
+            <button class="btn btn-primary" id="btn-process-script">${icon('dna', 16)} Generar ADN de Contexto</button>
+          </div>
+        </div>
+        `}
       </div>
 
       <div>
@@ -220,7 +246,12 @@ export async function renderCerebro(container) {
     // --- STEP 1 events ---
     const dz = document.getElementById('script-drop-zone');
     const si = document.getElementById('script-input');
+    const ci = document.getElementById('context-input');
     const cc = document.getElementById('char-count');
+    const ccc = document.getElementById('char-count-context');
+
+    document.getElementById('tab-script')?.addEventListener('click', () => { inputType = 'script'; render(); });
+    document.getElementById('tab-context')?.addEventListener('click', () => { inputType = 'context'; render(); });
 
     async function extractTextFromFile(file) {
       if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
@@ -285,9 +316,11 @@ export async function renderCerebro(container) {
     }
 
     if (si) si.addEventListener('input', () => { scriptText = si.value; if (cc) cc.textContent = si.value.length + ' caracteres'; });
+    if (ci) ci.addEventListener('input', () => { contextText = ci.value; if (ccc) ccc.textContent = ci.value.length + ' caracteres'; });
 
     document.getElementById('btn-process-script')?.addEventListener('click', async () => {
-      if (!scriptText.trim()) { alert('Ingresa un guión primero'); return; }
+      const textToProcess = inputType === 'script' ? scriptText : contextText;
+      if (!textToProcess.trim()) { alert('Ingresa información primero'); return; }
       const btn = document.getElementById('btn-process-script');
       const originalHtml = btn.innerHTML;
       btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Analizando...`;
@@ -295,10 +328,11 @@ export async function renderCerebro(container) {
       try {
         const { data: brandKit } = await supabase.from('brand_kits').select('detailed_adn').eq('channel_id', activeChannelId).maybeSingle();
         const adn = brandKit?.detailed_adn || {};
-        analysisResult = await callAI('SCRIPT_ANALYSIS', scriptText, adn);
+        const promptModel = inputType === 'script' ? 'SCRIPT_ANALYSIS' : 'CONTEXT_ANALYSIS';
+        analysisResult = await callAI(promptModel, textToProcess, adn);
         render();
       } catch (err) {
-        console.error('Script Processing Error:', err);
+        console.error('Data Processing Error:', err);
         alert('Error al analizar: ' + err.message);
         btn.innerHTML = originalHtml;
         btn.disabled = false;
