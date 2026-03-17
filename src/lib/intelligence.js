@@ -146,7 +146,7 @@ const MODEL_MAPPING = {
     IMAGE_GEN: 'gemini-3-flash-preview', // text-based prompt builder
 };
 
-// Dedicated image generation model (Gemini Imagen)
+// Dedicated image generation model (Nano Banana)
 const IMAGE_GEN_MODEL = 'gemini-3.1-flash-image-preview'; // used in generateImage()
 
 export async function checkApiKey() {
@@ -161,7 +161,7 @@ export async function checkApiKey() {
         }
 
         const cleanKey = apiKeyData.trim();
-        
+
         // Basic format validation for Google AI Key (starts with AIza... and roughly 39 chars)
         if (!cleanKey.startsWith('AIza') || cleanKey.length < 30) {
             console.log('Skipping API check: Invalid key format.');
@@ -302,8 +302,11 @@ export async function generateImage(prompt) {
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-            responseModalities: ['IMAGE'],
-            imageConfig: { aspectRatio: '16:9' }
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: {
+                aspectRatio: '16:9',
+                imageSize: '2K'
+            }
         }
     };
 

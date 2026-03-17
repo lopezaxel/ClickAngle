@@ -209,9 +209,9 @@ export async function renderCerebro(container) {
     <div class="text-xs font-bold text-muted mb-sm" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} Todos los Ángulos — Seleccioná los que vas a usar</div>
     <div class="grid-3">
       ${sorted.map(angle => {
-        const isSelected = selectedAngleIds.includes(angle.id);
-        const isRec = recommendedNames.some(n => angle.name.toLowerCase().includes(n) || n.includes(angle.name.toLowerCase()));
-        return `
+      const isSelected = selectedAngleIds.includes(angle.id);
+      const isRec = recommendedNames.some(n => angle.name.toLowerCase().includes(n) || n.includes(angle.name.toLowerCase()));
+      return `
         <div class="angle-card angle-selectable ${isSelected ? 'angle-selected' : ''}" data-angle-id="${angle.id}"
           style="cursor:pointer; position:relative; transition: all 0.15s ease;
             ${isSelected ? 'border-color: var(--accent); background: rgba(220,38,38,0.07);' : ''}
@@ -238,7 +238,7 @@ export async function renderCerebro(container) {
             </div>
           </div>
         </div>`;
-      }).join('')}
+    }).join('')}
     </div>`;
   }
 

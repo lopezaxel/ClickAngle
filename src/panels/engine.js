@@ -145,10 +145,10 @@ export async function renderEngine(container) {
               <p class="text-sm text-muted mt-sm">Sin proyectos aún.<br/>Procesá un guión en El Cerebro.</p>
             </div>
           ` : projects.map(p => {
-            const pAngles = p.logic_dna?.selected_angles || [];
-            const pVariants = p.thumbnail_variants || [];
-            const isActive = p.id === selectedProjectId;
-            return `
+      const pAngles = p.logic_dna?.selected_angles || [];
+      const pVariants = p.thumbnail_variants || [];
+      const isActive = p.id === selectedProjectId;
+      return `
             <div class="card project-folder" data-project-id="${p.id}"
               style="cursor:pointer; margin-bottom:var(--space-sm); padding:var(--space-md); transition:all 0.15s;
                 ${isActive ? 'border-color:var(--accent); background:rgba(220,38,38,0.05);' : ''}">
@@ -159,10 +159,10 @@ export async function renderEngine(container) {
               <div class="flex gap-xs" style="flex-wrap:wrap;">
                 <span class="badge badge-neutral" style="font-size:9px;">${pAngles.length} ángulo${pAngles.length !== 1 ? 's' : ''}</span>
                 <span class="badge ${pVariants.length > 0 ? 'badge-accent' : 'badge-neutral'}" style="font-size:9px;">${pVariants.length} miniatura${pVariants.length !== 1 ? 's' : ''}</span>
-                <span class="badge badge-neutral" style="font-size:9px;">${new Date(p.created_at).toLocaleDateString('es', { day:'2-digit', month:'short' })}</span>
+                <span class="badge badge-neutral" style="font-size:9px;">${new Date(p.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short' })}</span>
               </div>
             </div>`;
-          }).join('')}
+    }).join('')}
         </div>
 
         <!-- ── RIGHT: Workflow ── -->
@@ -248,8 +248,8 @@ export async function renderEngine(container) {
         <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate || isGenerating ? 'disabled' : ''}
           style="background:linear-gradient(135deg, var(--accent), #9333ea); font-size:14px; padding:10px 24px; font-weight:800; letter-spacing:0.5px;">
           ${isGenerating
-            ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando Miniatura...`
-            : `${icon('rocket', 16)} GENERAR MINIATURA MAESTRA`}
+        ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando Miniatura...`
+        : `${icon('rocket', 16)} GENERAR MINIATURA MAESTRA`}
         </button>
       `}
     </div>
@@ -268,8 +268,8 @@ export async function renderEngine(container) {
       <div class="text-xs font-bold text-muted mb-md" style="letter-spacing:1px; text-transform:uppercase;">${icon('layout', 12)} Elegí el formato de composición (podés seleccionar varios)</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
         ${FORMATS.map(f => {
-          const isSelected = selectedFormats.includes(f.id);
-          return `
+      const isSelected = selectedFormats.includes(f.id);
+      return `
           <div class="card format-card" data-format-id="${f.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
             ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
             <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
@@ -283,7 +283,7 @@ export async function renderEngine(container) {
             <div class="text-xs text-accent mb-xs">${f.subtitle}</div>
             <div class="text-xs text-muted" style="line-height:1.5;">${f.desc}</div>
           </div>`;
-        }).join('')}
+    }).join('')}
       </div>
       ${selectedFormats.length === 0 ? `<p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná al menos un formato para continuar</p>` : `
         <p class="text-xs text-accent mt-md" style="text-align:center;">${icon('check', 12)} ${selectedFormats.length} formato${selectedFormats.length > 1 ? 's' : ''} seleccionado${selectedFormats.length > 1 ? 's' : ''}</p>
@@ -299,8 +299,8 @@ export async function renderEngine(container) {
       <div class="text-xs font-bold text-muted mb-md" style="letter-spacing:1px; text-transform:uppercase;">${icon('palette', 12)} Elegí el estilo visual</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
         ${STYLES.map(s => {
-          const isSelected = selectedStyleId === s.id;
-          return `
+      const isSelected = selectedStyleId === s.id;
+      return `
           <div class="card style-card" data-style-id="${s.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
             ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
             <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
@@ -314,7 +314,7 @@ export async function renderEngine(container) {
             <div class="text-xs text-accent mb-xs">${s.subtitle}</div>
             <div class="text-xs text-muted" style="line-height:1.5; font-style:italic;">"${s.keywords.split(',').slice(0, 3).join(', ')}..."</div>
           </div>`;
-        }).join('')}
+    }).join('')}
       </div>
       ${!selectedStyleId ? `<p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná un estilo visual para continuar</p>` : `
         <p class="text-xs text-accent mt-md" style="text-align:center;">${icon('check', 12)} Estilo: <strong>${STYLES.find(s => s.id === selectedStyleId)?.label}</strong></p>
@@ -336,9 +336,9 @@ export async function renderEngine(container) {
             <span class="text-xs text-muted">Formatos:</span>
             <div class="flex gap-xs mt-xs" style="flex-wrap:wrap;">
               ${selectedFormats.map(fid => {
-                const f = FORMATS.find(x => x.id === fid);
-                return `<span class="badge badge-neutral" style="font-size:9px;">${f?.emoji} ${f?.label}</span>`;
-              }).join('')}
+      const f = FORMATS.find(x => x.id === fid);
+      return `<span class="badge badge-neutral" style="font-size:9px;">${f?.emoji} ${f?.label}</span>`;
+    }).join('')}
             </div>
           </div>
           <div>
@@ -385,9 +385,9 @@ export async function renderEngine(container) {
       <div class="text-xs font-bold text-muted mb-sm" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} Seleccioná el Ángulo Psicológico</div>
       <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:var(--space-sm); margin-bottom:var(--space-md);">
         ${selectedAngles.map(a => {
-          const isSelected = selectedAngleId === a.id;
-          const angleVariants = variants.filter(v => v.angle_id === a.id);
-          return `
+      const isSelected = selectedAngleId === a.id;
+      const angleVariants = variants.filter(v => v.angle_id === a.id);
+      return `
           <div class="card angle-select-card" data-angle-id="${a.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
             ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
             <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
@@ -401,7 +401,7 @@ export async function renderEngine(container) {
             ${a.title ? `<div class="text-xs text-muted" style="font-style:italic; margin-top:2px;">"${a.title}"</div>` : ''}
             ${angleVariants.length > 0 ? `<div class="text-xs text-accent mt-sm">${icon('image', 10)} ${angleVariants.length} generada${angleVariants.length > 1 ? 's' : ''}</div>` : ''}
           </div>`;
-        }).join('')}
+    }).join('')}
       </div>
 
       ${!selectedAngleId ? `<p class="text-xs text-muted" style="text-align:center; opacity:0.6;">Seleccioná un ángulo para activar la generación</p>` : `
@@ -437,18 +437,18 @@ export async function renderEngine(container) {
             ${icon('trash', 12)}
           </button>
           ${imgSrc
-            ? `<img src="${imgSrc}" alt="Miniatura" class="thumb-preview-trigger" data-preview="${imgSrc}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
-            : isGen
-              ? `<div class="flex flex-col items-center justify-center h-full gap-sm">
+          ? `<img src="${imgSrc}" alt="Miniatura" class="thumb-preview-trigger" data-preview="${imgSrc}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
+          : isGen
+            ? `<div class="flex flex-col items-center justify-center h-full gap-sm">
                    <div class="animate-pulse" style="color:var(--accent);">${icon('clock', 32)}</div>
                    <div class="text-xs text-muted">Generando imagen...</div>
                  </div>`
-              : hasError
-                ? `<div class="flex flex-col items-center justify-center h-full p-md text-center gap-xs">
+            : hasError
+              ? `<div class="flex flex-col items-center justify-center h-full p-md text-center gap-xs">
                      <span style="color:var(--danger);">${icon('alertTriangle', 24)}</span>
                      <div class="text-xs text-muted" style="font-size:10px;">${v.ai_metadata.error.slice(0, 60)}</div>
                    </div>`
-                : `<div class="flex flex-col items-center justify-center h-full p-md text-center">
+              : `<div class="flex flex-col items-center justify-center h-full p-md text-center">
                      <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:0.4; margin-bottom:4px;">Concepto Visual</div>
                      <div style="font-size:11px; opacity:0.75; line-height:1.4;">${(v.ai_metadata?.prompt || '').slice(0, 80)}...</div>
                    </div>`}
@@ -466,14 +466,14 @@ export async function renderEngine(container) {
           </div>
           ${imgSrc && !isGen ? `
           <div class="flex gap-xs">
-            <button class="btn btn-secondary btn-xs btn-download" data-src="${imgSrc}" data-name="miniatura-${safeTitle}-${i+1}.png"
+            <button class="btn btn-secondary btn-xs btn-download" data-src="${imgSrc}" data-name="miniatura-${safeTitle}-${i + 1}.png"
               title="Descargar" style="flex:0;">
               ${icon('download', 12)} Descargar
             </button>
             ${!isChild ? `
             <div class="flex gap-xs" style="flex:1; align-items:center;">
               <select class="form-select" id="expand-count-${v.id}" style="font-size:10px; padding:3px 6px; flex:1; height:26px;">
-                ${[1,2,3,4,5,6,7,8].map(n => `<option value="${n}"${n===3?' selected':''}>${n} variación${n>1?'es':''}</option>`).join('')}
+                ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${n === 1 ? ' selected' : ''}>${n} variación${n > 1 ? 'es' : ''}</option>`).join('')}
               </select>
               <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${v.id}" data-count="3"
                 ${isExpanding || expandingVariantId ? 'disabled' : ''} style="white-space:nowrap;">
@@ -583,7 +583,7 @@ export async function renderEngine(container) {
           if (variant?.image_url) {
             const urlParts = variant.image_url.split('/public/thumbnails/');
             if (urlParts.length > 1) {
-              await supabase.storage.from('thumbnails').remove([urlParts[1]]).catch(() => {});
+              await supabase.storage.from('thumbnails').remove([urlParts[1]]).catch(() => { });
             }
           }
           const { error } = await supabase.from('thumbnail_variants').delete().eq('id', variantId);
@@ -656,11 +656,11 @@ export async function renderEngine(container) {
       const angle = (project.logic_dna?.selected_angles || []).find(a => a.id === selectedAngleId);
       const style = STYLES.find(s => s.id === selectedStyleId);
       const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
-      
+
       const useFace = document.getElementById('check-use-face')?.checked;
       const expressionId = document.getElementById('select-expression-step3')?.value;
       const selectedFace = faceList.find(f => f.id === expressionId);
-      
+
       const customText = document.getElementById('custom-overlay-text')?.value || project.title;
 
       isGenerating = true;
@@ -682,12 +682,13 @@ export async function renderEngine(container) {
     container.querySelectorAll('.btn-expand-variant').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
+        if (expandingVariantId) return; // Prevent double-click
+
         const variantId = btn.dataset.variantId;
-        // Read count from the sibling select
         const countSelect = document.getElementById(`expand-count-${variantId}`);
-        const count = parseInt(countSelect?.value || '3');
+        const count = Math.min(parseInt(countSelect?.value || '1'), 5); // Cap at 5
         const project = getProject();
-        if (!project || expandingVariantId) return;
+        if (!project) return;
 
         const allVariants = project.thumbnail_variants || [];
         const baseVariant = allVariants.find(v => v.id === variantId);
@@ -700,21 +701,56 @@ export async function renderEngine(container) {
           const basePrompt = baseVariant.ai_metadata?.prompt || project.title;
           for (let i = 0; i < count; i++) {
             const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle, branding ADN, and video context. Change composition or color treatment while keeping the face (if present) and core message.`;
-            await generateAndSaveVariant({
-              project,
-              angle: { id: baseVariant.angle_id, name: baseVariant.ai_metadata?.angle_name || '' },
-              style: { label: baseVariant.style_preset },
-              formats: [],
-              imagePrompt: variationPrompt,
-              overlayText: baseVariant.overlay_text,
-              parentId: variantId,
-            });
+
+            // Insert placeholder + generate image without intermediate render
+            const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
+            const { data: inserted, error: insertErr } = await supabase
+              .from('thumbnail_variants')
+              .insert({
+                project_id: project.id,
+                angle_id: isRealAngleId ? baseVariant.angle_id : null,
+                overlay_text: baseVariant.overlay_text,
+                style_preset: baseVariant.style_preset,
+                impact_score: Math.floor(Math.random() * 20) + 80,
+                ai_metadata: {
+                  prompt: variationPrompt.slice(0, 300),
+                  angle_name: baseVariant.ai_metadata?.angle_name || '',
+                  format: baseVariant.ai_metadata?.format || '',
+                  style: baseVariant.style_preset,
+                  generating: true,
+                  parent_id: variantId,
+                }
+              })
+              .select()
+              .single();
+            if (insertErr) throw insertErr;
+
+            try {
+              const dataUrl = await generateImage(variationPrompt);
+              const { data: sessionData } = await supabase.auth.getSession();
+              const userId = sessionData?.session?.user?.id;
+              const blob = await fetch(dataUrl).then(r => r.blob());
+              const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.png`;
+              await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: 'image/png', upsert: true });
+              const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(fileName);
+
+              await supabase.from('thumbnail_variants').update({
+                image_url: urlData.publicUrl,
+                ai_metadata: { ...inserted.ai_metadata, generating: false, data_url: dataUrl }
+              }).eq('id', inserted.id);
+            } catch (imgErr) {
+              console.error('Variation image gen failed:', imgErr);
+              await supabase.from('thumbnail_variants').update({
+                ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message }
+              }).eq('id', inserted.id);
+            }
           }
         } catch (err) {
           console.error('Expand error:', err);
           alert('Error al generar variaciones: ' + err.message);
         } finally {
           expandingVariantId = null;
+          await reloadProjects();
           render();
         }
       });
@@ -726,7 +762,7 @@ export async function renderEngine(container) {
     const formatInstructions = formats.map(f => f.prompt).join(' COMBINED WITH: ');
     const adnData = brandKit?.detailed_adn?.synthesis || brandKit?.detailed_adn || {};
     const visual = brandKit?.visual_config || {};
-    
+
     return `High-impact YouTube thumbnail, 16:9 aspect ratio.
 CHANNEL ADN:
 - Tone: ${adnData.tone || 'Professional'}
@@ -765,11 +801,14 @@ Professional YouTube CTR-optimized composition. Cinematic lighting. No borders. 
   // ── Helper: generate one image and save to DB ─────────────────────────────
   async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText, parentId = null }) {
     // Insert placeholder
+    // angle.id may be a real UUID (from click_angles table) or a virtual AI id like "ai-xxx"
+    // Only pass angle_id if it's a valid UUID to avoid FK constraint violation
+    const isRealAngleId = angle.id && !String(angle.id).startsWith('ai-');
     const { data: inserted, error: insertErr } = await supabase
       .from('thumbnail_variants')
       .insert({
         project_id: project.id,
-        angle_id: angle.id,
+        angle_id: isRealAngleId ? angle.id : null,
         overlay_text: overlayText,
         style_preset: style.label,
         impact_score: Math.floor(Math.random() * 20) + 80,
