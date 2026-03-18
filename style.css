@@ -55,13 +55,13 @@
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-blur: 20px;
 
-  /* Spacing */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
+  /* Spacing — fluid, scales with viewport */
+  --space-xs: clamp(3px, 0.25vw, 4px);
+  --space-sm: clamp(6px, 0.5vw, 8px);
+  --space-md: clamp(10px, 0.9vw, 16px);
+  --space-lg: clamp(14px, 1.25vw, 24px);
+  --space-xl: clamp(18px, 1.7vw, 32px);
+  --space-2xl: clamp(24px, 2.5vw, 48px);
 
   /* Radii */
   --radius-sm: 6px;
@@ -74,9 +74,9 @@
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-impact: 'Bangers', 'Impact', sans-serif;
 
-  /* Sidebar */
-  --sidebar-width: 260px;
-  --topbar-height: 64px;
+  /* Sidebar — fluid */
+  --sidebar-width: clamp(200px, 16vw, 260px);
+  --topbar-height: clamp(52px, 4.5vw, 64px);
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -85,7 +85,8 @@
 }
 
 html {
-  font-size: 16px;
+  /* Fluid base font: 13px @ 1280px → 16px @ 1920px, clamped between 12px and 16px */
+  font-size: clamp(12px, 0.85vw, 16px);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -159,7 +160,7 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--space-xl);
+  padding: clamp(12px, 1.5vw, 32px);
 }
 
 /* --- Sidebar Components --- */
@@ -2233,3 +2234,39 @@ body {
  opacity: 0.5;
 }
 
+
+/* ─── Responsive Breakpoints ─────────────────────────────────────────────── */
+
+/* 1440px — large laptops / standard monitors */
+@media (max-width: 1440px) {
+  .grid-4 { grid-template-columns: repeat(3, 1fr); }
+  .grid-5 { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* 1280px — small laptops (13"–14") */
+@media (max-width: 1280px) {
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+
+  .section-title { font-size: 1.1rem; }
+  .section-subtitle { font-size: 0.75rem; }
+
+  .card { padding: var(--space-sm) var(--space-md); }
+}
+
+/* 1100px — smaller screens */
+@media (max-width: 1100px) {
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+
+  #topbar { padding: 0 var(--space-md); gap: var(--space-sm); }
+  #workspace { padding: var(--space-md); }
+}
+
+/* 960px — very small browser / high zoom */
+@media (max-width: 960px) {
+  :root { --sidebar-width: 180px; }
+
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .section-header { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
+}

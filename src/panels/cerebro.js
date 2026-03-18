@@ -1,7 +1,8 @@
 import { supabase } from '../lib/supabase.js';
-import { getState } from '../lib/state.js';
+import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
+import { toast } from '../lib/toast.js';
 
 export async function renderCerebro(container) {
   const { activeChannelId } = getState();
@@ -10,18 +11,13 @@ export async function renderCerebro(container) {
   let scriptText = '';
   let inputType = 'script'; // 'script' or 'context'
   let contextText = '';
-  let analysisResult = null;   // Step 1 result: hook, tension, promise
-  let allAngles = [];          // All angles from DB
-  let selectedAngleIds = [];   // Angles selected by user
-  let step = 1;                // 1 = script input, 2 = angles selection
+  let analysisResult = null;     // Step 1 result: hook, tension, promise, visual_briefing
+  let generatedAngles = [];      // 5 AI-generated angles for this specific video
+  let selectedAngleIndices = []; // indices (0-4) of selected angles
+  let isGeneratingAngles = false;
+  let step = 1;                  // 1 = script input, 2 = angles A/B/C test
 
-  // Load angles from DB once
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
-  const { data: anglesData } = await supabase
-    .from('click_angles')
-    .select('id, name, title, description, psychology_text, example_text, category')
-    .order('category', { ascending: true });
-  allAngles = anglesData || [];
 
   function render() {
     container.innerHTML = `<div class="animate-in">
@@ -43,7 +39,7 @@ export async function renderCerebro(container) {
           <div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
             background:${step >= 2 ? 'var(--accent)' : 'var(--bg-tertiary)'};
             color:${step >= 2 ? 'white' : 'var(--text-tertiary)'};">2</div>
-          <span class="text-xs ${step === 2 ? 'text-accent font-bold' : 'text-muted'}">Ángulos de Click</span>
+          <span class="text-xs ${step === 2 ? 'text-accent font-bold' : 'text-muted'}">Ángulos A/B/C Test</span>
         </div>
       </div>
     </div>
@@ -123,10 +119,12 @@ export async function renderCerebro(container) {
             <div style="font-size:11px; font-weight:800; color: var(--warning); letter-spacing:1px; text-transform:uppercase;">CONFLICTO (Tensión)</div>
             <div style="font-size:13px; color: var(--text-secondary); line-height:1.6; margin-top:var(--space-xs);">${analysisResult.tension}</div>
           </div>
-          <div class="card mb-md" style="border-left: 3px solid var(--success); padding: var(--space-md); background: var(--bg-tertiary);">
+          <div class="card mb-sm" style="border-left: 3px solid var(--success); padding: var(--space-md); background: var(--bg-tertiary);">
             <div style="font-size:11px; font-weight:800; color: var(--success); letter-spacing:1px; text-transform:uppercase;">PROMESA (Valor)</div>
             <div style="font-size:13px; color: var(--text-secondary); line-height:1.6; margin-top:var(--space-xs);">${analysisResult.promise}</div>
           </div>
+
+          ${analysisResult.visual_briefing ? renderVisualBriefingCard(analysisResult.visual_briefing) : ''}
 
           <div class="card mb-md" style="background: var(--bg-tertiary); border: 1px dashed var(--accent);">
             <div class="card-header"><div class="card-title" style="font-size:11px;">${icon('bolt', 12)} SUGERENCIAS DE TEXTO (CTR)</div></div>
@@ -151,95 +149,243 @@ export async function renderCerebro(container) {
     </div>`;
   }
 
-  function renderStep2() {
-    const recommended = analysisResult?.recommended_angles || [];
-    const recommendedNames = recommended.map(r => (r.name || '').toLowerCase());
-
-    // Sort: recommended angles first, then rest
-    const sorted = [...allAngles].sort((a, b) => {
-      const aRec = recommendedNames.some(n => a.name.toLowerCase().includes(n) || n.includes(a.name.toLowerCase()));
-      const bRec = recommendedNames.some(n => b.name.toLowerCase().includes(n) || n.includes(b.name.toLowerCase()));
-      return (bRec ? 1 : 0) - (aRec ? 1 : 0);
-    });
+  function renderVisualBriefingCard(vb) {
+    const emotionConfig = {
+      SORPRESA: { color: '#F59E0B', label: 'SORPRESA', icon: '⚡' },
+      AUTORIDAD: { color: '#3B82F6', label: 'AUTORIDAD', icon: '👁' },
+      MIEDO:     { color: '#EF4444', label: 'MIEDO',     icon: '⚠' },
+      DUDA:      { color: '#8B5CF6', label: 'DUDA',      icon: '?' },
+    };
+    const em = emotionConfig[vb.emotion_label] || { color: 'var(--accent)', label: vb.emotion_label, icon: '◉' };
 
     return `
-    <div class="mb-md flex items-center justify-between">
+    <div class="card mb-sm" style="
+      background: linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(15,15,20,0.9) 100%);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-top: 2px solid ${em.color};
+      padding: 0;
+      overflow: hidden;
+    ">
+      <!-- Header -->
+      <div style="
+        padding: var(--space-sm) var(--space-md);
+        background: rgba(255,255,255,0.04);
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      ">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-size:14px;">🎬</span>
+          <span style="font-size:10px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color: rgba(255,255,255,0.9);">Briefing Visual de Producción</span>
+        </div>
+        <span style="
+          font-size:9px; font-weight:700; letter-spacing:1px;
+          padding: 2px 8px; border-radius: 3px;
+          background: ${em.color}22;
+          color: ${em.color};
+          border: 1px solid ${em.color}44;
+          text-transform: uppercase;
+        ">ORDEN DE IA</span>
+      </div>
+
+      <!-- Body -->
+      <div style="padding: var(--space-md);">
+
+        <!-- Hero Object -->
+        <div style="margin-bottom: var(--space-sm);">
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+            <span style="
+              display:inline-flex; align-items:center; justify-content:center;
+              width:20px; height:20px; border-radius:4px;
+              background: rgba(255,255,255,0.07);
+              font-size:11px;
+            ">🎯</span>
+            <span style="font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color: rgba(255,255,255,0.4);">Objeto Héroe</span>
+          </div>
+          <div style="
+            font-size:13px; font-weight:600; color: rgba(255,255,255,0.92); line-height:1.5;
+            padding-left: 26px;
+          ">${vb.hero_object}</div>
+        </div>
+
+        <!-- Separator -->
+        <div style="height:1px; background: rgba(255,255,255,0.06); margin-bottom: var(--space-sm);"></div>
+
+        <!-- Central Conflict -->
+        <div style="margin-bottom: var(--space-sm);">
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+            <span style="
+              display:inline-flex; align-items:center; justify-content:center;
+              width:20px; height:20px; border-radius:4px;
+              background: rgba(239,68,68,0.1);
+              font-size:11px;
+            ">⚔</span>
+            <span style="font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color: rgba(255,255,255,0.4);">Conflicto Central</span>
+          </div>
+          <div style="
+            font-size:12px; color: rgba(255,255,255,0.7); line-height:1.5; font-style:italic;
+            padding-left: 26px;
+          ">${vb.central_conflict}</div>
+        </div>
+
+        <!-- Separator -->
+        <div style="height:1px; background: rgba(255,255,255,0.06); margin-bottom: var(--space-sm);"></div>
+
+        <!-- Emotion Match -->
+        <div>
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+            <span style="
+              display:inline-flex; align-items:center; justify-content:center;
+              width:20px; height:20px; border-radius:4px;
+              background: ${em.color}18;
+              font-size:11px;
+            ">${em.icon}</span>
+            <span style="font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color: rgba(255,255,255,0.4);">Emoción Requerida</span>
+          </div>
+          <div style="padding-left: 26px;">
+            <div style="font-size:12px; color: rgba(255,255,255,0.7); line-height:1.5; margin-bottom:8px;">${vb.required_emotion}</div>
+            <!-- Face Vault matcher -->
+            <div style="
+              display:inline-flex; align-items:center; gap:8px;
+              padding: 6px 12px; border-radius:6px;
+              background: ${em.color}15;
+              border: 1px solid ${em.color}35;
+            ">
+              <span style="font-size:10px; color: rgba(255,255,255,0.4);">Buscando en Face Vault:</span>
+              <span style="
+                font-size:11px; font-weight:800; letter-spacing:1.5px;
+                color: ${em.color};
+                text-transform: uppercase;
+              ">${em.icon} ${em.label}</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+  }
+
+  function renderStep2() {
+    const count = selectedAngleIndices.length;
+    const LABEL_LETTERS = ['A', 'B', 'C', 'D', 'E'];
+    const PSYCH_COLORS = {
+      0: { bg: 'rgba(220,38,38,0.1)', border: 'rgba(220,38,38,0.35)', badge: '#ef4444', label: 'MIEDO' },
+      1: { bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.35)', badge: '#a855f7', label: 'CURIOSIDAD' },
+      2: { bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.35)', badge: '#3b82f6', label: 'AUTORIDAD' },
+      3: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.35)', badge: '#f59e0b', label: 'CONTRASTE' },
+      4: { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.35)', badge: '#10b981', label: 'URGENCIA' },
+    };
+
+    return `
+    <!-- Top bar -->
+    <div class="mb-md flex items-center justify-between" style="flex-wrap:wrap; gap:var(--space-sm);">
       <button class="btn btn-secondary btn-sm" id="btn-back-step1">${icon('arrowLeft', 14)} Volver al Guión</button>
-      <div class="flex items-center gap-sm">
-        <span class="text-xs text-muted">${selectedAngleIds.length} ángulo${selectedAngleIds.length !== 1 ? 's' : ''} seleccionado${selectedAngleIds.length !== 1 ? 's' : ''}</span>
-        <button class="btn btn-primary btn-sm" id="btn-save-angles" ${selectedAngleIds.length === 0 ? 'disabled' : ''}>
-          ${icon('check', 14)} Confirmar Selección
+      <div class="flex items-center gap-sm" style="flex-wrap:wrap;">
+        <!-- A/B/C counter -->
+        <div style="background:var(--bg-tertiary); border-radius:var(--radius-md); padding:6px 12px; border:1px solid var(--border);">
+          <span class="text-xs text-muted">Seleccionados para producir: </span>
+          <span class="font-bold" style="color:${count === 0 ? 'var(--text-muted)' : count <= 3 ? 'var(--success)' : 'var(--warning)'}; font-size:14px;">${count}</span>
+          <span class="text-xs text-muted"> / 5</span>
+          ${count > 0 ? `<span class="text-xs font-bold" style="margin-left:6px; color:var(--text-secondary);">[${selectedAngleIndices.map(i => LABEL_LETTERS[i]).join('/')}]</span>` : ''}
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-save-angles" ${count === 0 ? 'disabled' : ''}>
+          ${icon('rocket', 14)} Pasar a la Fábrica${count > 0 ? ` (${count})` : ''}
         </button>
+      </div>
+    </div>
+
+    <!-- YouTube A/B test hint -->
+    <div class="card mb-md" style="background:rgba(245,158,11,0.06); border-color:rgba(245,158,11,0.3); padding:var(--space-sm) var(--space-md);">
+      <div class="flex items-center gap-sm">
+        <span style="font-size:18px;">🧪</span>
+        <div>
+          <div class="text-xs font-bold" style="color:var(--warning);">Estrategia de A/B Test para YouTube</div>
+          <div class="text-xs text-muted">YouTube permite testear hasta 3 miniaturas simultáneamente. <strong style="color:var(--text-primary);">Te recomendamos elegir tus 3 ángulos favoritos</strong> para maximizar los datos de CTR sin dispersar el tráfico.</div>
+        </div>
       </div>
     </div>
 
     <!-- ADN summary bar -->
     <div class="card mb-lg" style="background:var(--bg-tertiary); border:none;">
       <div class="flex gap-md" style="flex-wrap:wrap;">
-        <div style="flex:1; min-width:200px;">
+        <div style="flex:1; min-width:180px;">
           <div style="font-size:10px; font-weight:800; color:var(--accent-light); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">HOOK</div>
           <div class="text-xs text-muted" style="line-height:1.4;">${analysisResult?.hook || '—'}</div>
         </div>
-        <div style="flex:1; min-width:200px;">
+        <div style="flex:1; min-width:180px;">
           <div style="font-size:10px; font-weight:800; color:var(--warning); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">CONFLICTO</div>
           <div class="text-xs text-muted" style="line-height:1.4;">${analysisResult?.tension || '—'}</div>
         </div>
-        <div style="flex:1; min-width:200px;">
+        <div style="flex:1; min-width:180px;">
           <div style="font-size:10px; font-weight:800; color:var(--success); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">PROMESA</div>
           <div class="text-xs text-muted" style="line-height:1.4;">${analysisResult?.promise || '—'}</div>
         </div>
       </div>
     </div>
 
-    ${recommended.length > 0 ? `
-    <div class="mb-md">
-      <div class="text-xs font-bold text-accent mb-sm" style="letter-spacing:1px; text-transform:uppercase;">${icon('brain', 12)} Recomendados por IA para este guión</div>
-      <div class="flex gap-sm" style="flex-wrap:wrap;">
-        ${recommended.map(r => `
-          <div class="card" style="padding:var(--space-sm) var(--space-md); background:rgba(220,38,38,0.07); border-color:rgba(220,38,38,0.25); display:inline-flex; align-items:center; gap:var(--space-xs);">
-            <span style="color:var(--accent); font-size:10px;">${icon('crosshair', 10)}</span>
-            <span class="text-xs font-bold text-accent">${r.name}</span>
-            <span class="text-xs text-muted">— ${r.reason}</span>
-          </div>
-        `).join('')}
-      </div>
+    <!-- Angles heading -->
+    <div class="flex items-center justify-between mb-sm">
+      <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} 5 Ángulos Generados por IA — Seleccioná los que vas a producir</div>
+      ${isGeneratingAngles ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando ángulos...</span>` : `
+        <button class="btn btn-secondary btn-xs" id="btn-regenerate-angles" style="font-size:10px; padding:4px 10px;">
+          ${icon('refreshCw', 10)} Regenerar
+        </button>`}
     </div>
-    ` : ''}
 
-    <div class="text-xs font-bold text-muted mb-sm" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} Todos los Ángulos — Seleccioná los que vas a usar</div>
-    <div class="grid-3">
-      ${sorted.map(angle => {
-      const isSelected = selectedAngleIds.includes(angle.id);
-      const isRec = recommendedNames.some(n => angle.name.toLowerCase().includes(n) || n.includes(angle.name.toLowerCase()));
+    ${isGeneratingAngles ? `
+      <div class="card" style="text-align:center; padding:var(--space-2xl);">
+        <div class="animate-pulse" style="font-size:40px; margin-bottom:var(--space-md);">${icon('brain', 40)}</div>
+        <p class="text-sm text-muted">La IA está generando 5 ángulos psicológicamente opuestos...</p>
+      </div>
+    ` : generatedAngles.length === 0 ? `
+      <div class="card" style="text-align:center; padding:var(--space-xl); opacity:0.6;">
+        <p class="text-sm text-muted">No se pudieron generar ángulos. Intentá regenerar.</p>
+        <button class="btn btn-primary btn-sm mt-md" id="btn-regenerate-angles">Generar Ángulos</button>
+      </div>
+    ` : `
+    <div class="grid-3" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+      ${generatedAngles.map((angle, i) => {
+      const isSelected = selectedAngleIndices.includes(i);
+      const colors = PSYCH_COLORS[i] || PSYCH_COLORS[0];
+      const letter = LABEL_LETTERS[i];
+      const selectionOrder = selectedAngleIndices.indexOf(i);
       return `
-        <div class="angle-card angle-selectable ${isSelected ? 'angle-selected' : ''}" data-angle-id="${angle.id}"
-          style="cursor:pointer; position:relative; transition: all 0.15s ease;
-            ${isSelected ? 'border-color: var(--accent); background: rgba(220,38,38,0.07);' : ''}
-            ${isRec && !isSelected ? 'border-color: rgba(220,38,38,0.3);' : ''}">
-          ${isRec ? `<div style="position:absolute;top:8px;left:8px;"><span class="badge badge-accent" style="font-size:9px;padding:2px 6px;">IA</span></div>` : ''}
-          <div style="position:absolute;top:8px;right:8px;">
-            <div style="width:20px;height:20px;border-radius:50%;border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
-              background:${isSelected ? 'var(--accent)' : 'transparent'};
-              display:flex;align-items:center;justify-content:center;color:white;font-size:11px;">
-              ${isSelected ? icon('check', 11) : ''}
+        <div class="angle-card angle-selectable ${isSelected ? 'angle-selected' : ''}" data-angle-index="${i}"
+          style="cursor:pointer; position:relative; transition: all 0.15s ease; padding: var(--space-md);
+            ${isSelected ? `border-color: ${colors.badge}; background: ${colors.bg};` : ''}">
+
+          <!-- Letter badge + psych type -->
+          <div class="flex items-center justify-between mb-sm">
+            <div class="flex items-center gap-xs">
+              <div style="width:28px;height:28px;border-radius:50%;background:${colors.badge};display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:900;">${letter}</div>
+              <span class="badge" style="font-size:9px; background:${colors.bg}; color:${colors.badge}; border-color:${colors.border};">${colors.label}</span>
+            </div>
+            <!-- Checkbox -->
+            <div style="width:22px;height:22px;border-radius:50%;border:2px solid ${isSelected ? colors.badge : 'var(--border)'};
+              background:${isSelected ? colors.badge : 'transparent'};
+              display:flex;align-items:center;justify-content:center;color:white;font-size:11px;flex-shrink:0;">
+              ${isSelected ? (selectionOrder < 3 ? `<span style="font-size:9px;font-weight:900;">${selectionOrder + 1}</span>` : icon('check', 10)) : ''}
             </div>
           </div>
-          <div style="margin-top: var(--space-sm);">
-            <div class="angle-name" style="padding-right:28px;">${angle.name}</div>
-            <div class="text-xs text-muted mb-sm" style="font-style:italic;">"${angle.title}"</div>
-            <div class="angle-desc mb-sm">${angle.description}</div>
-            <div class="card" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); margin-bottom: var(--space-xs);">
-              <div class="text-xs font-bold text-muted mb-xs">${icon('brain', 10)} PSICOLOGÍA</div>
-              <div style="font-size:11px; color: var(--text-secondary); line-height:1.4;">${angle.psychology_text || ''}</div>
-            </div>
-            <div class="card" style="padding: var(--space-xs) var(--space-sm); background: var(--accent-subtle); border-color: rgba(220,38,38,0.1);">
-              <div class="text-xs font-bold text-accent mb-xs">${icon('bolt', 10)} EJEMPLO</div>
-              <div style="font-size:11px; color: var(--accent-light); font-weight:500;">${angle.example_text || ''}</div>
-            </div>
+
+          <!-- Name -->
+          <div class="angle-name" style="font-size:14px; margin-bottom:var(--space-xs);">${angle.name}</div>
+
+          <!-- Psychology -->
+          <div class="card" style="padding: var(--space-xs) var(--space-sm); background: var(--bg-tertiary); margin-bottom: var(--space-xs);">
+            <div class="text-xs font-bold text-muted mb-xs">${icon('brain', 10)} PSICOLOGÍA</div>
+            <div style="font-size:11px; color: var(--text-secondary); line-height:1.5;">${angle.psychology}</div>
+          </div>
+
+          <!-- Visual Twist -->
+          <div class="card" style="padding: var(--space-xs) var(--space-sm); background: ${colors.bg}; border-color: ${colors.border};">
+            <div class="text-xs font-bold mb-xs" style="color:${colors.badge};">${icon('palette', 10)} TWIST VISUAL</div>
+            <div style="font-size:11px; line-height:1.5; color: var(--text-secondary); font-style:italic;">"${angle.visual_twist}"</div>
           </div>
         </div>`;
     }).join('')}
-    </div>`;
+    </div>`}`;
   }
 
   function bindEvents() {
@@ -320,7 +466,7 @@ export async function renderCerebro(container) {
 
     document.getElementById('btn-process-script')?.addEventListener('click', async () => {
       const textToProcess = inputType === 'script' ? scriptText : contextText;
-      if (!textToProcess.trim()) { alert('Ingresa información primero'); return; }
+      if (!textToProcess.trim()) { toast('Ingresá el guión o contexto primero', 'warning'); return; }
       const btn = document.getElementById('btn-process-script');
       const originalHtml = btn.innerHTML;
       btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Analizando...`;
@@ -333,15 +479,19 @@ export async function renderCerebro(container) {
         render();
       } catch (err) {
         console.error('Data Processing Error:', err);
-        alert('Error al analizar: ' + err.message);
+        toast('Error al analizar: ' + err.message, 'error');
         btn.innerHTML = originalHtml;
         btn.disabled = false;
       }
     });
 
-    document.getElementById('btn-go-step2')?.addEventListener('click', () => {
+    document.getElementById('btn-go-step2')?.addEventListener('click', async () => {
       step = 2;
+      generatedAngles = [];
+      selectedAngleIndices = [];
+      isGeneratingAngles = true;
       render();
+      await generateAnglesForVideo();
     });
 
     // --- STEP 2 events ---
@@ -350,46 +500,98 @@ export async function renderCerebro(container) {
       render();
     });
 
+    // Angle card multi-select (by index, not DB id)
     container.querySelectorAll('.angle-selectable').forEach(card => {
       card.addEventListener('click', () => {
-        const id = card.dataset.angleId;
-        if (selectedAngleIds.includes(id)) {
-          selectedAngleIds = selectedAngleIds.filter(x => x !== id);
+        const idx = parseInt(card.dataset.angleIndex);
+        if (selectedAngleIndices.includes(idx)) {
+          selectedAngleIndices = selectedAngleIndices.filter(x => x !== idx);
         } else {
-          selectedAngleIds.push(id);
+          selectedAngleIndices.push(idx);
         }
         render();
       });
     });
 
+    // Regenerate angles
+    document.getElementById('btn-regenerate-angles')?.addEventListener('click', async () => {
+      await generateAnglesForVideo();
+    });
+
+    // Save / pass to Fábrica
     document.getElementById('btn-save-angles')?.addEventListener('click', async () => {
-      if (selectedAngleIds.length === 0) return;
+      if (selectedAngleIndices.length === 0) return;
       const btn = document.getElementById('btn-save-angles');
       btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Guardando...`;
       btn.disabled = true;
       try {
-        const selectedAngles = allAngles.filter(a => selectedAngleIds.includes(a.id));
-        // Save project with logic_dna + selected angles
-        const { error } = await supabase.from('projects').insert({
-          channel_id: activeChannelId,
-          title: scriptText.split('\n')[0].slice(0, 50) || 'Nuevo Video',
-          script_text: scriptText,
-          logic_dna: {
-            ...analysisResult,
-            selected_angles: selectedAngles.map(a => ({ id: a.id, name: a.name, title: a.title }))
-          },
-          status: 'draft'
+        const selectedAngles = selectedAngleIndices.map((idx) => {
+          const a = generatedAngles[idx];
+          return {
+            id: `ai-${idx}-${Date.now()}`,
+            name: a.name,
+            title: a.name,
+            psychology_text: a.psychology,
+            visual_twist: a.visual_twist,
+          };
         });
+
+        const logic_dna = {
+          hook: analysisResult.hook,
+          tension: analysisResult.tension,
+          promise: analysisResult.promise,
+          text_suggestions: analysisResult.text_suggestions || [],
+          visual_briefing: analysisResult.visual_briefing || null,
+          selected_angles: selectedAngles,
+        };
+
+        const { data: savedProject, error } = await supabase.from('projects').insert({
+          channel_id: activeChannelId,
+          title: (scriptText || contextText).split('\n')[0].slice(0, 50) || 'Nuevo Video',
+          script_text: scriptText || contextText,
+          logic_dna,
+          status: 'draft'
+        }).select('id').single();
+
         if (error) throw error;
-        alert(`✓ ${selectedAngleIds.length} ángulo${selectedAngleIds.length !== 1 ? 's' : ''} guardado${selectedAngleIds.length !== 1 ? 's' : ''}. ¡Listo para generar miniaturas!`);
+
+        setState({
+          activeProjectId: savedProject?.id || null,
+          activeVisualBriefing: logic_dna.visual_briefing,
+          activeEmotionLabel: logic_dna.visual_briefing?.emotion_label || null,
+        });
+
+        toast(`${selectedAngles.length} ángulo${selectedAngles.length !== 1 ? 's' : ''} pasado${selectedAngles.length !== 1 ? 's' : ''} a la Fábrica — listo para el batch`, 'success');
       } catch (err) {
         console.error('Save angles error:', err);
-        alert('Error al guardar: ' + err.message);
+        toast('Error al guardar: ' + err.message, 'error');
       } finally {
         const b = document.getElementById('btn-save-angles');
-        if (b) { b.innerHTML = `${icon('check', 14)} Confirmar Selección`; b.disabled = selectedAngleIds.length === 0; }
+        if (b) { b.innerHTML = `${icon('rocket', 14)} Pasar a la Fábrica`; b.disabled = selectedAngleIndices.length === 0; }
       }
     });
+  }
+
+  async function generateAnglesForVideo() {
+    isGeneratingAngles = true;
+    render();
+    try {
+      const textContent = scriptText || contextText;
+      const context = {
+        hook: analysisResult?.hook || '',
+        tension: analysisResult?.tension || '',
+        promise: analysisResult?.promise || '',
+        visual_briefing: analysisResult?.visual_briefing || null,
+      };
+      const result = await callAI('ANGLES_GENERATION', textContent, context);
+      generatedAngles = result?.angles || [];
+    } catch (err) {
+      console.error('Angles generation error:', err);
+      generatedAngles = [];
+    } finally {
+      isGeneratingAngles = false;
+      render();
+    }
   }
 
   render();
