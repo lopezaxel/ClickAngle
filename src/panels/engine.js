@@ -586,7 +586,7 @@ export async function renderEngine(container) {
       const isGen = v.ai_metadata?.generating;
       const hasError = v.ai_metadata?.error;
       const isExpanding = expandingVariantId === v.id;
-      const imgSrc = v.image_url || v.ai_metadata?.data_url || null;
+      const imgSrc = v.image_url || null;
       const childCount = children.filter(c => c.ai_metadata?.parent_id === v.id).length;
       const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
 
@@ -995,7 +995,7 @@ export async function renderEngine(container) {
 
               await supabase.from('thumbnail_variants').update({
                 image_url: urlData.publicUrl,
-                ai_metadata: { ...inserted.ai_metadata, generating: false, data_url: dataUrl }
+                ai_metadata: { ...inserted.ai_metadata, generating: false }
               }).eq('id', inserted.id);
             } catch (imgErr) {
               console.error('Variation image gen failed:', imgErr);
@@ -1130,7 +1130,7 @@ FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High
 
       await supabase.from('thumbnail_variants').update({
         image_url: urlData.publicUrl,
-        ai_metadata: { ...inserted.ai_metadata, generating: false, data_url: dataUrl }
+        ai_metadata: { ...inserted.ai_metadata, generating: false }
       }).eq('id', inserted.id);
 
     } catch (imgErr) {
