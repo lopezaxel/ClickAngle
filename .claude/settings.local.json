@@ -8,7 +8,10 @@
       "Bash(__NEW_LINE_32b36d4dc0983ef4__ echo:*)",
       "Bash(curl -s \"https://ahbrflukfncghlyscogq.supabase.co/rest/v1/profiles?select=id,email,full_name&limit=5\" -H \"apikey: $SERVICE_KEY\" -H \"Authorization: Bearer $SERVICE_KEY\")",
       "Bash(curl -s \"https://ahbrflukfncghlyscogq.supabase.co/rest/v1/channels?select=id,name,owner_id&limit=5\" -H \"apikey: $SERVICE_KEY\" -H \"Authorization: Bearer $SERVICE_KEY\")",
-      "Bash(find /d/ad/otross/antigrav/ClickAngle/src -type f -name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js)"
+      "Bash(find /d/ad/otross/antigrav/ClickAngle/src -type f -name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js)",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__get_publishable_keys"
     ]
   }
 }
