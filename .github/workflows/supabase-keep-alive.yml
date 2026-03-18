@@ -1,0 +1,24 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Runs every 4 days at 08:00 UTC (well within the 7-day pause window)
+    - cron: '0 8 */4 * *'
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://ahbrflukfncghlyscogq.supabase.co/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoYnJmbHVrZm5jZ2hseXNjb2dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI2NDksImV4cCI6MjA4ODIwODY0OX0.Cz0jIZcS-1QyDqsCXCE7Q49HYAWbSL-rXlxiDD4hnWM")
+          echo "Supabase ping status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Warning: unexpected status $STATUS"
+            exit 1
+          fi
+          echo "Project is alive."
