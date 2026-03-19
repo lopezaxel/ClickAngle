@@ -1095,7 +1095,7 @@ FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High
   }
 
   // ── Helper: generate one image and save to DB ─────────────────────────────
-  // NOTE: does NOT call render() or reloadProjects() — caller is responsible
+  // Inserts placeholder, immediately updates UI, then generates image in background
   async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText, parentId = null }) {
     const isRealAngleId = angle.id && !String(angle.id).startsWith('ai-');
     const { data: inserted, error: insertErr } = await supabase
@@ -1119,6 +1119,11 @@ FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High
       .single();
     if (insertErr) throw insertErr;
 
+    // ── Immediately show placeholder in UI ──
+    if (!project.thumbnail_variants) project.thumbnail_variants = [];
+    project.thumbnail_variants.push(inserted);
+    render();
+
     try {
       const dataUrl = await generateImage(imagePrompt);
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1133,11 +1138,26 @@ FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High
         ai_metadata: { ...inserted.ai_metadata, generating: false }
       }).eq('id', inserted.id);
 
+      // ── Update local variant so UI reflects completed image ──
+      const localVariant = project.thumbnail_variants.find(v => v.id === inserted.id);
+      if (localVariant) {
+        localVariant.image_url = urlData.publicUrl;
+        localVariant.ai_metadata = { ...inserted.ai_metadata, generating: false };
+      }
+      render();
+
     } catch (imgErr) {
       console.error('Image gen failed:', imgErr);
       await supabase.from('thumbnail_variants').update({
         ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message }
       }).eq('id', inserted.id);
+
+      // ── Update local variant to show error state ──
+      const localVariant = project.thumbnail_variants.find(v => v.id === inserted.id);
+      if (localVariant) {
+        localVariant.ai_metadata = { ...inserted.ai_metadata, generating: false, error: imgErr.message };
+      }
+      render();
     }
   }
 
