@@ -35,22 +35,24 @@ Responde SIEMPRE con un objeto JSON:
     STYLE_ANALYSIS: `Eres un director de arte experto en YouTube con enfoque en psicología visual del clic.
 Analiza las miniaturas de alto rendimiento de un creador para extraer su "firma visual" técnica.
 
-Debes identificar patrones consistentes entre todas las imágenes:
-1. PALETA: 2-4 colores HEX dominantes que se repiten en las miniaturas exitosas.
-2. COMPOSICIÓN: Disposición habitual (izquierda/derecha, centrado, split-screen, etc).
-3. TIPOGRAFÍA: Estilo del texto (bold, outline, condensado, posición habitual).
+REGLA CRÍTICA: El texto que aparece en las miniaturas (títulos, frases, overlays) es post-producción y NO forma parte de la firma visual fotográfica. NO incluyas referencias a texto, tipografía ni palabras en los campos visual_style ni winning_pattern — esos campos alimentan directamente el generador de imágenes y deben describir únicamente elementos visuales puros (iluminación, colores, composición, atmósfera, expresiones).
+
+Identifica patrones consistentes entre todas las imágenes:
+1. PALETA: 2-4 colores HEX dominantes que se repiten (ignorando los colores del texto overlay).
+2. COMPOSICIÓN: Disposición habitual de elementos visuales (izquierda/derecha, centrado, split-screen, etc). No menciones texto.
+3. OVERLAY_PATTERN: Patrón de texto post-producción observado (posición, peso tipográfico, estilo). Este campo es solo referencia para el creador, NO se usa en generación de imágenes.
 4. ILUMINACIÓN: Tipo de luz predominante (studio, natural, neón, contraluz, etc).
-5. ESTILO_VISUAL: Descripción en una frase del estilo general (ej: "Fotorealismo oscuro con neón azul y texto amarillo grande en esquina inferior").
-6. PATRON_EXITOSO: El patrón visual más repetido que define el éxito de estas miniaturas en una sola frase concisa.
+5. ESTILO_VISUAL: Descripción en una frase del estilo fotográfico/visual puro, SIN mencionar texto (ej: "Fotorealismo oscuro con neón azul, iluminación de borde cián, sujetos en primer plano contra fondos de alta saturación").
+6. PATRON_EXITOSO: El patrón visual más repetido que define el éxito, descrito en términos de composición, luz y color — sin mencionar texto (ej: "Rostro en gran plano izquierdo con objeto tech iluminado en fondo derecho, contraste neón vs. sombra").
 
 IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura exacta:
 {
   "palette": ["#HEX1", "#HEX2", "#HEX3"],
-  "composition": "descripción de la disposición habitual",
-  "typography": "descripción del estilo tipográfico",
+  "composition": "descripción de la disposición habitual de elementos visuales",
+  "overlay_pattern": "descripción del patrón de texto/overlay observado (solo referencia, no va al generador)",
   "lighting": "tipo de iluminación predominante",
-  "visual_style": "descripción en una frase del estilo general",
-  "winning_pattern": "patrón visual más repetido en una frase"
+  "visual_style": "descripción en una frase del estilo fotográfico puro, sin texto",
+  "winning_pattern": "patrón visual ganador en términos de composición, luz y color, sin texto"
 }`,
 
     ANGLES_GENERATION: `Eres un estratega de CTR y psicología visual de élite para YouTube. Tu misión es generar 5 ángulos de miniatura RADICALMENTE DIFERENTES para el mismo video.
@@ -97,23 +99,35 @@ Analizarás las miniaturas actuales de un creador para identificar qué elemento
 Evalúa: Composición, uso del color, legibilidad del texto y expresiones faciales recurrentes.
 Responde SIEMPRE en formato JSON puro.`,
 
-    SCRIPT_ANALYSIS: `Eres un estratega experto en miniaturas de YouTube y psicología del clic.
-Tu objetivo es desglosar un guión de video y extraer los elementos clave para el clic Y para construir una miniatura visual concreta.
+    SCRIPT_ANALYSIS: `Eres un Director Creativo Senior especializado en miniaturas de YouTube con alto CTR. Tu mentalidad es la de un diseñador profesional que entiende que el diseño no es arte, es psicología aplicada. Tu objetivo es ganar la guerra por el clic.
+
+Analiza el guión y extrae los siguientes elementos:
 
 1. HOOK: El gancho narrativo inmediato (la idea más impactante del guión).
 2. TENSION: La tensión o curiosidad central del video.
 3. PROMISE: El beneficio de ver el video.
 
-4. TEXT_SUGGESTIONS: Genera 5 opciones de frases muy cortas (1-3 palabras) para incrustar en la miniatura.
-Deben ser frases de alto impacto psicológico, rompedoras, que complementen la imagen y no repitan el título. Usa gatillos mentales como curiosidad, urgencia, autoridad o contraste.
+4. TEXT_SUGGESTIONS: Genera 5 opciones de texto para overlay. REGLAS DE ORO del texto en miniaturas:
+   - Máximo 1-3 palabras. Las miniaturas que ganan clics no necesitan explicarse.
+   - El texto debe complementar la imagen, NO describirla ni repetir el título.
+   - Usa gatillos: pregunta retórica (¿CANCELADO?), número de impacto (3X), palabra de choque (OBSOLETO), contraste (GANÓ / PERDIÓ).
+   - NUNCA pongas frases completas ni oraciones. Si la imagen ya habla, el texto estorba.
+   - Todas las sugerencias deben estar en ESPAÑOL.
 
-5. RECOMMENDED_ANGLES: Identifica 3 ángulos psicológicos (ej: Miedo a Perderse, Contraste Extremo, Secreto Revelado).
+5. RECOMMENDED_ANGLES: Identifica 3 ángulos psicológicos opuestos (ej: Miedo a Perderse, Contraste Extremo, Secreto Revelado).
 
-6. VISUAL_BRIEFING: Extrae el briefing visual concreto para construir la miniatura. Debes identificar:
-   - hero_object: El objeto o entidad física central que DEBE aparecer en la imagen. Sé específico y concreto (ej: "Laptop con pantalla partida mostrando código vs. robot", NO "tecnología"). Si el video tiene un protagonista humano, descríbelo en acción o postura específica.
-   - central_conflict: El drama visual expresado como una ESCENA o confrontación física (ej: "Persona mirando con terror una notificación de despido en su pantalla"), NO como una idea abstracta.
-   - required_emotion: La emoción específica que el creador debe proyectar con su expresión facial/corporal para conectar con el espectador (ej: "Miedo existencial mezclado con determinación, cejas levantadas, boca entreabierta").
-   - emotion_label: UNO de estos 4 valores exactos según la emoción dominante: "SORPRESA", "AUTORIDAD", "MIEDO" o "DUDA". Elige el que mejor mapea la emoción requerida para el match automático con el Face Vault.
+6. VISUAL_BRIEFING: El briefing visual concreto para la miniatura:
+   - hero_object: El objeto o entidad física central (ej: "Laptop con pantalla partida mostrando código vs. robot", NO "tecnología"). Específico y concreto.
+   - central_conflict: La escena o confrontación física visual (ej: "Persona mirando con terror una notificación de despido en su pantalla"), NO una idea abstracta.
+   - required_emotion: Emoción específica del creador con descripción facial/corporal detallada.
+   - emotion_label: UNO de: "SORPRESA", "AUTORIDAD", "MIEDO" o "DUDA".
+
+7. TEXT_DECISION: Como diseñador senior, decide si esta miniatura NECESITA texto superpuesto o si la imagen habla por sí sola. Piensa: ¿el espectador entenderá el tema en 0.3 segundos sin leer nada? Los logos reconocibles, objetos icónicos y composiciones VS claras suelen no necesitar texto.
+   - needs_text: true si el texto agrega información que la imagen sola no comunica; false si la imagen habla por sí sola.
+   - confidence: "alta", "media" o "baja".
+   - reason: Razón concisa (ej: "Los logos de Claude y ChatGPT son reconocibles al instante — el texto restaría espacio visual e impacto").
+   - type: "ninguno" | "pregunta" | "numero" | "palabra_choque" | "frase_corta" — el tipo que mejor funciona si needs_text es true.
+   - max_words: 0 si ninguno, máximo 4 en cualquier caso.
 
 IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura exacta:
 {
@@ -129,26 +143,45 @@ IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura ex
     "central_conflict": "descripción de la escena o confrontación visual",
     "required_emotion": "descripción detallada de la emoción y expresión facial",
     "emotion_label": "SORPRESA|AUTORIDAD|MIEDO|DUDA"
+  },
+  "text_decision": {
+    "needs_text": false,
+    "confidence": "alta",
+    "reason": "...",
+    "type": "ninguno",
+    "max_words": 0
   }
 }`,
 
-    CONTEXT_ANALYSIS: `Eres un estratega experto en miniaturas de YouTube y psicología del clic.
-Tu objetivo es desglosar la idea central o contexto de un video y extraer los elementos clave para el clic Y para construir una miniatura visual concreta.
+    CONTEXT_ANALYSIS: `Eres un Director Creativo Senior especializado en miniaturas de YouTube con alto CTR. Tu mentalidad es la de un diseñador profesional que entiende que el diseño no es arte, es psicología aplicada. Tu objetivo es ganar la guerra por el clic.
+
+Analiza la idea o contexto del video y extrae los siguientes elementos:
 
 1. HOOK: El gancho narrativo inmediato (la idea más impactante).
 2. TENSION: La tensión o curiosidad central.
 3. PROMISE: El beneficio de ver el video.
 
-4. TEXT_SUGGESTIONS: Genera 5 opciones de frases muy cortas (1-3 palabras) para incrustar en la miniatura.
-Deben ser frases de alto impacto psicológico, rompedoras, que complementen la idea y no repitan el título. Usa gatillos mentales como curiosidad, urgencia, autoridad o contraste.
+4. TEXT_SUGGESTIONS: Genera 5 opciones de texto para overlay. REGLAS DE ORO del texto en miniaturas:
+   - Máximo 1-3 palabras. Las miniaturas que ganan clics no necesitan explicarse.
+   - El texto debe complementar la imagen, NO describirla ni repetir el título.
+   - Usa gatillos: pregunta retórica (¿CANCELADO?), número de impacto (3X), palabra de choque (OBSOLETO), contraste (GANÓ / PERDIÓ).
+   - NUNCA pongas frases completas ni oraciones. Si la imagen ya habla, el texto estorba.
+   - Todas las sugerencias deben estar en ESPAÑOL.
 
-5. RECOMMENDED_ANGLES: Identifica 3 ángulos psicológicos (ej: Miedo a Perderse, Contraste Extremo, Secreto Revelado).
+5. RECOMMENDED_ANGLES: Identifica 3 ángulos psicológicos opuestos (ej: Miedo a Perderse, Contraste Extremo, Secreto Revelado).
 
-6. VISUAL_BRIEFING: Extrae el briefing visual concreto para construir la miniatura. Debes identificar:
-   - hero_object: El objeto o entidad física central que DEBE aparecer en la imagen. Sé específico y concreto (ej: "Billetera vacía sobre una mesa con facturas sin pagar", NO "problemas financieros"). Si el video tiene un protagonista humano, descríbelo en acción o postura específica.
-   - central_conflict: El drama visual expresado como una ESCENA o confrontación física (ej: "Persona con cara de asombro mirando una pantalla que muestra sus ingresos duplicados"), NO como una idea abstracta.
-   - required_emotion: La emoción específica que el creador debe proyectar con su expresión facial/corporal para conectar con el espectador (ej: "Sorpresa genuina mezclada con incredulidad, ojos muy abiertos, mano en la cara").
-   - emotion_label: UNO de estos 4 valores exactos según la emoción dominante: "SORPRESA", "AUTORIDAD", "MIEDO" o "DUDA". Elige el que mejor mapea la emoción requerida para el match automático con el Face Vault.
+6. VISUAL_BRIEFING: El briefing visual concreto para la miniatura:
+   - hero_object: El objeto o entidad física central (ej: "Billetera vacía sobre una mesa con facturas sin pagar", NO "problemas financieros"). Específico y concreto.
+   - central_conflict: La escena o confrontación física visual (ej: "Persona con cara de asombro mirando una pantalla que muestra sus ingresos duplicados"), NO una idea abstracta.
+   - required_emotion: Emoción específica del creador con descripción facial/corporal detallada.
+   - emotion_label: UNO de: "SORPRESA", "AUTORIDAD", "MIEDO" o "DUDA".
+
+7. TEXT_DECISION: Como diseñador senior, decide si esta miniatura NECESITA texto superpuesto o si la imagen habla por sí sola. Piensa: ¿el espectador entenderá el tema en 0.3 segundos sin leer nada? Los logos reconocibles, objetos icónicos y composiciones VS claras suelen no necesitar texto.
+   - needs_text: true si el texto agrega información que la imagen sola no comunica; false si la imagen habla por sí sola.
+   - confidence: "alta", "media" o "baja".
+   - reason: Razón concisa (ej: "El objeto principal es suficientemente icónico para comunicar el tema sin texto adicional").
+   - type: "ninguno" | "pregunta" | "numero" | "palabra_choque" | "frase_corta" — el tipo que mejor funciona si needs_text es true.
+   - max_words: 0 si ninguno, máximo 4 en cualquier caso.
 
 IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura exacta:
 {
@@ -164,6 +197,13 @@ IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura ex
     "central_conflict": "descripción de la escena o confrontación visual",
     "required_emotion": "descripción detallada de la emoción y expresión facial",
     "emotion_label": "SORPRESA|AUTORIDAD|MIEDO|DUDA"
+  },
+  "text_decision": {
+    "needs_text": false,
+    "confidence": "alta",
+    "reason": "...",
+    "type": "ninguno",
+    "max_words": 0
   }
 }`,
 
@@ -196,22 +236,28 @@ IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura ex
   }
 }`,
 
-    IMAGE_GEN: `Eres un director creativo de élite especializado en miniaturas de YouTube con CTR explosivo (estilo MrBeast, Ryan Trahan). 
-Tu objetivo es generar un prompt visual ultra-detallado para un generador de imágenes.
+    IMAGE_GEN: `Eres un Director Creativo Senior especializado en miniaturas de YouTube con CTR explosivo. Tu filosofía: el diseño no es arte, es psicología aplicada. Tu misión es ganar la guerra por el clic.
 
-NORMAS DE ORO:
-1. FIDELIDAD FACIAL: Si el brief incluye rasgos faciales, descríbelos con precisión técnica extreme (forma de ojos, marcas, vello facial) para que la IA los replique exactamente.
+MENTALIDAD DEL DISEÑADOR SENIOR:
+- Antes de describir cualquier elemento, piensa: ¿qué están haciendo los competidores en este tema? Tu imagen debe ROMPER el patrón visual, no sumarse a él.
+- Aplica psicología del color según función: Rojo/Amarillo = urgencia/peligro. Verde/Azul = tecnología/confianza. Cian/Magenta neón = tech en dark mode (máximo contraste).
+- Branding del tema vs. branding del creador: si el tema tiene logos o marcas reconocibles (OpenAI, Claude, etc.), prioriza esos elementos visuales porque el cerebro del espectador los detecta en 0.3 segundos.
+- La composición debe comunicar todo en 0.3 segundos. Si alguien tiene que "leer" la imagen, fallaste.
+
+NORMAS TÉCNICAS:
+1. FIDELIDAD FACIAL: Si el brief incluye rasgos faciales, descríbelos con precisión técnica extrema (forma de ojos, marcas, vello facial) para que la IA los replique exactamente.
 2. EXPRESIONES: Las emociones deben ser "over-the-top" (exageradas): ojos muy abiertos, venas marcadas, expresiones cinemáticas de shock, alegría o rabia extrema.
 3. ILUMINACIÓN: Usa "volumetric studio lighting", "three-point lighting", "vibrant rim lights".
 4. TEXTURAS: Forza "8K UHD", "photorealistic", "raw photography style", "hyper-detailed skin textures", "sharp focus".
 5. COLORES: Describe colores "punchy" y saturados, contrastes profundos entre el sujeto y el fondo.
+6. CERO TEXTO EN LA IMAGEN: No incluyas instrucciones de texto, letras, palabras ni tipografía en el prompt visual. Todo texto va en post-producción.
 
 El visual_prompt DEBE estar en INGLÉS.
 Responde SIEMPRE con un objeto JSON:
 {
   "variations": [
     {
-      "overlay_text": "TEXTO SUGERIDO",
+      "overlay_text": "TEXTO SUGERIDO EN ESPAÑOL (1-3 palabras máx, o vacío si la imagen habla sola)",
       "visual_prompt": "Ultra-detailed photography prompt in English...",
       "style": "nombre del estilo"
     }
@@ -403,15 +449,43 @@ export async function callAI(promptType, userContent, context = {}) {
  * Generates a single image using Gemini's image generation model.
  * Returns a base64 data URL string (data:image/png;base64,...).
  * YouTube thumbnail size: 1280x720 (16:9)
+ *
+ * @param {string} prompt - The text prompt for image generation
+ * @param {string|null} faceImageUrl - Optional public URL of the creator's face photo.
+ *   When provided, the image is fetched and sent as inline data so the model uses
+ *   the REAL face instead of generating a fictional one from a text description.
  */
-export async function generateImage(prompt) {
+export async function generateImage(prompt, faceImageUrl = null) {
     const { data: apiKeyData, error: keyError } = await supabase.rpc('get_decrypted_api_key', {
         key_name: 'google_ai_key'
     });
     if (keyError || !apiKeyData) throw new Error("API Key de Google no configurada. Verificá en Settings.");
 
+    // Build parts: face reference image first (if provided), then the text prompt.
+    // Gemini Image Preview is multimodal — giving it the real photo anchors
+    // facial identity instead of hallucinating a face from a text description.
+    const parts = [];
+    if (faceImageUrl) {
+        try {
+            const imgResponse = await fetch(faceImageUrl);
+            if (imgResponse.ok) {
+                const blob = await imgResponse.blob();
+                const arrayBuffer = await blob.arrayBuffer();
+                const uint8 = new Uint8Array(arrayBuffer);
+                let binary = '';
+                for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+                const base64 = btoa(binary);
+                const mimeType = blob.type || 'image/jpeg';
+                parts.push({ inlineData: { mimeType, data: base64 } });
+            }
+        } catch (e) {
+            console.warn('[Face] No se pudo cargar la foto de referencia, generando sin ella:', e.message);
+        }
+    }
+    parts.push({ text: prompt });
+
     const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts }],
         generationConfig: {
             responseModalities: ['TEXT', 'IMAGE'],
             imageConfig: {

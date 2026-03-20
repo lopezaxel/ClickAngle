@@ -3,6 +3,7 @@ import { getState, subscribe } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI, generateImage } from '../lib/intelligence.js';
 import { toast, confirmDialog, inputDialog } from '../lib/toast.js';
+import { showLoader, updateLoader, hideLoader } from '../lib/loader.js';
 
 // ─── Creative Config ────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ const FORMATS = [
     subtitle: 'Urgencia Total',
     emoji: '🚨',
     desc: 'Estética de noticia de última hora. Colores de alerta y saturación máxima.',
-    composition: 'PHYSICAL LAYOUT: Broadcast news aesthetic — bold text chyron bar at bottom third. Strong red/yellow color accents frame the edges. Subject centered with high-energy forward lean pose. Alert/warning badge element in corner. Flat even broadcast lighting on face.',
+    composition: 'PHYSICAL LAYOUT: Broadcast news aesthetic — solid bold color horizontal band at bottom third (NO TEXT inside — pure colored bar only, graphic shape). Strong red/yellow color accents frame the edges like a news ticker border. Subject centered with high-energy forward lean pose. Graphic alert/warning icon badge in corner (icon only, absolutely zero text or letters). Flat even broadcast lighting on face.',
   },
 ];
 
@@ -121,6 +122,7 @@ export async function renderEngine(container) {
   let selectedStyleId = null;
   let isGenerating = false;
   let expandingVariantId = null;
+  let batchAngleSelection = null; // null = all selected; array of indices = specific selection
 
   // Auto-matched face from DNA (set during render based on emotion_label)
   let autoMatchedFaceId = null;
@@ -181,18 +183,18 @@ export async function renderEngine(container) {
           </div>
           <div class="flex gap-xs" style="flex-shrink:0;">
             <button class="btn-rename-project" data-project-id="${p.id}" data-project-title="${p.title.replace(/"/g, '&quot;')}"
-              style="background:transparent; border:none; cursor:pointer; color:var(--text-tertiary); padding:3px; border-radius:4px; display:flex; align-items:center; opacity:0.5; transition:all 0.15s;"
-              onmouseover="this.style.color='#818cf8';this.style.opacity='1';"
-              onmouseout="this.style.color='var(--text-tertiary)';this.style.opacity='0.5';"
-              title="Renombrar">
-              ${icon('edit', 12)}
+              style="background:rgba(129,140,248,0.12); border:1px solid rgba(129,140,248,0.3); cursor:pointer; color:#818cf8; padding:5px 8px; border-radius:6px; display:flex; align-items:center; gap:4px; transition:all 0.15s; font-size:10px; font-weight:700; letter-spacing:0.5px;"
+              onmouseover="this.style.background='rgba(129,140,248,0.25)';this.style.borderColor='#818cf8';"
+              onmouseout="this.style.background='rgba(129,140,248,0.12)';this.style.borderColor='rgba(129,140,248,0.3)';"
+              title="Renombrar proyecto">
+              ${icon('edit', 12)} <span>Editar</span>
             </button>
             <button class="btn-delete-project" data-project-id="${p.id}"
-              style="background:transparent; border:none; cursor:pointer; color:var(--text-tertiary); padding:3px; border-radius:4px; display:flex; align-items:center; opacity:0.5; transition:all 0.15s;"
-              onmouseover="this.style.color='var(--danger)';this.style.opacity='1';"
-              onmouseout="this.style.color='var(--text-tertiary)';this.style.opacity='0.5';"
+              style="background:rgba(220,38,38,0.12); border:1px solid rgba(220,38,38,0.35); cursor:pointer; color:#ef4444; padding:5px 8px; border-radius:6px; display:flex; align-items:center; gap:4px; transition:all 0.15s; font-size:10px; font-weight:700; letter-spacing:0.5px;"
+              onmouseover="this.style.background='rgba(220,38,38,0.25)';this.style.borderColor='#ef4444';"
+              onmouseout="this.style.background='rgba(220,38,38,0.12)';this.style.borderColor='rgba(220,38,38,0.35)';"
               title="Eliminar proyecto">
-              ${icon('trash', 12)}
+              ${icon('trash', 12)} <span>Borrar</span>
             </button>
           </div>
         </div>`;
@@ -216,11 +218,16 @@ export async function renderEngine(container) {
           </div>
         ` : `
           <!-- Trigger button -->
+          <div style="font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:5px; padding-left:2px; opacity:0.6;">
+            Proyecto activo — hacé click para cambiar
+          </div>
           <button id="btn-project-dropdown" style="
             width:100%; display:flex; align-items:center; gap:var(--space-md);
             background:var(--bg-card); border:1px solid ${project ? 'var(--accent)' : 'var(--border)'};
             border-radius:var(--radius-lg); padding:var(--space-sm) var(--space-md);
-            cursor:pointer; transition:all 0.15s; text-align:left;">
+            cursor:pointer; transition:all 0.15s; text-align:left;"
+            onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg-elevated)';"
+            onmouseout="this.style.borderColor='${project ? 'var(--accent)' : 'var(--border)'}';this.style.background='var(--bg-card)';">
             <span style="color:var(--accent); flex-shrink:0;">${icon('folder', 16)}</span>
             <div style="flex:1; min-width:0;">
               ${project ? `
@@ -231,10 +238,13 @@ export async function renderEngine(container) {
                   ${project.logic_dna?.visual_briefing ? `<span class="badge" style="font-size:9px; background:rgba(99,102,241,0.2); color:#818cf8;">🧬 DNA</span>` : ''}
                 </div>
               ` : `
-                <div class="text-sm text-muted">Seleccioná un proyecto...</div>
+                <div class="text-sm" style="color:var(--accent); font-weight:600;">Seleccioná un proyecto para comenzar →</div>
               `}
             </div>
-            <span style="color:var(--text-tertiary); flex-shrink:0; transition:transform 0.2s;" id="dropdown-chevron">${icon('arrowDown', 14)}</span>
+            <div style="flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:2px;">
+              <span style="color:var(--text-tertiary); transition:transform 0.2s;" id="dropdown-chevron">${icon('arrowDown', 14)}</span>
+              <span style="font-size:8px; color:var(--accent); font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">cambiar</span>
+            </div>
           </button>
 
           <!-- Dropdown panel -->
@@ -310,7 +320,9 @@ export async function renderEngine(container) {
   function renderWorkflow(project, selectedAngles, variants) {
     const canGoStep2 = selectedFormats.length > 0;
     const canGoStep3 = canGoStep2 && selectedStyleId;
-    const canGenerate = canGoStep3 && selectedAngles.length > 0;
+    const activeBatchIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
+    const batchCount = activeBatchIndices.length;
+    const canGenerate = canGoStep3 && batchCount > 0;
 
     return `
     <!-- Project header -->
@@ -376,7 +388,7 @@ export async function renderEngine(container) {
           style="background:linear-gradient(135deg, var(--accent), #9333ea); font-size:14px; padding:10px 24px; font-weight:800; letter-spacing:0.5px;">
           ${isGenerating
         ? `<span class="animate-pulse">${icon('clock', 16)}</span> Preparando síntesis...`
-        : `${icon('rocket', 16)} SINTETIZAR BATCH DE ${selectedAngles.length} ÁNGULO${selectedAngles.length !== 1 ? 'S' : ''}`}
+        : `${icon('rocket', 16)} SINTETIZAR ${batchCount} ÁNGULO${batchCount !== 1 ? 'S' : ''}${batchCount < selectedAngles.length ? ` (de ${selectedAngles.length})` : ''}`}
         </button>
       `}
     </div>
@@ -389,30 +401,185 @@ export async function renderEngine(container) {
 
   // ─── STEP 1: Formato ──────────────────────────────────────────────────────
 
+  // Analyzes project DNA and returns format recommendations with reasons.
+  // Deterministic — no API call. Runs on the logic_dna already in the project.
+  function recommendFormats(project) {
+    const dna = project?.logic_dna || {};
+    const hook       = (dna.hook || '').toLowerCase();
+    const tension    = (dna.tension || '').toLowerCase();
+    const promise    = (dna.promise || '').toLowerCase();
+    const hero       = (dna.visual_briefing?.hero_object || '').toLowerCase();
+    const conflict   = (dna.visual_briefing?.central_conflict || '').toLowerCase();
+    const title      = (project.title || '').toLowerCase();
+    const angles     = dna.selected_angles || [];
+    const angleNames = angles.map(a => (a.name || '').toLowerCase()).join(' ');
+    const anglePsych = angles.map(a => (a.psychology || a.psychology_text || '').toLowerCase()).join(' ');
+    const all = [hook, tension, promise, hero, conflict, title, angleNames, anglePsych].join(' ');
+
+    const recs = [];
+
+    // ── VERSUS ──
+    const versusHits = ['vs ', 'versus', ' contra ', 'comparar', 'comparativ', 'mejor que', 'peor que',
+      'diferencia', 'contraste extremo', 'antes y después', 'ganador', 'perdedor', 'duelo', 'batalla']
+      .filter(k => all.includes(k)).length;
+    if (versusHits >= 1 || angleNames.includes('contraste')) {
+      recs.push({
+        id: 'versus',
+        reason: versusHits >= 2
+          ? 'El guión es una comparación directa — el split screen es el formato más reconocido y efectivo para este tema.'
+          : 'El ángulo de Contraste Extremo genera el mayor impacto visual con la composición dividida.',
+        confidence: versusHits >= 2 || angleNames.includes('contraste') ? 'alta' : 'media',
+      });
+    }
+
+    // ── AUTHORITY ──
+    const authHits = ['autoridad', 'experto', 'definitiv', 'solución', 'tutorial', 'cómo ', 'guía',
+      'sistema', 'herramienta', 'dominar', 'master', 'mejor manera', 'paso a paso']
+      .filter(k => all.includes(k)).length;
+    if (authHits >= 1 || angleNames.includes('autoridad')) {
+      recs.push({
+        id: 'authority',
+        reason: 'El objeto héroe del guión domina visualmente. La composición de autoridad lo pone al frente y comunica liderazgo técnico en 0.3 segundos.',
+        confidence: angleNames.includes('autoridad') ? 'alta' : 'media',
+      });
+    }
+
+    // ── SHOCK ──
+    const shockHits = ['curiosidad', 'secreto', 'oculto', 'nadie te', 'no te dijeron', 'misterio',
+      'revela', 'increíble', 'impactante', 'sorpresa', 'no puedo creer', 'descubr']
+      .filter(k => all.includes(k)).length;
+    if (shockHits >= 1 || angleNames.includes('curiosidad')) {
+      recs.push({
+        id: 'shock',
+        reason: 'El gap de curiosidad del guión pide ocultamiento estratégico. La caja negra genera el itch mental que obliga el clic.',
+        confidence: angleNames.includes('curiosidad') ? 'alta' : 'media',
+      });
+    }
+
+    // ── BREAKING ──
+    const breakingHits = ['urgencia', 'urgente', 'fomo', 'ahora', 'peligro', 'error', 'falló',
+      'noticia', 'alerta', 'advertencia', 'cuidado', 'obsoleto', 'cancelad', 'breaking',
+      'se acaba', 'último momento', 'ya no', 'murió', 'fin de']
+      .filter(k => all.includes(k)).length;
+    if (breakingHits >= 1 || angleNames.includes('urgencia') || angleNames.includes('miedo')) {
+      recs.push({
+        id: 'breaking',
+        reason: 'El tono de urgencia y alerta del guión encaja perfectamente con la estética de noticia de última hora — máxima saturación emocional.',
+        confidence: (angleNames.includes('urgencia') || angleNames.includes('miedo')) ? 'alta' : 'media',
+      });
+    }
+
+    // Sort: alta confidence first
+    recs.sort((a, b) => (a.confidence === 'alta' ? -1 : 1) - (b.confidence === 'alta' ? -1 : 1));
+    return recs;
+  }
+
   function renderStep1() {
+    const project = getProject();
+    const recs = project ? recommendFormats(project) : [];
+    const recMap = Object.fromEntries(recs.map(r => [r.id, r]));
+    const topRec = recs.find(r => r.confidence === 'alta') || recs[0] || null;
+
     return `
     <div>
+
+      ${recs.length > 0 ? `
+      <!-- IA Recommendation banner -->
+      <div style="
+        background: linear-gradient(135deg, rgba(220,38,38,0.08), rgba(168,85,247,0.06));
+        border: 1px solid rgba(220,38,38,0.25);
+        border-radius: var(--radius-md);
+        padding: var(--space-md);
+        margin-bottom: var(--space-md);
+      ">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <div style="
+            background: rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.4);
+            border-radius:4px; padding:3px 7px;
+            font-size:9px; font-weight:900; letter-spacing:1.5px; color:#ef4444; text-transform:uppercase;
+          ">✦ IA</div>
+          <div style="font-size:12px; font-weight:700; color:var(--text-primary);">
+            Formatos recomendados basados en tu guión y ángulos psicológicos
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:var(--space-sm);">
+          ${recs.map(r => {
+            const f = FORMATS.find(x => x.id === r.id);
+            return `
+            <div style="
+              display:flex; align-items:flex-start; gap:8px;
+              background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
+              border-radius:var(--radius-sm); padding:8px 10px; flex:1; min-width:180px;
+            ">
+              <span style="font-size:18px; flex-shrink:0; margin-top:1px;">${f?.emoji}</span>
+              <div>
+                <div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">
+                  <span style="font-size:11px; font-weight:800; color:var(--text-primary);">${f?.label}</span>
+                  <span style="
+                    font-size:8px; font-weight:900; letter-spacing:1px; text-transform:uppercase; padding:1px 5px;
+                    border-radius:3px; flex-shrink:0;
+                    ${r.confidence === 'alta'
+                      ? 'background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3);'
+                      : 'background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3);'}
+                  ">${r.confidence === 'alta' ? 'Alta' : 'Media'}</span>
+                </div>
+                <div style="font-size:10px; color:rgba(255,255,255,0.45); line-height:1.5;">${r.reason}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      ` : ''}
+
       <div class="text-xs font-bold text-muted mb-md" style="letter-spacing:1px; text-transform:uppercase;">${icon('layout', 12)} Elegí el formato de composición (podés seleccionar varios)</div>
+
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
         ${FORMATS.map(f => {
-      const isSelected = selectedFormats.includes(f.id);
-      return `
+          const isSelected = selectedFormats.includes(f.id);
+          const rec = recMap[f.id];
+          const isHighRec = rec?.confidence === 'alta';
+          const isMedRec  = rec?.confidence === 'media';
+          return `
           <div class="card format-card" data-format-id="${f.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
-            ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
+            ${isSelected
+              ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);'
+              : isHighRec
+                ? 'border-color:rgba(16,185,129,0.45); background:rgba(16,185,129,0.04);'
+                : isMedRec
+                  ? 'border-color:rgba(245,158,11,0.35); background:rgba(245,158,11,0.03);'
+                  : ''}">
+
+            <!-- Check circle -->
             <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
               border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
               background:${isSelected ? 'var(--accent)' : 'transparent'};
               display:flex; align-items:center; justify-content:center; color:white; font-size:11px;">
               ${isSelected ? icon('check', 10) : ''}
             </div>
-            <div style="font-size:28px; margin-bottom:var(--space-sm);">${f.emoji}</div>
+
+            <!-- IA badge -->
+            ${rec ? `
+            <div style="
+              position:absolute; top:10px; left:10px;
+              font-size:8px; font-weight:900; letter-spacing:1px; text-transform:uppercase;
+              padding:2px 6px; border-radius:3px;
+              ${isHighRec
+                ? 'background:rgba(16,185,129,0.18); color:#10b981; border:1px solid rgba(16,185,129,0.4);'
+                : 'background:rgba(245,158,11,0.18); color:#f59e0b; border:1px solid rgba(245,158,11,0.35);'}
+            ">✦ IA ${isHighRec ? '★★★' : '★★'}</div>
+            ` : ''}
+
+            <div style="font-size:28px; margin-bottom:var(--space-sm); margin-top:${rec ? '20px' : '0'};">${f.emoji}</div>
             <div class="font-bold" style="font-size:14px;">${f.label}</div>
-            <div class="text-xs text-accent mb-xs">${f.subtitle}</div>
+            <div class="text-xs mb-xs" style="color:${isHighRec ? '#10b981' : isMedRec ? '#f59e0b' : 'var(--accent)'};">${f.subtitle}</div>
             <div class="text-xs text-muted" style="line-height:1.5;">${f.desc}</div>
           </div>`;
-    }).join('')}
+        }).join('')}
       </div>
-      ${selectedFormats.length === 0 ? `<p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná al menos un formato para continuar</p>` : `
+
+      ${selectedFormats.length === 0 ? `
+        <p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná al menos un formato para continuar${topRec ? ` — IA recomienda empezar con <strong>${FORMATS.find(x=>x.id===topRec.id)?.label}</strong>` : ''}</p>
+      ` : `
         <p class="text-xs text-accent mt-md" style="text-align:center;">${icon('check', 12)} ${selectedFormats.length} formato${selectedFormats.length > 1 ? 's' : ''} seleccionado${selectedFormats.length > 1 ? 's' : ''}</p>
       `}
     </div>`;
@@ -499,20 +666,72 @@ export async function renderEngine(container) {
         </div>
       </div>
 
-      <!-- Text Suggestion -->
-      <div class="card mb-md" style="background:var(--bg-tertiary); border: 1px solid var(--accent); padding:var(--space-md);">
-        <label class="form-label">${icon('bolt', 12)} Texto de Overlay (se aplicará a cada miniatura del batch)</label>
-        <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
-          ${(project.logic_dna?.text_suggestions || []).map(txt => `
-            <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">
-              ${txt}
-            </button>
-          `).join('')}
-        </div>
-        <div class="form-group mb-0">
-          <input type="text" class="form-input" id="custom-overlay-text" placeholder="O escribe tu propio texto de impacto..." value="${project.title.toUpperCase()}" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
-        </div>
-      </div>
+      <!-- Text Suggestion — condicional según text_decision del DNA -->
+      ${(() => {
+        const td = project.logic_dna?.text_decision;
+        const suggestions = project.logic_dna?.text_suggestions || [];
+        const typeLabels = { pregunta: '¿...?', numero: '0-9', palabra_choque: '⚡', frase_corta: 'AB', ninguno: '—' };
+
+        if (td && td.needs_text === false && td.confidence === 'alta') {
+          // La imagen habla sola — texto no recomendado
+          return `
+          <div class="card mb-md" style="background:rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.35); padding:var(--space-md);">
+            <div class="flex items-center gap-sm mb-sm">
+              <span style="font-size:18px;">🎯</span>
+              <div>
+                <div class="text-xs font-bold" style="color:var(--success);">Esta miniatura habla por sí sola</div>
+                <div class="text-xs text-muted">${td.reason || 'La imagen comunica el concepto sin necesidad de texto.'}</div>
+              </div>
+            </div>
+            <details style="margin-top:var(--space-xs);">
+              <summary class="text-xs text-muted" style="cursor:pointer; opacity:0.6;">Agregar texto de todos modos (no recomendado)</summary>
+              <div class="mt-sm">
+                <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
+                  ${suggestions.map(txt => `
+                    <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">${txt}</button>
+                  `).join('')}
+                </div>
+                <input type="text" class="form-input" id="custom-overlay-text" placeholder="Texto de override (1-3 palabras máx)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
+              </div>
+            </details>
+          </div>`;
+        } else if (td && td.needs_text === true) {
+          // Texto recomendado — mostrar tipo sugerido y máx palabras
+          const typeLabel = typeLabels[td.type] || '';
+          const maxW = td.max_words || 3;
+          return `
+          <div class="card mb-md" style="background:var(--bg-tertiary); border: 1px solid var(--accent); padding:var(--space-md);">
+            <div class="flex items-center justify-between mb-sm">
+              <label class="form-label mb-0">${icon('bolt', 12)} Texto de Overlay</label>
+              <div class="flex gap-xs">
+                ${td.type && td.type !== 'ninguno' ? `<span class="badge" style="font-size:9px; background:rgba(168,85,247,0.15); color:#a855f7; border:1px solid rgba(168,85,247,0.3);">Tipo: ${typeLabel}</span>` : ''}
+                <span class="badge" style="font-size:9px; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">Máx ${maxW} palabras</span>
+              </div>
+            </div>
+            <div class="text-xs text-muted mb-sm" style="opacity:0.7;">${td.reason || ''}</div>
+            <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
+              <button class="badge btn-suggestion-text" style="cursor:pointer; border:1px solid rgba(100,100,100,0.3); background:transparent; font-size:10px; padding:6px 10px; color:var(--text-muted);" data-text="">Sin texto</button>
+              ${suggestions.map(txt => `
+                <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">${txt}</button>
+              `).join('')}
+            </div>
+            <input type="text" class="form-input" id="custom-overlay-text" placeholder="O escribe tu propio texto (${maxW} palabras máx)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
+          </div>`;
+        } else {
+          // Sin text_decision (proyecto viejo o sin análisis) — comportamiento neutro
+          return `
+          <div class="card mb-md" style="background:var(--bg-tertiary); border: 1px solid var(--border); padding:var(--space-md);">
+            <label class="form-label">${icon('bolt', 12)} Texto de Overlay <span class="text-xs text-muted" style="font-weight:400;">(opcional — déjalo vacío si la imagen habla sola)</span></label>
+            <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
+              <button class="badge btn-suggestion-text" style="cursor:pointer; border:1px solid rgba(100,100,100,0.3); background:transparent; font-size:10px; padding:6px 10px; color:var(--text-muted);" data-text="">Sin texto</button>
+              ${suggestions.map(txt => `
+                <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">${txt}</button>
+              `).join('')}
+            </div>
+            <input type="text" class="form-input" id="custom-overlay-text" placeholder="Escribe tu texto de impacto (1-3 palabras máx)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
+          </div>`;
+        }
+      })()}
 
       <!-- Face auto-match -->
       <div class="card mb-md" style="background:var(--bg-tertiary); padding:var(--space-md);">
@@ -545,32 +764,59 @@ export async function renderEngine(container) {
         </select>
       </div>
 
-      <!-- Ángulos del batch (readonly, info only) -->
-      <div class="text-xs font-bold text-muted mb-sm" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} Ángulos en el Batch — ${selectedAngles.length} miniatura${selectedAngles.length !== 1 ? 's' : ''} a generar</div>
+      <!-- Ángulos del batch — seleccionables -->
+      ${(() => {
+        const activeSelection = batchAngleSelection ?? selectedAngles.map((_, i) => i);
+        const allSelected = activeSelection.length === selectedAngles.length;
+        const selectedCount = activeSelection.length;
+        return `
+      <div class="flex items-center gap-sm mb-sm" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} Seleccioná qué ángulos generar — <span style="color:var(--accent);">${selectedCount} de ${selectedAngles.length}</span> seleccionado${selectedCount !== 1 ? 's' : ''}</div>
+        <div class="flex gap-xs">
+          <button id="btn-batch-select-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(99,102,241,0.4); background:${allSelected ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#818cf8; cursor:pointer; font-weight:700; letter-spacing:0.5px;">Todos</button>
+          <button id="btn-batch-deselect-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:rgba(255,255,255,0.4); cursor:pointer; font-weight:700; letter-spacing:0.5px;">Ninguno</button>
+        </div>
+      </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:var(--space-sm); margin-bottom:var(--space-md);">
         ${selectedAngles.map((a, i) => {
-      const colors = PSYCH_COLORS[i % PSYCH_COLORS.length];
-      const letter = ['A', 'B', 'C', 'D', 'E'][i] || (i + 1);
-      const angleVariants = variants.filter(v => v.ai_metadata?.angle_name === a.name);
-      return `
-          <div class="card" style="padding:var(--space-md); background:${colors.bg}; border-color:${colors.badge}40;">
+          const colors = PSYCH_COLORS[i % PSYCH_COLORS.length];
+          const letter = ['A', 'B', 'C', 'D', 'E'][i] || (i + 1);
+          const angleVariants = variants.filter(v => v.ai_metadata?.angle_name === a.name);
+          const isSelected = activeSelection.includes(i);
+          return `
+          <div class="batch-angle-card" data-angle-idx="${i}" style="
+            padding:var(--space-md); border-radius:var(--radius-md); cursor:pointer;
+            background:${isSelected ? colors.bg : 'rgba(255,255,255,0.03)'};
+            border:1px solid ${isSelected ? colors.badge : 'rgba(255,255,255,0.08)'};
+            opacity:${isSelected ? '1' : '0.45'};
+            transition:all 0.15s ease;
+            user-select:none; position:relative;
+          ">
+            ${isSelected ? `<div style="position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;background:${colors.badge};display:flex;align-items:center;justify-content:center;">
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>` : `<div style="position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);"></div>`}
             <div class="flex items-center gap-sm mb-sm">
-              <div style="width:24px;height:24px;border-radius:50%;background:${colors.badge};display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:900;flex-shrink:0;">${letter}</div>
+              <div style="width:24px;height:24px;border-radius:50%;background:${isSelected ? colors.badge : 'rgba(255,255,255,0.1)'};display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:900;flex-shrink:0;">${letter}</div>
               <div class="font-bold" style="font-size:13px;">${a.name}</div>
             </div>
             ${a.visual_twist ? `<div class="text-xs text-muted" style="font-style:italic; line-height:1.4; font-size:10px;">"${a.visual_twist}"</div>` : ''}
             ${angleVariants.length > 0 ? `<div class="text-xs mt-sm" style="color:${colors.badge};">${icon('image', 10)} ${angleVariants.length} ya generada${angleVariants.length > 1 ? 's' : ''}</div>` : ''}
           </div>`;
-    }).join('')}
+        }).join('')}
       </div>
 
       ${selectedAngles.length === 0 ? `
         <p class="text-xs text-muted" style="text-align:center; opacity:0.6;">No hay ángulos. Volvé al Cerebro y generá ángulos de click.</p>
+      ` : selectedCount === 0 ? `
+        <div class="card" style="padding:var(--space-sm) var(--space-md); background:rgba(220,38,38,0.08); border-color:rgba(220,38,38,0.3); text-align:center;">
+          <span class="text-xs" style="color:#ef4444;">⚠️ Seleccioná al menos un ángulo para generar.</span>
+        </div>
       ` : `
         <div class="card" style="padding:var(--space-sm) var(--space-md); background:rgba(99,102,241,0.08); border-color:rgba(99,102,241,0.3); text-align:center;">
-          <span class="text-xs" style="color:#818cf8;">🧬 Fusión de Capas lista — cada ángulo recibe su propio <strong>Visual Twist</strong> como capa 4 del prompt. Las ${selectedAngles.length} imágenes resultantes serán distintas en enfoque psicológico pero coherentes con la marca.</span>
+          <span class="text-xs" style="color:#818cf8;">🧬 Fusión de Capas lista — ${selectedCount === selectedAngles.length ? `las ${selectedCount} imágenes` : `${selectedCount} imagen${selectedCount !== 1 ? 'es' : ''} (de ${selectedAngles.length} ángulos)`} recibirán su propio <strong>Visual Twist</strong> como capa 4 del prompt.</span>
         </div>
-      `}
+      `}`;
+      })()}
     </div>`;
   }
 
@@ -732,6 +978,7 @@ export async function renderEngine(container) {
             workflowStep = 1;
             selectedFormats = [];
             selectedStyleId = null;
+            batchAngleSelection = null;
           }
 
           await reloadProjects();
@@ -781,6 +1028,7 @@ export async function renderEngine(container) {
           workflowStep = 1;
           selectedFormats = [];
           selectedStyleId = null;
+          batchAngleSelection = null;
         }
         // Close dropdown
         if (dropdownPanel) dropdownPanel.style.display = 'none';
@@ -895,11 +1143,39 @@ export async function renderEngine(container) {
       });
     });
 
+    // ── BATCH ANGLE SELECTION ──
+    container.querySelectorAll('.batch-angle-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const project = getProject();
+        const allAngles = project?.logic_dna?.selected_angles || [];
+        const idx = parseInt(card.dataset.angleIdx, 10);
+        const current = batchAngleSelection ?? allAngles.map((_, i) => i);
+        if (current.includes(idx)) {
+          batchAngleSelection = current.filter(i => i !== idx);
+        } else {
+          batchAngleSelection = [...current, idx].sort((a, b) => a - b);
+        }
+        render();
+      });
+    });
+
+    document.getElementById('btn-batch-select-all')?.addEventListener('click', () => {
+      batchAngleSelection = null; // null = all
+      render();
+    });
+
+    document.getElementById('btn-batch-deselect-all')?.addEventListener('click', () => {
+      batchAngleSelection = [];
+      render();
+    });
+
     // ── GENERATE MASTER BATCH ──
     document.getElementById('btn-generate-master')?.addEventListener('click', async () => {
       const project = getProject();
       const selectedAngles = project?.logic_dna?.selected_angles || [];
-      if (!project || selectedAngles.length === 0 || !selectedStyleId || selectedFormats.length === 0) return;
+      const activeIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
+      const anglesToGenerate = selectedAngles.filter((_, i) => activeIndices.includes(i));
+      if (!project || anglesToGenerate.length === 0 || !selectedStyleId || selectedFormats.length === 0) return;
 
       const style = STYLES.find(s => s.id === selectedStyleId);
       const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
@@ -911,24 +1187,28 @@ export async function renderEngine(container) {
       isGenerating = true;
       render();
 
-      function patchBatchBtn(letter, current, total) {
-        const btn = document.getElementById('btn-generate-master');
-        if (!btn) return;
-        btn.disabled = true;
-        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Sintetizando Ángulo ${letter}... (${current}/${total})`;
-      }
+      showLoader(container, {
+        title: 'Sintetizando Miniaturas',
+        subtitle: `Generando ${anglesToGenerate.length} variante${anglesToGenerate.length !== 1 ? 's' : ''} — DNA Chain completo activo`,
+        detail: `ÁNGULO 1 / ${anglesToGenerate.length} — INICIANDO`,
+      });
 
       try {
-        for (let i = 0; i < selectedAngles.length; i++) {
-          const angle = selectedAngles[i];
-          const angleLetter = ['A', 'B', 'C', 'D', 'E'][i] || (i + 1);
-          patchBatchBtn(angleLetter, i + 1, selectedAngles.length);
-          toast(`Sintetizando Ángulo ${angleLetter}: "${angle.name}"`, 'info', 3000);
+        for (let i = 0; i < anglesToGenerate.length; i++) {
+          const angle = anglesToGenerate[i];
+          const angleLetter = ['A', 'B', 'C', 'D', 'E'][activeIndices[i]] || (activeIndices[i] + 1);
+          updateLoader({
+            title: `Sintetizando Ángulo ${angleLetter}`,
+            subtitle: `"${angle.name}" — aplicando Visual Twist único + ADN de Marca`,
+            detail: `VARIANTE ${i + 1} DE ${anglesToGenerate.length} — IMAGE GENERATION`,
+          });
           const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit });
-          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase() });
+          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase(), faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
         }
-        toast(`✅ Batch completado — ${selectedAngles.length} miniatura${selectedAngles.length !== 1 ? 's' : ''} generada${selectedAngles.length !== 1 ? 's' : ''}`, 'success', 4000);
+        hideLoader();
+        toast(`✅ Batch completado — ${anglesToGenerate.length} miniatura${anglesToGenerate.length !== 1 ? 's' : ''} generada${anglesToGenerate.length !== 1 ? 's' : ''}`, 'success', 4000);
       } catch (err) {
+        hideLoader();
         console.error('Batch generate error:', err);
         toast('Error al generar batch: ' + err.message, 'error');
       } finally {
@@ -957,9 +1237,18 @@ export async function renderEngine(container) {
         expandingVariantId = variantId;
         render();
 
+        showLoader(container, {
+          title: 'Generando Variaciones',
+          subtitle: `Creando ${count} interpretación${count !== 1 ? 'es' : ''} alternativa${count !== 1 ? 's' : ''} del mismo ángulo psicológico`,
+          detail: `VARIACIÓN 1 DE ${count} — IMAGE GENERATION`,
+        });
+
         try {
           const basePrompt = baseVariant.ai_metadata?.prompt || project.title;
           for (let i = 0; i < count; i++) {
+            updateLoader({
+              detail: `VARIACIÓN ${i + 1} DE ${count} — IMAGE GENERATION`,
+            });
             const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle, branding ADN, and video context. Change composition or color treatment while keeping the face (if present) and core message.`;
 
             const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
@@ -978,6 +1267,7 @@ export async function renderEngine(container) {
                   style: baseVariant.style_preset,
                   generating: true,
                   parent_id: variantId,
+                  face_image_url: baseVariant.ai_metadata?.face_image_url || null,
                 }
               })
               .select()
@@ -985,7 +1275,8 @@ export async function renderEngine(container) {
             if (insertErr) throw insertErr;
 
             try {
-              const dataUrl = await generateImage(variationPrompt);
+              const variationFaceUrl = baseVariant.ai_metadata?.face_image_url || null;
+              const dataUrl = await generateImage(variationPrompt, variationFaceUrl);
               const { data: sessionData } = await supabase.auth.getSession();
               const userId = sessionData?.session?.user?.id;
               const blob = await fetch(dataUrl).then(r => r.blob());
@@ -1005,9 +1296,11 @@ export async function renderEngine(container) {
             }
           }
         } catch (err) {
+          hideLoader();
           console.error('Expand error:', err);
           toast('Error al generar variaciones: ' + err.message, 'error');
         } finally {
+          hideLoader();
           expandingVariantId = null;
           await reloadProjects();
           render();
@@ -1067,8 +1360,10 @@ export async function renderEngine(container) {
     ].filter(Boolean).join('\n');
 
     // === SLOT 6: FACE INTEGRATION ===
+    // When a face image is attached to the request, instruct the model to USE that real person.
+    // Never describe facial traits as text — the model must anchor to the actual photo.
     const faceLayer = useFace && selectedFace
-      ? `CREATOR FACE (mandatory): Feature the creator's exact face with expression: ${requiredEmotion || selectedFace.expression_type}. Hyper-expressive, cinematic, over-the-top to match the psychological angle. High fidelity to creator's real facial structure.`
+      ? `CREATOR FACE (mandatory): The reference photo of the real creator is attached to this request as an image. You MUST use that exact real person's face — do NOT generate a fictional or AI-invented face. Preserve 100% of their real identity: bone structure, eyes, nose, mouth, hair, skin tone, piercing or any distinctive features. Required expression: ${requiredEmotion || selectedFace.expression_type} — make it hyper-expressive and over-the-top cinematic, but the face must unmistakably be the same real person from the reference photo.`
       : 'NO people or faces. Focus entirely on objects, environments, and graphic elements.';
 
     return `High-impact YouTube thumbnail — 16:9 aspect ratio — maximum CTR optimized.
@@ -1091,12 +1386,15 @@ ${adnLayer}
 ━━━ LAYER 6: CREATOR FACE ━━━
 ${faceLayer}
 
-FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High contrast against competition.`;
+FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High contrast against competition.
+
+━━━ REGLA ABSOLUTA — CERO TEXTO EN LA IMAGEN ━━━
+PROHIBIDO renderizar texto, palabras, letras, números o tipografía en cualquier parte de la imagen — ni en pantallas, señales, banners, barras, badges, carteles, ni en ningún otro lugar. Cualquier elemento de diseño que normalmente contendría texto (barras de chyron, tarjetas de título, etiquetas, marcas de agua, pantallas con código o mensajes) debe mostrar ÚNICAMENTE color sólido, formas geométricas, patrones visuales abstractos o íconos gráficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-producción como overlay. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.`;
   }
 
   // ── Helper: generate one image and save to DB ─────────────────────────────
   // Inserts placeholder, immediately updates UI, then generates image in background
-  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText, parentId = null }) {
+  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText, faceImageUrl = null, parentId = null }) {
     const isRealAngleId = angle.id && !String(angle.id).startsWith('ai-');
     const { data: inserted, error: insertErr } = await supabase
       .from('thumbnail_variants')
@@ -1113,6 +1411,7 @@ FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High
           style: style.label,
           generating: true,
           parent_id: parentId,
+          face_image_url: faceImageUrl || null,
         }
       })
       .select()
@@ -1125,7 +1424,7 @@ FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High
     render();
 
     try {
-      const dataUrl = await generateImage(imagePrompt);
+      const dataUrl = await generateImage(imagePrompt, faceImageUrl);
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id;
       const blob = await fetch(dataUrl).then(r => r.blob());

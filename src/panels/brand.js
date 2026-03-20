@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
+import { showLoader, hideLoader } from '../lib/loader.js';
 
 function triggerFileInput(accept, callback) {
   const input = document.createElement('input');
@@ -367,8 +368,12 @@ export async function renderBrand(container) {
         const btn = document.getElementById('btn-save-adn-answers');
         const originalHtml = btn.innerHTML;
         try {
-          btn.innerHTML = `<span class="animate-pulse">${icon('clock', 12)}</span> Re-Sintetizando...`;
           btn.disabled = true;
+          showLoader(container, {
+            title: 'Re-Sintetizando ADN',
+            subtitle: 'La IA está procesando tus respuestas actualizadas para reconstruir los pilares estratégicos del canal.',
+            detail: 'ADN SYNTHESIS',
+          });
 
           const updatedAnswers = Array.from(container.querySelectorAll('.adn-answer-item')).map(div => ({
             q: adn.interview[div.dataset.index]?.q || '',
@@ -386,8 +391,10 @@ export async function renderBrand(container) {
             detailed_adn: { synthesis, interview: updatedAnswers }
           }, { onConflict: 'channel_id' });
 
+          hideLoader();
           renderBrand(container);
         } catch (err) {
+          hideLoader();
           alert('Error: ' + err.message);
           btn.innerHTML = originalHtml;
           btn.disabled = false;
@@ -421,8 +428,12 @@ export async function renderBrand(container) {
         if (styleRefList.length === 0) return;
         const originalHtml = btn.innerHTML;
         try {
-          btn.innerHTML = `<span class="animate-pulse">${icon('clock', 12)}</span> Analizando...`;
           btn.disabled = true;
+          showLoader(container, {
+            title: 'Analizando Firma Visual',
+            subtitle: `Extrayendo paleta, composición, iluminación y patrón ganador de ${styleRefList.length} miniatura${styleRefList.length !== 1 ? 's' : ''} exitosa${styleRefList.length !== 1 ? 's' : ''}.`,
+            detail: 'STYLE ANALYSIS',
+          });
 
           const urls = styleRefList.map(r => r.image_url).join('\n');
           const summary = await callAI(
@@ -439,8 +450,10 @@ export async function renderBrand(container) {
 
           renderBrand(container);
         } catch (err) {
+          hideLoader();
           alert('Error al analizar estilo: ' + err.message);
         } finally {
+          hideLoader();
           if (btn) { btn.innerHTML = originalHtml; btn.disabled = styleRefList.length === 0; }
         }
       });

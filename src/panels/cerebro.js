@@ -3,6 +3,7 @@ import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
 import { toast } from '../lib/toast.js';
+import { showLoader, updateLoader, hideLoader } from '../lib/loader.js';
 
 export async function renderCerebro(container) {
   const { activeChannelId } = getState();
@@ -469,16 +470,25 @@ export async function renderCerebro(container) {
       if (!textToProcess.trim()) { toast('Ingresá el guión o contexto primero', 'warning'); return; }
       const btn = document.getElementById('btn-process-script');
       const originalHtml = btn.innerHTML;
-      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 16)}</span> Analizando...`;
       btn.disabled = true;
+      const loaderSubtitle = inputType === 'script'
+        ? 'Extrayendo hook, tensión, promesa, briefing visual y decisión de texto...'
+        : 'Analizando tu idea y construyendo el ADN visual del video...';
+      showLoader(container, {
+        title: 'Analizando ' + (inputType === 'script' ? 'Guión' : 'Contexto'),
+        subtitle: loaderSubtitle,
+        detail: inputType === 'script' ? 'SCRIPT ANALYSIS' : 'CONTEXT ANALYSIS',
+      });
       try {
         const { data: brandKit } = await supabase.from('brand_kits').select('detailed_adn').eq('channel_id', activeChannelId).maybeSingle();
         const adn = brandKit?.detailed_adn || {};
         const promptModel = inputType === 'script' ? 'SCRIPT_ANALYSIS' : 'CONTEXT_ANALYSIS';
         analysisResult = await callAI(promptModel, textToProcess, adn);
+        hideLoader();
         render();
       } catch (err) {
         console.error('Data Processing Error:', err);
+        hideLoader();
         toast('Error al analizar: ' + err.message, 'error');
         btn.innerHTML = originalHtml;
         btn.disabled = false;
@@ -575,6 +585,11 @@ export async function renderCerebro(container) {
   async function generateAnglesForVideo() {
     isGeneratingAngles = true;
     render();
+    showLoader(container, {
+      title: 'Generando Ángulos de Click',
+      subtitle: 'La IA está creando 5 ángulos psicológicamente opuestos: Miedo, Curiosidad, Autoridad, Contraste y Urgencia.',
+      detail: 'ANGLES GENERATION — A / B / C / D / E',
+    });
     try {
       const textContent = scriptText || contextText;
       const context = {
@@ -589,6 +604,7 @@ export async function renderCerebro(container) {
       console.error('Angles generation error:', err);
       generatedAngles = [];
     } finally {
+      hideLoader();
       isGeneratingAngles = false;
       render();
     }

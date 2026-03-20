@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
+import { showLoader, hideLoader } from '../lib/loader.js';
 
 // --- Storage upload (one file) ---
 async function uploadToStorage(file, channelId, userId) {
@@ -310,10 +311,13 @@ export async function renderEspionaje(container) {
     btn.addEventListener('click', async () => {
       const originalHtml = btn.innerHTML;
       try {
-        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span>`;
         btn.disabled = true;
-
         const ref = savedReferences.find(r => r.id === btn.dataset.refId);
+        showLoader(container, {
+          title: 'Decodificando Competencia',
+          subtitle: `Analizando "${ref?.title || 'referencia'}" — extrayendo paleta, patrones a evitar y CTR estimado.`,
+          detail: 'ESPIONAGE ANALYSIS',
+        });
         const analysis = await callAI('ESPIONAGE_ANALYSIS', `Referencia: ${ref.title}`, { url: ref.image_url });
 
         await supabase.from('visual_references').update({
@@ -322,8 +326,10 @@ export async function renderEspionaje(container) {
 
         renderEspionaje(container);
       } catch (err) {
+        hideLoader();
         alert('Error: ' + err.message);
       } finally {
+        hideLoader();
         btn.innerHTML = originalHtml;
         btn.disabled = false;
       }
