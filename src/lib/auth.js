@@ -57,7 +57,7 @@ async function fetchWithRetry(fn, label, maxAttempts = 3) {
 export async function loadUserProfile(userId) {
     const { data, error } = await fetchWithRetry(
         () => supabase.from('profiles')
-            .select('id, email, full_name, avatar_url, subscription_tier, created_at')
+            .select('id, email, full_name, avatar_url, subscription_tier, role, created_at')
             .eq('id', userId)
             .single(),
         'Perfil'
@@ -65,11 +65,24 @@ export async function loadUserProfile(userId) {
     if (error) {
         if (error.code === 'PGRST116') {
             const { data: { user } } = await supabase.auth.getUser();
-            if (user) return { id: user.id, email: user.email, full_name: user.user_metadata?.full_name || 'Usuario', subscription_tier: 'Free' };
+            if (user) return { id: user.id, email: user.email, full_name: user.user_metadata?.full_name || 'Usuario', subscription_tier: 'Free', role: 'user' };
         }
         throw error;
     }
     return data;
+}
+
+export async function loadUserSubscription(userId) {
+    const { data, error } = await supabase
+        .from('subscriptions')
+        .select('status, duration_type, start_date, end_date, block_date')
+        .eq('user_id', userId)
+        .single();
+    if (error && error.code !== 'PGRST116') {
+        console.warn('Subscription load error:', error.message);
+        return null;
+    }
+    return data || null;
 }
 
 let channelsPromise = null;
@@ -184,14 +197,18 @@ async function loadUserData(session) {
             session
         });
 
-        const [profile, channels] = await Promise.all([
+        const [profile, channels, subscription] = await Promise.all([
             loadUserProfile(userId).catch(err => {
                 console.warn('Profile load failed (non-critical):', err.message);
-                return { id: userId, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Usuario' };
+                return { id: userId, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Usuario', role: 'user' };
             }),
             loadUserChannels(userId).catch(err => {
                 console.warn('Channels load failed (non-critical):', err.message);
                 return [];
+            }),
+            loadUserSubscription(userId).catch(err => {
+                console.warn('Subscription load failed (non-critical):', err.message);
+                return null;
             })
         ]);
 
@@ -207,6 +224,7 @@ async function loadUserData(session) {
             session,
             channels,
             activeChannelId,
+            subscription,
             isAuthInitializing: false,
             isLoadingChannels: false
         });

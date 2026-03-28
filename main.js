@@ -13,6 +13,7 @@ import { renderEditor } from './src/panels/editor.js';
 import { renderLogin } from './src/panels/login.js';
 import { renderSettings } from './src/panels/settings.js';
 import { renderChannelSelector } from './src/panels/channel-selector.js';
+import { renderAdmin } from './src/panels/admin.js';
 import { initAuth } from './src/lib/auth.js';
 import { getState, subscribe } from './src/lib/state.js';
 import { icon } from './src/icons.js';
@@ -28,6 +29,7 @@ registerRoute('engine', renderEngine);
 registerRoute('editor', renderEditor);
 registerRoute('settings', renderSettings);
 registerRoute('channel-selector', renderChannelSelector);
+registerRoute('admin', renderAdmin);
 
 // Initialize app
 function initApp() {
@@ -44,7 +46,7 @@ function initApp() {
   let lastChannelCount = -1;
 
   function renderApp() {
-    const { session, currentUser, activeChannelId, isAuthInitializing, isLoadingChannels, channels } = getState();
+    const { session, currentUser, activeChannelId, isAuthInitializing, isLoadingChannels, channels, subscription } = getState();
 
     // 0. Handle Initialization (Prevent flicker to login)
     if (isAuthInitializing) {
@@ -93,7 +95,28 @@ function initApp() {
       return;
     }
 
-    // 3. Setup Authenticated Layout
+    // 3. Subscription guard (skip for admins)
+    if (currentUser?.role !== 'admin' && currentUser?.id) {
+      if (subscription === undefined) return; // still loading
+      if (!subscription || subscription.status === 'blocked') {
+        app.classList.remove('login-mode');
+        sidebar.innerHTML = ''; sidebar.style.display = 'none';
+        topbar.innerHTML = ''; topbar.style.display = 'none';
+        workflowBar.innerHTML = ''; workflowBar.style.display = 'none';
+        workspace.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:24px;text-align:center;padding:40px;">
+            <div style="font-size:48px;">${icon('lock', 48)}</div>
+            <h2 style="font-size:24px;font-weight:800;">Acceso suspendido</h2>
+            <p style="color:var(--text-tertiary);max-width:400px;">Tu período de acceso ha vencido o fue suspendido. Contactá al administrador para renovar tu suscripción.</p>
+            <a href="mailto:lopezaxelalejandro@gmail.com" class="btn btn-primary">Contactar al administrador</a>
+            <button class="btn btn-ghost btn-sm" onclick="document.dispatchEvent(new Event('signout-requested'))">Cerrar sesión</button>
+          </div>`;
+        document.addEventListener('signout-requested', () => { import('./src/lib/auth.js').then(m => m.signOut()); }, { once: true });
+        return;
+      }
+    }
+
+    // 4. Setup Authenticated Layout
     app.classList.remove('login-mode');
     sidebar.style.display = '';
     topbar.style.display = '';

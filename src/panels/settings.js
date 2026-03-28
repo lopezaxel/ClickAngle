@@ -10,11 +10,8 @@ export function renderSettings(container) {
     return;
   }
 
-  // RENDER IMMEDIATELY (synchronous) with a placeholder for the key field
-  // Then fetch the masked key in the background — avoids the 8s Panel Render Timeout
   renderSettingsUI(container, null);
 
-  // Fire-and-forget: fetch real key data in background (never blocks the router)
   supabase.rpc('get_masked_api_keys').then(({ data, error }) => {
     if (!error && data) {
       renderSettingsUI(container, data);
@@ -23,9 +20,10 @@ export function renderSettings(container) {
 }
 
 function renderSettingsUI(container, maskedKeys) {
+  const { currentUser } = getState();
+  const isAdmin = currentUser?.role === 'admin';
   const googlePlaceholder = (maskedKeys?.google_ai_key_set) ? maskedKeys.google_ai_key_masked : 'AIza...';
   const keyStatus = maskedKeys?.google_ai_key_set;
-
 
   const html = `<div class="animate-in">
     <div class="section-header">
@@ -103,6 +101,61 @@ function renderSettingsUI(container, maskedKeys) {
         </div>
       </div>
     </div>
+
+    ${isAdmin ? `
+    <!-- ADMIN: Gestión de Usuarios -->
+    <div style="margin-top:var(--space-xl);">
+      <div class="section-header" style="margin-bottom:var(--space-md);">
+        <div>
+          <h3 style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;color:#f59e0b;">
+            ${icon('user', 16)} Gestión de Usuarios <span style="font-size:10px;background:rgba(245,158,11,0.2);color:#f59e0b;padding:2px 8px;border-radius:4px;font-weight:700;">ADMIN</span>
+          </h3>
+          <p class="section-subtitle">Crear, bloquear o eliminar usuarios de la plataforma</p>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-open-create-user" style="background:#f59e0b;border-color:#f59e0b;">
+          ${icon('user', 14)} Crear Usuario
+        </button>
+      </div>
+
+      <!-- Create User Modal (hidden by default) -->
+      <div id="create-user-modal" style="display:none;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-lg);margin-bottom:var(--space-lg);">
+        <h4 style="margin-bottom:var(--space-md);font-size:14px;">Nuevo Usuario</h4>
+        <div class="grid-2" style="gap:var(--space-md);margin-bottom:var(--space-md);">
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="new-user-email" placeholder="usuario@email.com" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Duración del acceso</label>
+            <select class="form-select" id="new-user-duration">
+              <option value="7days">7 días</option>
+              <option value="14days">14 días</option>
+              <option value="1month" selected>1 mes</option>
+              <option value="2months">2 meses</option>
+              <option value="3months">3 meses</option>
+              <option value="forever">Para siempre</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:var(--space-md);">
+          <label class="form-label">Notas (opcional)</label>
+          <input type="text" class="form-input" id="new-user-notes" placeholder="Ej: Cliente prueba, influencer, etc." />
+        </div>
+        <div id="create-user-feedback" style="display:none;margin-bottom:var(--space-md);"></div>
+        <div class="flex gap-sm">
+          <button class="btn btn-primary btn-sm" id="btn-confirm-create-user" style="background:#f59e0b;border-color:#f59e0b;">${icon('user', 14)} Crear y Generar Link</button>
+          <button class="btn btn-ghost btn-sm" id="btn-cancel-create-user">Cancelar</button>
+        </div>
+      </div>
+
+      <!-- Users Table -->
+      <div class="card" id="users-table-container">
+        <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.3);padding:20px;">
+          <div class="loader" style="width:16px;height:16px;border-width:2px"></div> Cargando usuarios...
+        </div>
+      </div>
+    </div>
+    ` : ''}
   </div>`;
 
   container.innerHTML = html;
@@ -186,14 +239,14 @@ function renderSettingsUI(container, maskedKeys) {
     testBtn.onclick = async () => {
       const originalHtml = testBtn.innerHTML;
       const feedback = document.getElementById('save-keys-feedback');
-      
+
       testBtn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Testeando...`;
       testBtn.disabled = true;
       feedback.style.display = 'block';
       feedback.innerHTML = `<div class="text-xs" style="color:var(--accent);"><span class="animate-pulse">${icon('clock', 12)}</span> Verificando estado actual...</div>`;
 
       const isValid = await checkApiKey();
-      
+
       if (isValid) {
         feedback.innerHTML = `<div class="card" style="border-left: 3px solid var(--success); background: rgba(16, 185, 129, 0.05); padding: var(--space-sm) var(--space-md);">
           <div class="text-xs" style="color:var(--success); font-weight:700;">${icon('check', 14)} Conexión activa</div>
@@ -205,9 +258,178 @@ function renderSettingsUI(container, maskedKeys) {
           <div class="text-xs text-muted">No pudimos comunicarnos con Google AI. Verifica tu clave o tu conexión a internet.</div>
         </div>`;
       }
-      
+
       testBtn.innerHTML = originalHtml;
       testBtn.disabled = false;
     };
   }
+
+  // ---- ADMIN: User Management ----
+  if (isAdmin) {
+    loadUsersTable();
+
+    document.getElementById('btn-open-create-user')?.addEventListener('click', () => {
+      const modal = document.getElementById('create-user-modal');
+      if (modal) modal.style.display = modal.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.getElementById('btn-cancel-create-user')?.addEventListener('click', () => {
+      document.getElementById('create-user-modal').style.display = 'none';
+      document.getElementById('create-user-feedback').style.display = 'none';
+    });
+
+    document.getElementById('btn-confirm-create-user')?.addEventListener('click', async () => {
+      const email = document.getElementById('new-user-email')?.value.trim();
+      const duration_type = document.getElementById('new-user-duration')?.value;
+      const notes = document.getElementById('new-user-notes')?.value.trim();
+      const feedback = document.getElementById('create-user-feedback');
+      const btn = document.getElementById('btn-confirm-create-user');
+
+      if (!email) {
+        feedback.style.display = 'block';
+        feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">Ingresá un email válido.</div>`;
+        return;
+      }
+
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Creando...`;
+      btn.disabled = true;
+      feedback.style.display = 'block';
+      feedback.innerHTML = `<div class="text-xs" style="color:var(--accent);">Creando usuario y generando link de acceso...</div>`;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const response = await fetch(
+          `https://ahbrflukfncghlyscogq.supabase.co/functions/v1/invite-user`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ email, duration_type, notes })
+          }
+        );
+        const result = await response.json();
+        if (!response.ok || result.error) throw new Error(result.error || 'Error desconocido');
+
+        feedback.innerHTML = `
+          <div class="card" style="border-left:3px solid var(--success);background:rgba(16,185,129,0.05);padding:var(--space-md);">
+            <div class="text-xs" style="color:var(--success);font-weight:700;margin-bottom:8px;">${icon('check', 14)} Usuario creado exitosamente</div>
+            ${result.magic_link ? `
+              <div class="text-xs text-muted" style="margin-bottom:6px;">Link de acceso (válido por 1 hora):</div>
+              <div style="background:var(--surface-3);padding:8px;border-radius:6px;word-break:break-all;font-size:10px;font-family:monospace;color:var(--text-secondary);">${result.magic_link}</div>
+              <button class="btn btn-secondary btn-sm" style="margin-top:8px;font-size:11px;" onclick="navigator.clipboard.writeText('${result.magic_link}').then(()=>this.innerHTML='¡Copiado!')">
+                ${icon('copy', 12)} Copiar link
+              </button>
+            ` : '<div class="text-xs text-muted">El usuario fue creado. Generá un link manualmente desde Supabase si es necesario.</div>'}
+          </div>`;
+
+        document.getElementById('new-user-email').value = '';
+        document.getElementById('new-user-notes').value = '';
+        loadUsersTable();
+
+      } catch (err) {
+        feedback.innerHTML = `<div class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 12)} Error: ${err.message}</div>`;
+      } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+      }
+    });
+  }
+}
+
+async function loadUsersTable() {
+  const tableContainer = document.getElementById('users-table-container');
+  if (!tableContainer) return;
+
+  const { data: users, error } = await supabase.rpc('admin_list_users');
+  if (error) {
+    tableContainer.innerHTML = `<div class="text-xs" style="color:var(--danger);">Error cargando usuarios: ${error.message}</div>`;
+    return;
+  }
+
+  const durationLabel = { '7days': '7 días', '14days': '14 días', '1month': '1 mes', '2months': '2 meses', '3months': '3 meses', 'forever': 'Para siempre' };
+  const statusColor = { active: 'var(--success)', blocked: 'var(--danger)', sin_suscripcion: '#f59e0b', deleted: 'var(--text-tertiary)' };
+  const statusLabel = { active: 'Activo', blocked: 'Bloqueado', sin_suscripcion: 'Sin suscripción', deleted: 'Eliminado' };
+
+  const { icon: iconFn } = await import('../icons.js');
+
+  tableContainer.innerHTML = `
+    <div class="card-header" style="margin-bottom:var(--space-md);">
+      <div class="card-title">${iconFn('user', 14)} Usuarios registrados (${users.length})</div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="color:var(--text-tertiary);text-align:left;">
+            <th style="padding:8px 12px;border-bottom:1px solid var(--border);">Email</th>
+            <th style="padding:8px 12px;border-bottom:1px solid var(--border);">Rol</th>
+            <th style="padding:8px 12px;border-bottom:1px solid var(--border);">Estado</th>
+            <th style="padding:8px 12px;border-bottom:1px solid var(--border);">Duración</th>
+            <th style="padding:8px 12px;border-bottom:1px solid var(--border);">Vence</th>
+            <th style="padding:8px 12px;border-bottom:1px solid var(--border);">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => {
+            const isCurrentAdmin = u.role === 'admin';
+            const venceText = u.duration_type === 'forever' ? 'Nunca'
+              : u.end_date ? new Date(u.end_date).toLocaleDateString('es-AR') : '—';
+            const color = statusColor[u.status] || 'var(--text-tertiary)';
+            return `
+              <tr style="border-bottom:1px solid var(--border);" data-user-id="${u.user_id}">
+                <td style="padding:10px 12px;">
+                  <div style="font-weight:600;">${u.full_name || '—'}</div>
+                  <div style="color:var(--text-tertiary);font-size:11px;">${u.email}</div>
+                </td>
+                <td style="padding:10px 12px;">
+                  <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${isCurrentAdmin ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.05)'};color:${isCurrentAdmin ? '#f59e0b' : 'var(--text-tertiary)'};">
+                    ${isCurrentAdmin ? 'ADMIN' : 'USER'}
+                  </span>
+                </td>
+                <td style="padding:10px 12px;">
+                  <span style="font-size:11px;font-weight:700;color:${color};">${statusLabel[u.status] || u.status}</span>
+                </td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">${durationLabel[u.duration_type] || '—'}</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">${venceText}</td>
+                <td style="padding:10px 12px;">
+                  ${isCurrentAdmin ? '<span style="color:var(--text-tertiary);font-size:11px;">—</span>' : `
+                    <div class="flex gap-xs">
+                      ${u.status === 'active'
+                        ? `<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:3px 8px;" data-action="block" data-uid="${u.user_id}">Bloquear</button>`
+                        : `<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:3px 8px;color:var(--success);" data-action="unblock" data-uid="${u.user_id}">Activar</button>`
+                      }
+                      <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:rgba(220,38,38,0.1);color:var(--danger);border:1px solid rgba(220,38,38,0.3);" data-action="delete" data-uid="${u.user_id}">Eliminar</button>
+                    </div>
+                  `}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Bind action buttons
+  tableContainer.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      const uid = btn.dataset.uid;
+
+      if (action === 'delete') {
+        if (!confirm('¿Eliminar este usuario y TODOS sus datos? Esta acción es irreversible.')) return;
+        btn.disabled = true;
+        const { error } = await supabase.rpc('admin_delete_user', { target_user_id: uid });
+        if (error) { alert('Error: ' + error.message); btn.disabled = false; return; }
+      } else {
+        btn.disabled = true;
+        const newStatus = action === 'block' ? 'blocked' : 'active';
+        const { error } = await supabase.rpc('admin_set_user_status', { target_user_id: uid, new_status: newStatus });
+        if (error) { alert('Error: ' + error.message); btn.disabled = false; return; }
+      }
+      loadUsersTable();
+    });
+  });
 }

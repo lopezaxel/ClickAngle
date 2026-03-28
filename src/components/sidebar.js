@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 export function renderSidebar(container) {
   const current = getCurrentRoute();
   const { currentUser, channels, activeChannelId } = getState();
+  const isAdmin = currentUser?.role === 'admin';
   const activeChannel = channels.find(c => c.id === activeChannelId);
 
   const sections = {};
@@ -65,6 +66,12 @@ export function renderSidebar(container) {
 
   html += `
     <div class="sidebar-section" style="margin-top:auto; border-top:1px solid var(--border); padding-top:var(--space-md);">
+      ${isAdmin ? `
+      <a class="nav-item ${current === 'admin' ? 'active' : ''}" href="#admin" data-route="admin" style="color: #f59e0b;">
+        <span class="nav-icon">${icon('barChart', 18)}</span>
+        <span>Admin Panel</span>
+        <span class="nav-badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;font-size:9px;">ADMIN</span>
+      </a>` : ''}
       <a class="nav-item" href="#settings" data-route="settings">
         <span class="nav-icon">${icon('sliders', 18)}</span>
         <span>Configuración</span>
