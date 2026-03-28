@@ -136,6 +136,13 @@ function renderSettingsUI(container, maskedKeys) {
               <option value="forever">Para siempre</option>
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">Rol</label>
+            <select class="form-select" id="new-user-role">
+              <option value="user" selected>Usuario (cliente)</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
         </div>
         <div class="form-group" style="margin-bottom:var(--space-md);">
           <label class="form-label">Notas (opcional)</label>
@@ -281,6 +288,7 @@ function renderSettingsUI(container, maskedKeys) {
     document.getElementById('btn-confirm-create-user')?.addEventListener('click', async () => {
       const email = document.getElementById('new-user-email')?.value.trim();
       const duration_type = document.getElementById('new-user-duration')?.value;
+      const role = document.getElementById('new-user-role')?.value;
       const notes = document.getElementById('new-user-notes')?.value.trim();
       const feedback = document.getElementById('create-user-feedback');
       const btn = document.getElementById('btn-confirm-create-user');
@@ -307,7 +315,7 @@ function renderSettingsUI(container, maskedKeys) {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session.access_token}`
             },
-            body: JSON.stringify({ email, duration_type, notes })
+            body: JSON.stringify({ email, duration_type, role, notes })
           }
         );
         const result = await response.json();
@@ -373,7 +381,7 @@ async function loadUsersTable() {
         </thead>
         <tbody>
           ${users.map(u => {
-            const isCurrentAdmin = u.role === 'admin';
+            const isCurrentAdmin = u.user_role === 'admin';
             const venceText = u.duration_type === 'forever' ? 'Nunca'
               : u.end_date ? new Date(u.end_date).toLocaleDateString('es-AR') : '—';
             const color = statusColor[u.status] || 'var(--text-tertiary)';
