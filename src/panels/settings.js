@@ -144,10 +144,6 @@ function renderSettingsUI(container, maskedKeys) {
             </select>
           </div>
         </div>
-        <div class="form-group" style="margin-bottom:var(--space-md);">
-          <label class="form-label">Notas (opcional)</label>
-          <input type="text" class="form-input" id="new-user-notes" placeholder="Ej: Cliente prueba, influencer, etc." />
-        </div>
         <div id="create-user-feedback" style="display:none;margin-bottom:var(--space-md);"></div>
         <div class="flex gap-sm">
           <button class="btn btn-primary btn-sm" id="btn-confirm-create-user" style="background:#f59e0b;border-color:#f59e0b;">${icon('user', 14)} Crear y Generar Link</button>
@@ -289,7 +285,6 @@ function renderSettingsUI(container, maskedKeys) {
       const email = document.getElementById('new-user-email')?.value.trim();
       const duration_type = document.getElementById('new-user-duration')?.value;
       const role = document.getElementById('new-user-role')?.value;
-      const notes = document.getElementById('new-user-notes')?.value.trim();
       const feedback = document.getElementById('create-user-feedback');
       const btn = document.getElementById('btn-confirm-create-user');
 
@@ -315,7 +310,7 @@ function renderSettingsUI(container, maskedKeys) {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session.access_token}`
             },
-            body: JSON.stringify({ email, duration_type, role, notes })
+            body: JSON.stringify({ email, duration_type, role })
           }
         );
         const result = await response.json();
@@ -334,7 +329,6 @@ function renderSettingsUI(container, maskedKeys) {
           </div>`;
 
         document.getElementById('new-user-email').value = '';
-        document.getElementById('new-user-notes').value = '';
         loadUsersTable();
 
       } catch (err) {
