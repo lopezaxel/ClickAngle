@@ -20,13 +20,55 @@ export async function signUp(email, password, fullName) {
 export function signOut() {
     localStorage.removeItem('clickangles_active_channel');
     Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('sb-') || key.includes('supabase.auth')) {
+        if (key.startsWith('sb-') || key.includes('supabase.auth') || key.startsWith('ca_cache_v')) {
             localStorage.removeItem(key);
         }
     });
     setState({ currentUser: null, session: null, activeChannelId: null, channels: [], isLoadingChannels: false });
     supabase.auth.signOut().catch(err => console.warn('Sign out server-side error (non-critical):', err));
 }
+
+// --- User data cache (stale-while-revalidate) ---
+// Cache key is scoped per userId so users never see each other's data.
+const CACHE_VERSION = 1;
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function getCacheKey(userId) {
+    return `ca_cache_v${CACHE_VERSION}_${userId}`;
+}
+
+function loadFromCache(userId) {
+    try {
+        const raw = localStorage.getItem(getCacheKey(userId));
+        if (!raw) return null;
+        const cached = JSON.parse(raw);
+        // Double-check userId matches (safety guard)
+        if (cached.userId !== userId) return null;
+        // Expire stale entries
+        if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
+            localStorage.removeItem(getCacheKey(userId));
+            return null;
+        }
+        return cached;
+    } catch (e) {
+        return null;
+    }
+}
+
+function saveToCache(userId, profile, channels, subscription) {
+    try {
+        localStorage.setItem(getCacheKey(userId), JSON.stringify({
+            userId,
+            timestamp: Date.now(),
+            profile,
+            channels,
+            subscription,
+        }));
+    } catch (e) {
+        // Ignore quota errors silently
+    }
+}
+// --- End cache ---
 
 async function fetchWithTimeout(promise, ms, label) {
     return Promise.race([
@@ -190,34 +232,59 @@ async function loadUserData(session) {
     loadingUserId = userId;
 
     try {
-        setState({
-            currentUser: {
-                id: userId,
-                email: session.user.email,
-                full_name: session.user.user_metadata?.full_name || 'Cargando...',
-                subscription_tier: '...',
-            },
-            session
-        });
+        // --- CACHE-FIRST: show the app instantly if cached data exists ---
+        // The Supabase client lock can delay API queries 30-35s on cold load.
+        // Serving cached data first eliminates the black screen entirely.
+        // Fresh data is always fetched below and will silently update the UI.
+        const cached = loadFromCache(userId);
+        if (cached) {
+            const cachedActiveId = restoreActiveChannel(cached.channels)
+                || localStorage.getItem('clickangles_active_channel');
+            setState({
+                currentUser: cached.profile,
+                session,
+                channels: cached.channels,
+                activeChannelId: cachedActiveId,
+                subscription: cached.subscription,
+                isAuthInitializing: false,
+                isLoadingChannels: false,
+            });
+        } else {
+            // No cache yet — show a minimal placeholder so the loading screen
+            // transitions to the layout while data is fetched.
+            setState({
+                currentUser: {
+                    id: userId,
+                    email: session.user.email,
+                    full_name: session.user.user_metadata?.full_name || 'Cargando...',
+                    subscription_tier: '...',
+                },
+                session,
+            });
+        }
+        // --- END CACHE-FIRST ---
 
+        // Always fetch fresh data from Supabase (runs in background if cache hit).
         const [profile, channels, subscription] = await Promise.all([
             loadUserProfile(userId).catch(err => {
                 console.warn('Profile load failed (non-critical):', err.message);
-                return { id: userId, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Usuario', role: 'user' };
+                return cached?.profile || { id: userId, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Usuario', role: 'user' };
             }),
             loadUserChannels(userId).catch(err => {
                 console.warn('Channels load failed (non-critical):', err.message);
-                return [];
+                return cached?.channels || [];
             }),
             loadUserSubscription(userId).catch(err => {
                 console.warn('Subscription load failed (non-critical):', err.message);
-                return { status: 'load_error' };
+                return cached?.subscription || { status: 'load_error' };
             })
         ]);
 
+        // Persist fresh data so the next F5 is instant too.
+        saveToCache(userId, profile, channels, subscription);
+
         let activeChannelId = restoreActiveChannel(channels);
         if (!activeChannelId) {
-            // Fallback: recover from localStorage so Brand Kit doesn't show "Selecciona un canal"
             const saved = localStorage.getItem('clickangles_active_channel');
             if (saved) activeChannelId = saved;
         }
@@ -229,7 +296,7 @@ async function loadUserData(session) {
             activeChannelId,
             subscription,
             isAuthInitializing: false,
-            isLoadingChannels: false
+            isLoadingChannels: false,
         });
     } catch (err) {
         console.error('loadUserData critical error:', err);
@@ -264,20 +331,27 @@ export async function initAuth(onReady) {
     }, 35000);
 
     // onAuthStateChange handles TOKEN_REFRESHED, SIGNED_IN, SIGNED_OUT, etc.
-    // We only act on SIGNED_OUT here — initial load is handled by getSession() below
-    // to avoid the double-call bug (getSession + onAuthStateChange both firing on startup)
+    // TOKEN_REFRESHED and SIGNED_IN are handled separately:
+    // - TOKEN_REFRESHED: fired by Supabase's internal _recoverAndRefresh on startup.
+    //   Awaiting loadUserData here blocks _recoverAndRefresh, which blocks getSession(),
+    //   creating a deadlock where all DB queries hang until timeout. Just update the
+    //   session token and let getSession() below handle the initial data load.
+    // - SIGNED_IN: fired on actual user logins, safe to load data here.
     supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
             loadingUserId = null;
             setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
             finish();
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            // TOKEN_REFRESHED fires every ~60min — only reload if we don't have channels yet
+        } else if (event === 'TOKEN_REFRESHED') {
+            // Only update the session token — data loading is handled by getSession() below.
+            if (session) setState({ session });
+            finish();
+        } else if (event === 'SIGNED_IN') {
+            // Fires on actual user logins (not startup token refresh).
             const { channels } = getState();
             if (session && channels.length === 0) {
                 await loadUserData(session);
             } else if (session) {
-                // Just update the session token silently
                 setState({ session });
             }
             finish();
