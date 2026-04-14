@@ -36,8 +36,8 @@ async function fetchWithTimeout(promise, ms, label) {
 }
 
 async function fetchWithRetry(fn, label, maxAttempts = 3) {
-    const delays = [0, 5000, 10000]; // immediate, 5s, 10s
-    const timeout = 25000;
+    const delays = [0, 1000, 2000]; // Pro plan: mucho más rápido que Free (era 5s/10s)
+    const timeout = 15000;         // Pro plan: 15s es suficiente (era 25s en Free)
     let lastError;
     for (let i = 0; i < maxAttempts; i++) {
         if (delays[i] > 0) {
@@ -73,11 +73,14 @@ export async function loadUserProfile(userId) {
 }
 
 export async function loadUserSubscription(userId) {
-    const { data, error } = await supabase
-        .from('subscriptions')
-        .select('status, duration_type, start_date, end_date, block_date')
-        .eq('user_id', userId)
-        .single();
+    const { data, error } = await fetchWithRetry(
+        () => supabase
+            .from('subscriptions')
+            .select('status, duration_type, start_date, end_date, block_date')
+            .eq('user_id', userId)
+            .single(),
+        'Suscripción'
+    );
     if (error && error.code !== 'PGRST116') {
         console.warn('Subscription load error:', error.message);
         return null;
@@ -208,7 +211,7 @@ async function loadUserData(session) {
             }),
             loadUserSubscription(userId).catch(err => {
                 console.warn('Subscription load failed (non-critical):', err.message);
-                return null;
+                return { status: 'load_error' };
             })
         ]);
 
@@ -242,16 +245,23 @@ export async function initAuth(onReady) {
         if (!resolved) { resolved = true; if (onReady) onReady(); }
     };
 
-    // Emergency unlock: give retries time to complete (3 attempts × 25s + delays = ~75s max)
-    // but unlock UI early at 60s if still stuck
+    // Emergency unlock: dispara DESPUÉS de que los 3 reintentos tengan tiempo de completarse
+    // Peor caso: intento1 (15s) + delay (1s) + intento2 (15s) + delay (2s) + intento3 (15s) = ~48s
+    // 35s es un punto de corte razonable: si en 35s no hubo respuesta, algo grave pasó
     const emergencyTimeout = setTimeout(() => {
-        const { isAuthInitializing } = getState();
+        const { isAuthInitializing, session } = getState();
         if (isAuthInitializing) {
             console.warn('Auth initialization timeout, unlocking UI...');
-            setState({ isAuthInitializing: false, isLoadingChannels: false });
+            // If we timed out and have no valid session, force to login
+            if (!session) {
+                setState({ isAuthInitializing: false, isLoadingChannels: false, session: null, currentUser: null });
+            } else {
+                // Only release the auth gate — channels loading has its own lifecycle
+                setState({ isAuthInitializing: false });
+            }
             finish();
         }
-    }, 60000);
+    }, 35000);
 
     // onAuthStateChange handles TOKEN_REFRESHED, SIGNED_IN, SIGNED_OUT, etc.
     // We only act on SIGNED_OUT here — initial load is handled by getSession() below
@@ -283,11 +293,42 @@ export async function initAuth(onReady) {
             return;
         }
 
-        // Load user data once from the initial session
-        await loadUserData(initialSession);
+        // Validate session: if the access token is expired, try to refresh it.
+        // getSession() can return a stale session from localStorage even when
+        // the refresh token is invalid (400: Refresh Token Not Found).
+        // We must verify the session is actually usable before loading data.
+        const expiresAt = initialSession.expires_at; // unix seconds
+        const now = Math.floor(Date.now() / 1000);
+        const isExpired = expiresAt && now >= expiresAt;
+
+        if (isExpired) {
+            console.warn('Session expired on load, attempting refresh...');
+            const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+
+            if (refreshError || !refreshedSession) {
+                // Refresh token is invalid — clean up and force login
+                console.warn('Refresh token invalid, clearing session:', refreshError?.message);
+                // Clear stale auth data from localStorage
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('sb-') || key.includes('supabase.auth')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
+                finish();
+                return;
+            }
+
+            // Refresh succeeded — use the new session
+            await loadUserData(refreshedSession);
+        } else {
+            // Session is still valid — load user data
+            await loadUserData(initialSession);
+        }
     } catch (err) {
         console.warn('initAuth error:', err.message);
-        setState({ isAuthInitializing: false, isLoadingChannels: false });
+        // On any critical auth error, clean up and go to login
+        setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
     } finally {
         clearTimeout(emergencyTimeout);
         finish();

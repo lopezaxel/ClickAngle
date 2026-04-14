@@ -97,8 +97,15 @@ function initApp() {
 
     // 3. Subscription guard (skip for admins)
     if (currentUser?.role !== 'admin' && currentUser?.id) {
-      if (subscription === undefined) return; // still loading
-      if (!subscription || subscription.status === 'blocked') {
+      if (subscription === undefined) {
+        // Still loading subscription — show a non-blocking spinner instead of blank screen
+        if (workspace && !workspace.querySelector('.subscription-loading')) {
+          workspace.innerHTML = `<div class="subscription-loading" style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.3);font-size:13px;gap:10px;"><div class="loader" style="width:20px;height:20px;border-width:2px"></div>Verificando acceso...</div>`;
+        }
+        return;
+      }
+      // subscription.status === 'load_error' means the query failed — allow access (fail open)
+      if (subscription && subscription.status !== 'load_error' && subscription.status === 'blocked') {
         app.classList.remove('login-mode');
         sidebar.innerHTML = ''; sidebar.style.display = 'none';
         topbar.innerHTML = ''; topbar.style.display = 'none';

@@ -49,10 +49,10 @@ async function performRender(workspace, showRouteLoader = true) {
     if (showRouteLoader) showLoader(workspace);
 
     try {
-        // Safety timeout: 20s (allows for Supabase cold-start on free tier)
+        // Safety timeout: 12s (Pro plan — era 20s en Free)
         const renderPromise = renderFn(workspace);
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Panel Render Timeout (20s)')), 20000)
+            setTimeout(() => reject(new Error('Panel Render Timeout (12s)')), 12000)
         );
 
         await Promise.race([renderPromise, timeoutPromise]);

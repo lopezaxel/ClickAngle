@@ -4,6 +4,7 @@ const state = {
     session: null,          // supabase auth session
     activeChannelId: null,  // currently selected channel UUID
     channels: [],           // user's channels list
+    subscription: undefined, // null = no subscription, undefined = still loading, object = loaded
     apiKeyStatus: 'not_connected', // 'connected', 'not_connected', 'disconnected'
     isAuthInitializing: true, // true while Supabase recovers session
     isLoadingChannels: true,  // true while channels haven't been fetched yet
