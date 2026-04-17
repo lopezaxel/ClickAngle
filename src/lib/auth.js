@@ -218,6 +218,10 @@ export async function createChannel(name, niche = 'Tech/IA', imageUrl = null) {
 
 // --- Guard: tracks the userId currently being loaded to prevent duplicate/loop calls ---
 let loadingUserId = null;
+// Tracks whether initAuth's getSession() call has returned. Before it does,
+// SIGNED_IN fires from _recoverAndRefresh inside _initialize, and awaiting
+// loadUserData there blocks _initialize → getSession() → all DB queries (~45s).
+let authInitialized = false;
 
 async function loadUserData(session) {
     if (!session?.user) {
@@ -340,6 +344,7 @@ export async function initAuth(onReady) {
     supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
             loadingUserId = null;
+            authInitialized = false;
             setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
             finish();
         } else if (event === 'TOKEN_REFRESHED') {
@@ -347,19 +352,31 @@ export async function initAuth(onReady) {
             if (session) setState({ session });
             finish();
         } else if (event === 'SIGNED_IN') {
-            // Fires on actual user logins (not startup token refresh).
-            const { channels } = getState();
-            if (session && channels.length === 0) {
-                await loadUserData(session);
-            } else if (session) {
-                setState({ session });
+            if (!authInitialized) {
+                // Startup SIGNED_IN from _recoverAndRefresh — fired before getSession()
+                // returns. Awaiting loadUserData here blocks _initialize → getSession()
+                // → all DB queries for ~45s. Just update session token; getSession()
+                // below handles the actual data load.
+                if (session) setState({ session });
+                finish();
+            } else {
+                // Actual user login — safe to load data.
+                const { channels } = getState();
+                if (session && channels.length === 0) {
+                    await loadUserData(session);
+                } else if (session) {
+                    setState({ session });
+                }
+                finish();
             }
-            finish();
         }
     });
 
     try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
+
+        // getSession() has returned — from here on, SIGNED_IN means a real login.
+        authInitialized = true;
 
         if (!initialSession) {
             setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
