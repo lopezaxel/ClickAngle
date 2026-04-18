@@ -33,8 +33,8 @@ function renderSettingsUI(container, maskedKeys) {
       </div>
     </div>
     
-    <div class="grid-2">
-      <div class="card">
+    <div>
+      <div class="card" style="max-width:600px;">
         <div class="card-header">
           <div class="card-title">${icon('key', 16)} API Keys</div>
           <div class="flex items-center gap-xs">
@@ -77,27 +77,6 @@ function renderSettingsUI(container, maskedKeys) {
         <div class="text-xs text-muted mt-md" style="padding:var(--space-sm);background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
           ${icon('lock', 12)} <strong>Seguridad:</strong> Las claves se encriptan con AES-256 antes de almacenarse. 
           Nunca se transmiten ni se muestran en texto plano después de guardarlas.
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">${icon('sliders', 16)} Preferencias</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Tema de Interfaz</label>
-          <select class="form-select">
-            <option selected>Dark Mode (Default)</option>
-            <option disabled>Ultra Dark (Próximamente)</option>
-            <option disabled>Glassmorphism (Próximamente)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Idioma</label>
-          <select class="form-select">
-            <option selected>Español</option>
-            <option>English</option>
-          </select>
         </div>
       </div>
     </div>
