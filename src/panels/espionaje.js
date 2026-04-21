@@ -3,6 +3,7 @@ import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
 import { showLoader, hideLoader } from '../lib/loader.js';
+import { toast } from '../lib/toast.js';
 
 // --- Storage upload (one file) ---
 async function uploadToStorage(file, channelId, userId) {
@@ -327,7 +328,7 @@ export async function renderEspionaje(container) {
         renderEspionaje(container);
       } catch (err) {
         hideLoader();
-        alert('Error: ' + err.message);
+        toast(err.message, 'error');
       } finally {
         hideLoader();
         btn.innerHTML = originalHtml;

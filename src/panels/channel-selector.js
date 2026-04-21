@@ -2,6 +2,7 @@ import { getState, setActiveChannel } from '../lib/state.js';
 import { deleteChannel, reloadChannels } from '../lib/auth.js';
 import { navigateTo } from '../router.js';
 import { icon } from '../icons.js';
+import { showLoader, hideLoader } from '../lib/loader.js';
 
 /**
  * The Hub — Project/Channel Selector (SaaS-style)
@@ -12,7 +13,13 @@ export function renderChannelSelector(container) {
   const { currentUser, channels, isLoadingChannels } = getState();
   const channelList = channels || [];
 
+  hideLoader(false);
   container.innerHTML = buildHubHTML(channelList, currentUser, isLoadingChannels);
+
+  if (isLoadingChannels) {
+    showLoader(container, { title: 'Cargando tus proyectos...', subtitle: 'Sincronizando canales con el servidor', detail: 'CARGANDO HUB' });
+  }
+
   bindHubEvents(container);
 }
 
@@ -47,13 +54,7 @@ function buildHubHTML(channels, user, isLoading) {
 
   let mainContent;
   if (isLoading) {
-    mainContent = `
-      <div class="hub-empty">
-        <div style="display:flex;align-items:center;justify-content:center;gap:12px;color:var(--text-tertiary);">
-          <div class="loader" style="width:20px;height:20px;border-width:2px;"></div>
-          <span>Cargando tus proyectos...</span>
-        </div>
-      </div>`;
+    mainContent = '';
   } else if (channels.length > 0) {
     mainContent = `<div class="hub-grid">${channelCards}</div>`;
   } else {

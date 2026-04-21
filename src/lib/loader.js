@@ -25,16 +25,19 @@ const STYLES = `
   }
 `;
 
-export function showLoader(container, { title = 'Procesando...', subtitle = '', detail = '' } = {}) {
-  hideLoader(false); // remove any existing, no animation
-
-  // Inject keyframes once
+export function ensureLoaderStyles() {
   if (!document.getElementById('ca-loader-styles')) {
     const styleEl = document.createElement('style');
     styleEl.id = 'ca-loader-styles';
     styleEl.textContent = STYLES;
     document.head.appendChild(styleEl);
   }
+}
+
+export function showLoader(container, { title = 'Procesando...', subtitle = '', detail = '' } = {}) {
+  hideLoader(false); // remove any existing, no animation
+
+  ensureLoaderStyles();
 
   // Ensure container is positioned so the absolute overlay fills it
   const pos = window.getComputedStyle(container).position;

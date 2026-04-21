@@ -18,6 +18,7 @@ import { initAuth } from './src/lib/auth.js';
 import { getState, subscribe } from './src/lib/state.js';
 import { icon } from './src/icons.js';
 import { checkApiKey } from './src/lib/intelligence.js';
+import { showLoader, hideLoader } from './src/lib/loader.js';
 
 // Register all panel routes
 registerRoute('dashboard', renderDashboard);
@@ -50,19 +51,15 @@ function initApp() {
 
     // 0. Handle Initialization (Prevent flicker to login)
     if (isAuthInitializing) {
-      if (!app.querySelector('.loading-screen')) {
-        app.innerHTML = `
-          <div class="loading-screen">
-            <div class="loader"></div>
-            <p>Cargando ClickAngle...</p>
-          </div>
-        `;
+      if (!document.getElementById('ca-global-loader')) {
+        showLoader(app, { title: 'Iniciando ClickAngles...', subtitle: 'Preparando tu espacio de trabajo', detail: 'AUTENTICANDO' });
       }
       return;
     }
 
-    // 1. Recover/Initialize DOM structure if loading screen is present or empty
-    if (app.querySelector('.loading-screen') || !app.querySelector('#main-area')) {
+    // 1. Recover/Initialize DOM structure if needed
+    if (!app.querySelector('#main-area')) {
+      hideLoader(false);
       app.innerHTML = `
         <aside id="sidebar"></aside>
         <div id="main-area">
@@ -98,9 +95,8 @@ function initApp() {
     // 3. Subscription guard (skip for admins)
     if (currentUser?.role !== 'admin' && currentUser?.id) {
       if (subscription === undefined) {
-        // Still loading subscription — show a non-blocking spinner instead of blank screen
-        if (workspace && !workspace.querySelector('.subscription-loading')) {
-          workspace.innerHTML = `<div class="subscription-loading" style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.3);font-size:13px;gap:10px;"><div class="loader" style="width:20px;height:20px;border-width:2px"></div>Verificando acceso...</div>`;
+        if (workspace && !document.getElementById('ca-global-loader')) {
+          showLoader(workspace, { title: 'Verificando acceso...', subtitle: 'Comprobando estado de tu suscripción', detail: 'VERIFICANDO' });
         }
         return;
       }
@@ -137,8 +133,8 @@ function initApp() {
     // and wait for the next state update. This prevents a race condition where
     // the router triggers renderChannelSelector while auth is still fetching.
     if (isLoadingChannels && !isOnHub) {
-      if (workspace && !workspace.querySelector('.channels-loading')) {
-        workspace.innerHTML = `<div class="channels-loading" style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.3);font-size:13px;gap:10px;"><div class="loader" style="width:20px;height:20px;border-width:2px"></div>Cargando canales...</div>`;
+      if (workspace && !document.getElementById('ca-global-loader')) {
+        showLoader(workspace, { title: 'Cargando tus proyectos...', subtitle: 'Sincronizando canales con el servidor', detail: 'SINCRONIZANDO' });
       }
       return;
     }
@@ -175,9 +171,11 @@ function initApp() {
       || (channelCount !== lastChannelCount);
 
     if (!routerInitialized) {
+      hideLoader(false);
       initRouter(workspace);
       routerInitialized = true;
     } else if (significantChange) {
+      hideLoader(false);
       renderSidebar(sidebar);
       updateWorkflow(workflowBar);
       reRenderCurrentRoute(workspace);

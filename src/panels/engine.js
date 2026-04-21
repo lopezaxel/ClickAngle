@@ -3,7 +3,7 @@ import { getState, subscribe } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI, generateImage } from '../lib/intelligence.js';
 import { toast, confirmDialog, inputDialog } from '../lib/toast.js';
-import { showLoader, updateLoader, hideLoader } from '../lib/loader.js';
+import { showLoader, updateLoader, hideLoader, ensureLoaderStyles } from '../lib/loader.js';
 
 // ─── Creative Config ────────────────────────────────────────────────────────
 
@@ -87,6 +87,36 @@ const STYLES = [
 
 // ─── Main Panel ─────────────────────────────────────────────────────────────
 
+function thumbLoaderHTML(title = 'Generando miniatura...', detail = 'IA PROCESANDO') {
+  ensureLoaderStyles();
+  return `
+  <div style="position:absolute;inset:0;z-index:10;background:rgba(6,6,10,0.88);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;">
+    <div style="position:absolute;inset:0;pointer-events:none;overflow:hidden;">
+      <div style="position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(220,38,38,.5),transparent);animation:ca-scanline 2.4s cubic-bezier(.4,0,.6,1) infinite;"></div>
+    </div>
+    <div style="position:absolute;top:8px;left:8px;width:12px;height:12px;border-top:2px solid rgba(220,38,38,.5);border-left:2px solid rgba(220,38,38,.5);"></div>
+    <div style="position:absolute;top:8px;right:8px;width:12px;height:12px;border-top:2px solid rgba(220,38,38,.5);border-right:2px solid rgba(220,38,38,.5);"></div>
+    <div style="position:absolute;bottom:8px;left:8px;width:12px;height:12px;border-bottom:2px solid rgba(220,38,38,.5);border-left:2px solid rgba(220,38,38,.5);"></div>
+    <div style="position:absolute;bottom:8px;right:8px;width:12px;height:12px;border-bottom:2px solid rgba(220,38,38,.5);border-right:2px solid rgba(220,38,38,.5);"></div>
+    <div style="position:relative;width:60px;height:60px;margin-bottom:12px;flex-shrink:0;">
+      <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(220,38,38,.1);"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:#DC2626;border-right-color:rgba(220,38,38,.25);animation:ca-spin-cw 1.6s linear infinite;"></div>
+      <div style="position:absolute;inset:8px;border-radius:50%;border:2px solid transparent;border-bottom-color:#ef4444;border-left-color:rgba(239,68,68,.2);animation:ca-spin-ccw 1s linear infinite;"></div>
+      <div style="position:absolute;inset:16px;border-radius:50%;border:1px solid transparent;border-top-color:rgba(248,113,113,.6);animation:ca-spin-cw 0.7s linear infinite;"></div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+        <div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle,#ef4444,#DC2626);animation:ca-pulse-core 1.8s ease-in-out infinite;"></div>
+      </div>
+    </div>
+    <div style="font-size:9px;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase;text-align:center;margin-bottom:6px;padding:0 12px;line-height:1.3;">${title}</div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <span style="width:3px;height:3px;border-radius:50%;background:#DC2626;display:inline-block;animation:ca-blink 1.1s ease-in-out infinite;"></span>
+      <span style="width:3px;height:3px;border-radius:50%;background:#DC2626;display:inline-block;animation:ca-blink 1.1s ease-in-out .3s infinite;"></span>
+      <span style="width:3px;height:3px;border-radius:50%;background:#DC2626;display:inline-block;animation:ca-blink 1.1s ease-in-out .6s infinite;"></span>
+      <div style="font-size:7px;color:#DC2626;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-left:4px;">${detail}</div>
+    </div>
+  </div>`;
+}
+
 export async function renderEngine(container) {
   const { activeChannelId } = getState();
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
@@ -123,6 +153,8 @@ export async function renderEngine(container) {
   let isGenerating = false;
   let expandingVariantId = null;
   let batchAngleSelection = null; // null = all selected; array of indices = specific selection
+  let faceEnabled = null;         // null = follow DNA match default; true/false = explicit user choice
+  let selectedExpressionId = null; // persists face select across renders
 
   // Auto-matched face from DNA (set during render based on emotion_label)
   let autoMatchedFaceId = null;
@@ -324,23 +356,25 @@ export async function renderEngine(container) {
     const batchCount = activeBatchIndices.length;
     const canGenerate = canGoStep3 && batchCount > 0;
 
+    const stepLabels = ['Formato', 'Estilo Visual', 'Sintetizar'];
+    const stepDone = [canGoStep2, canGoStep3, false];
+
     return `
-    <!-- Project header -->
-    <div class="card mb-md" style="background:var(--bg-tertiary); border:none; padding:var(--space-md);">
+    <!-- ── Project header (compact + collapsible DNA) ── -->
+    <div style="background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 16px; margin-bottom:var(--space-md);">
       <div class="flex items-center justify-between">
-        <div>
-          <div class="font-bold">${project.title}</div>
-          ${project.logic_dna?.hook ? `<div class="text-xs text-muted mt-xs">${icon('bolt', 10)} ${project.logic_dna.hook}</div>` : ''}
+        <div style="min-width:0; flex:1;">
+          <div class="font-bold" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</div>
+          ${project.logic_dna?.hook ? `<div class="text-xs text-muted" style="margin-top:2px; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.logic_dna.hook}</div>` : ''}
         </div>
-        <div class="flex gap-xs">
-          <span class="badge badge-neutral">${selectedAngles.length} ángulos</span>
-          <span class="badge badge-neutral">${new Date(project.created_at).toLocaleDateString('es')}</span>
-        </div>
+        <details style="flex-shrink:0; margin-left:12px;">
+          <summary style="cursor:pointer; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:rgba(99,102,241,0.8); white-space:nowrap; list-style:none; user-select:none;">🧬 Ver contexto</summary>
+          <div style="position:absolute; right:0; z-index:50; margin-top:8px; width:360px; background:var(--bg-elevated); border:1px solid rgba(99,102,241,0.3); border-radius:var(--radius-md); padding:var(--space-md); box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+            ${renderDNAChecklist(project)}
+          </div>
+        </details>
       </div>
     </div>
-
-    <!-- DNA Checklist -->
-    ${renderDNAChecklist(project)}
 
     ${selectedAngles.length === 0 ? `
       <div class="card" style="text-align:center; padding:var(--space-xl); opacity:0.6;">
@@ -349,46 +383,59 @@ export async function renderEngine(container) {
       </div>
     ` : `
 
-    <!-- Step tabs -->
-    <div class="flex gap-xs mb-lg" style="border-bottom:1px solid var(--border); padding-bottom:var(--space-md);">
-      ${[
-        { n: 1, label: 'Formato Creativo', ok: canGoStep2 },
-        { n: 2, label: 'Estilo Visual', ok: canGoStep3 },
-        { n: 3, label: 'Sintetizar', ok: canGenerate },
-      ].map(s => `
-        <button class="btn btn-sm step-tab ${workflowStep === s.n ? 'btn-primary' : (s.ok || workflowStep > s.n ? 'btn-secondary' : 'btn-secondary')}"
-          data-step="${s.n}" style="opacity:${workflowStep < s.n && !(s.n === 2 && canGoStep2) && !(s.n === 3 && canGoStep3) ? '0.45' : '1'};"
-          ${s.n === 2 && !canGoStep2 ? 'disabled' : ''}
-          ${s.n === 3 && !canGoStep2 ? 'disabled' : ''}>
-          <span style="background:${workflowStep === s.n ? 'rgba(255,255,255,0.25)' : (workflowStep > s.n ? 'var(--success)' : 'var(--bg-tertiary)')};
-            color:white; border-radius:50%; width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; margin-right:6px;">
-            ${workflowStep > s.n ? icon('check', 10) : s.n}
-          </span>
-          ${s.label}
+    <!-- ── Step progress indicator ── -->
+    <div style="display:flex; align-items:center; margin-bottom:var(--space-lg);">
+      ${stepLabels.map((label, i) => {
+        const n = i + 1;
+        const isActive = workflowStep === n;
+        const isDone = workflowStep > n;
+        const canAccess = n === 1 || (n === 2 && canGoStep2) || (n === 3 && canGoStep3);
+        return `
+        <button class="step-tab" data-step="${n}"
+          ${!canAccess ? 'disabled' : ''}
+          style="display:flex; align-items:center; gap:8px; background:none; border:none; cursor:${canAccess ? 'pointer' : 'default'}; padding:0; flex-shrink:0;">
+          <div style="width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; flex-shrink:0; transition:all 0.2s;
+            ${isDone
+              ? 'background:var(--success); color:white;'
+              : isActive
+                ? 'background:var(--accent); color:white; box-shadow:0 0 12px rgba(220,38,38,0.4);'
+                : 'background:var(--bg-tertiary); color:' + (canAccess ? 'var(--text-secondary)' : 'var(--text-tertiary)') + '; border:1px solid var(--border);'}">
+            ${isDone ? icon('check', 11) : n}
+          </div>
+          <span style="font-size:12px; font-weight:${isActive ? '800' : '500'}; color:${isActive ? 'var(--text-primary)' : isDone ? 'var(--text-secondary)' : (canAccess ? 'var(--text-secondary)' : 'var(--text-tertiary)')}; white-space:nowrap;">${label}</span>
         </button>
-      `).join('')}
+        ${i < stepLabels.length - 1 ? `
+          <div style="flex:1; height:1px; margin:0 10px; background:${isDone ? 'var(--success)' : 'var(--border)'}; opacity:${isDone ? '0.6' : '0.3'};"></div>
+        ` : ''}`;
+      }).join('')}
     </div>
 
-    <!-- Step content -->
-    ${workflowStep === 1 ? renderStep1() : workflowStep === 2 ? renderStep2() : renderStep3(project, selectedAngles, variants)}
+    <!-- ── Step content ── -->
+    <div style="min-height:280px;">
+      ${workflowStep === 1 ? renderStep1() : workflowStep === 2 ? renderStep2() : renderStep3(project, selectedAngles, variants)}
+    </div>
 
-    <!-- Bottom nav -->
-    <div class="flex justify-between items-center mt-lg">
+    <!-- ── Bottom navigation ── -->
+    <div class="flex justify-between items-center" style="margin-top:var(--space-lg); padding-top:var(--space-md); border-top:1px solid var(--border);">
       <button class="btn btn-secondary btn-sm" id="btn-prev-step" ${workflowStep === 1 ? 'disabled' : ''}>
         ${icon('arrowLeft', 14)} Anterior
       </button>
       ${workflowStep < 3 ? `
-        <button class="btn btn-primary btn-sm" id="btn-next-step"
-          ${workflowStep === 1 && !canGoStep2 ? 'disabled' : ''}
-          ${workflowStep === 2 && !canGoStep3 ? 'disabled' : ''}>
-          Siguiente ${icon('arrowRight', 14)}
-        </button>
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${workflowStep === 1 && !canGoStep2 ? `<span class="text-xs text-muted">Elegí al menos un formato</span>` : ''}
+          ${workflowStep === 2 && !canGoStep3 ? `<span class="text-xs text-muted">Elegí un estilo visual</span>` : ''}
+          <button class="btn btn-primary" id="btn-next-step" style="padding:8px 20px;"
+            ${workflowStep === 1 && !canGoStep2 ? 'disabled' : ''}
+            ${workflowStep === 2 && !canGoStep3 ? 'disabled' : ''}>
+            Siguiente ${icon('arrowRight', 14)}
+          </button>
+        </div>
       ` : `
         <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate || isGenerating ? 'disabled' : ''}
-          style="background:linear-gradient(135deg, var(--accent), #9333ea); font-size:14px; padding:10px 24px; font-weight:800; letter-spacing:0.5px;">
+          style="background:linear-gradient(135deg, var(--accent), #9333ea); font-size:14px; padding:12px 28px; font-weight:800; letter-spacing:0.5px; border-radius:var(--radius-md);">
           ${isGenerating
-        ? `<span class="animate-pulse">${icon('clock', 16)}</span> Preparando síntesis...`
-        : `${icon('rocket', 16)} SINTETIZAR ${batchCount} ÁNGULO${batchCount !== 1 ? 'S' : ''}${batchCount < selectedAngles.length ? ` (de ${selectedAngles.length})` : ''}`}
+            ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando...`
+            : `${icon('rocket', 16)} GENERAR ${batchCount} MINIATURA${batchCount !== 1 ? 'S' : ''}`}
         </button>
       `}
     </div>
@@ -637,186 +684,127 @@ export async function renderEngine(container) {
     const vb = project?.logic_dna?.visual_briefing;
     const emotionLabel = vb?.emotion_label;
     const matchedFace = faceList.find(f => f.id === autoMatchedFaceId);
+    const effectiveUseFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
+    const effectiveExpressionId = selectedExpressionId || autoMatchedFaceId;
+
+    const td = project.logic_dna?.text_decision;
+    const suggestions = project.logic_dna?.text_suggestions || [];
+    const typeLabels = { pregunta: '¿...?', numero: '0-9', palabra_choque: '⚡', frase_corta: 'AB', ninguno: '—' };
+
+    const activeSelection = batchAngleSelection ?? selectedAngles.map((_, i) => i);
+    const allSelected = activeSelection.length === selectedAngles.length;
+    const selectedCount = activeSelection.length;
     const PSYCH_COLORS = [
-      { badge: '#ef4444', bg: 'rgba(220,38,38,0.08)', label: 'MIEDO' },
-      { badge: '#a855f7', bg: 'rgba(168,85,247,0.08)', label: 'CURIOSIDAD' },
-      { badge: '#3b82f6', bg: 'rgba(59,130,246,0.08)', label: 'AUTORIDAD' },
-      { badge: '#f59e0b', bg: 'rgba(245,158,11,0.08)', label: 'CONTRASTE' },
-      { badge: '#10b981', bg: 'rgba(16,185,129,0.08)', label: 'URGENCIA' },
+      { badge: '#ef4444', bg: 'rgba(220,38,38,0.08)' },
+      { badge: '#a855f7', bg: 'rgba(168,85,247,0.08)' },
+      { badge: '#3b82f6', bg: 'rgba(59,130,246,0.08)' },
+      { badge: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
+      { badge: '#10b981', bg: 'rgba(16,185,129,0.08)' },
     ];
 
     return `
     <div>
-      <!-- Fusión de Capas summary -->
-      <div class="card mb-md" style="background:linear-gradient(135deg, rgba(220,38,38,0.08), rgba(147,51,234,0.06)); border-color:rgba(220,38,38,0.3); padding:var(--space-md);">
-        <div class="text-xs font-bold mb-sm" style="letter-spacing:1px; text-transform:uppercase; color:var(--accent);">${icon('rocket', 12)} Fusión de Capas — ${selectedAngles.length} Ángulo${selectedAngles.length !== 1 ? 's' : ''} × Prompt Único</div>
-        <div style="display:flex; flex-direction:column; gap:4px;">
-          ${[
-        { n: 1, label: 'Estilo Visual', value: (() => { const s = STYLES.find(x => x.id === selectedStyleId); return `${s?.emoji} ${s?.label} (${s?.subtitle})`; })(), color: '#818cf8' },
-        { n: 2, label: 'Formato Físico', value: selectedFormats.map(fid => { const f = FORMATS.find(x => x.id === fid); return `${f?.emoji} ${f?.subtitle}`; }).join(' + '), color: '#f59e0b' },
-        { n: 3, label: 'Objeto Héroe', value: project.logic_dna?.visual_briefing?.hero_object || project.logic_dna?.hook || 'desde script DNA', color: '#10b981' },
-        { n: 4, label: 'Visual Twist', value: `único por ángulo A/B/C (${selectedAngles.length} variante${selectedAngles.length > 1 ? 's' : ''})`, color: '#ef4444' },
-        { n: 5, label: 'ADN de Marca', value: brandKit ? '✅ Brand Kit conectado' : '⚠️ Sin Brand Kit', color: '#a855f7' },
-      ].map(row => `
-          <div class="flex items-center gap-sm" style="background:var(--bg-tertiary); border-radius:var(--radius-sm); padding:6px 10px;">
-            <div style="width:18px;height:18px;border-radius:50%;background:${row.color}22;border:1.5px solid ${row.color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:${row.color};flex-shrink:0;">${row.n}</div>
-            <div class="text-xs text-muted" style="flex-shrink:0; min-width:80px;">${row.label}</div>
-            <div class="text-xs font-bold" style="color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.value}</div>
-          </div>`).join('')}
-        </div>
-      </div>
 
-      <!-- Text Suggestion — condicional según text_decision del DNA -->
-      ${(() => {
-        const td = project.logic_dna?.text_decision;
-        const suggestions = project.logic_dna?.text_suggestions || [];
-        const typeLabels = { pregunta: '¿...?', numero: '0-9', palabra_choque: '⚡', frase_corta: 'AB', ninguno: '—' };
-
-        if (td && td.needs_text === false && td.confidence === 'alta') {
-          // La imagen habla sola — texto no recomendado
-          return `
-          <div class="card mb-md" style="background:rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.35); padding:var(--space-md);">
-            <div class="flex items-center gap-sm mb-sm">
-              <span style="font-size:18px;">🎯</span>
-              <div>
-                <div class="text-xs font-bold" style="color:var(--success);">Esta miniatura habla por sí sola</div>
-                <div class="text-xs text-muted">${td.reason || 'La imagen comunica el concepto sin necesidad de texto.'}</div>
-              </div>
-            </div>
-            <details style="margin-top:var(--space-xs);">
-              <summary class="text-xs text-muted" style="cursor:pointer; opacity:0.6;">Agregar texto de todos modos (no recomendado)</summary>
-              <div class="mt-sm">
-                <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
-                  ${suggestions.map(txt => `
-                    <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">${txt}</button>
-                  `).join('')}
-                </div>
-                <input type="text" class="form-input" id="custom-overlay-text" placeholder="Texto de override (1-3 palabras máx)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
-              </div>
-            </details>
-          </div>`;
-        } else if (td && td.needs_text === true) {
-          // Texto recomendado — mostrar tipo sugerido y máx palabras
-          const typeLabel = typeLabels[td.type] || '';
-          const maxW = td.max_words || 3;
-          return `
-          <div class="card mb-md" style="background:var(--bg-tertiary); border: 1px solid var(--accent); padding:var(--space-md);">
-            <div class="flex items-center justify-between mb-sm">
-              <label class="form-label mb-0">${icon('bolt', 12)} Texto de Overlay</label>
-              <div class="flex gap-xs">
-                ${td.type && td.type !== 'ninguno' ? `<span class="badge" style="font-size:9px; background:rgba(168,85,247,0.15); color:#a855f7; border:1px solid rgba(168,85,247,0.3);">Tipo: ${typeLabel}</span>` : ''}
-                <span class="badge" style="font-size:9px; background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">Máx ${maxW} palabras</span>
-              </div>
-            </div>
-            <div class="text-xs text-muted mb-sm" style="opacity:0.7;">${td.reason || ''}</div>
-            <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
-              <button class="badge btn-suggestion-text" style="cursor:pointer; border:1px solid rgba(100,100,100,0.3); background:transparent; font-size:10px; padding:6px 10px; color:var(--text-muted);" data-text="">Sin texto</button>
-              ${suggestions.map(txt => `
-                <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">${txt}</button>
-              `).join('')}
-            </div>
-            <input type="text" class="form-input" id="custom-overlay-text" placeholder="O escribe tu propio texto (${maxW} palabras máx)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
-          </div>`;
-        } else {
-          // Sin text_decision (proyecto viejo o sin análisis) — comportamiento neutro
-          return `
-          <div class="card mb-md" style="background:var(--bg-tertiary); border: 1px solid var(--border); padding:var(--space-md);">
-            <label class="form-label">${icon('bolt', 12)} Texto de Overlay <span class="text-xs text-muted" style="font-weight:400;">(opcional — déjalo vacío si la imagen habla sola)</span></label>
-            <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
-              <button class="badge btn-suggestion-text" style="cursor:pointer; border:1px solid rgba(100,100,100,0.3); background:transparent; font-size:10px; padding:6px 10px; color:var(--text-muted);" data-text="">Sin texto</button>
-              ${suggestions.map(txt => `
-                <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:6px 10px;" data-text="${txt}">${txt}</button>
-              `).join('')}
-            </div>
-            <input type="text" class="form-input" id="custom-overlay-text" placeholder="Escribe tu texto de impacto (1-3 palabras máx)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
-          </div>`;
-        }
-      })()}
-
-      <!-- Face auto-match -->
-      <div class="card mb-md" style="background:var(--bg-tertiary); padding:var(--space-md);">
-        <div class="flex items-center justify-between mb-sm">
-          <label class="form-label mb-0">${icon('camera', 12)} Cara para la Miniatura</label>
+      <!-- ── 1. Rostro ── -->
+      <div style="background:var(--bg-tertiary); border:1px solid ${effectiveUseFace ? 'rgba(220,38,38,0.4)' : 'var(--border)'}; border-radius:var(--radius-md); padding:14px 16px; margin-bottom:var(--space-md); transition:border-color 0.2s;">
+        <div class="flex items-center justify-between">
           <div class="flex items-center gap-sm">
-            <input type="checkbox" id="check-use-face" style="width:16px;height:16px;cursor:pointer;" ${matchedFace ? 'checked' : ''} />
-            <label for="check-use-face" class="text-xs cursor-pointer">Incluir rostro</label>
-          </div>
-        </div>
-
-        ${emotionLabel && matchedFace ? `
-        <div class="flex items-center gap-sm p-sm mb-sm" style="background:rgba(16,185,129,0.1); border-radius:var(--radius-sm); border:1px solid rgba(16,185,129,0.3);">
-          <span style="color:var(--success); font-size:16px;">✅</span>
-          <div>
-            <div class="text-xs font-bold" style="color:var(--success);">Match automático por DNA</div>
-            <div class="text-xs text-muted">Emoción detectada: <strong>${emotionLabel}</strong> → Foto con label "${matchedFace.expression_type}"</div>
-          </div>
-        </div>
-        ` : emotionLabel && !matchedFace ? `
-        <div class="flex items-center gap-sm p-sm mb-sm" style="background:rgba(245,158,11,0.1); border-radius:var(--radius-sm); border:1px solid rgba(245,158,11,0.3);">
-          <span style="font-size:16px;">⚠️</span>
-          <div class="text-xs text-muted">No hay foto con label <strong>${emotionLabel}</strong> en Face Vault. Etiquetá fotos en Brand Kit.</div>
-        </div>
-        ` : ''}
-
-        <select class="form-select" id="select-expression-step3" style="font-size:12px;">
-          ${faceList.map(f => `<option value="${f.id}" ${f.id === autoMatchedFaceId ? 'selected' : ''}>${f.expression_type || 'Sin etiqueta'}</option>`).join('')}
-          ${faceList.length === 0 ? '<option value="">Sin rostros en el Vault</option>' : ''}
-        </select>
-      </div>
-
-      <!-- Ángulos del batch — seleccionables -->
-      ${(() => {
-        const activeSelection = batchAngleSelection ?? selectedAngles.map((_, i) => i);
-        const allSelected = activeSelection.length === selectedAngles.length;
-        const selectedCount = activeSelection.length;
-        return `
-      <div class="flex items-center gap-sm mb-sm" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
-        <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} Seleccioná qué ángulos generar — <span style="color:var(--accent);">${selectedCount} de ${selectedAngles.length}</span> seleccionado${selectedCount !== 1 ? 's' : ''}</div>
-        <div class="flex gap-xs">
-          <button id="btn-batch-select-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(99,102,241,0.4); background:${allSelected ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#818cf8; cursor:pointer; font-weight:700; letter-spacing:0.5px;">Todos</button>
-          <button id="btn-batch-deselect-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:rgba(255,255,255,0.4); cursor:pointer; font-weight:700; letter-spacing:0.5px;">Ninguno</button>
-        </div>
-      </div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:var(--space-sm); margin-bottom:var(--space-md);">
-        ${selectedAngles.map((a, i) => {
-          const colors = PSYCH_COLORS[i % PSYCH_COLORS.length];
-          const letter = ['A', 'B', 'C', 'D', 'E'][i] || (i + 1);
-          const angleVariants = variants.filter(v => v.ai_metadata?.angle_name === a.name);
-          const isSelected = activeSelection.includes(i);
-          return `
-          <div class="batch-angle-card" data-angle-idx="${i}" style="
-            padding:var(--space-md); border-radius:var(--radius-md); cursor:pointer;
-            background:${isSelected ? colors.bg : 'rgba(255,255,255,0.03)'};
-            border:1px solid ${isSelected ? colors.badge : 'rgba(255,255,255,0.08)'};
-            opacity:${isSelected ? '1' : '0.45'};
-            transition:all 0.15s ease;
-            user-select:none; position:relative;
-          ">
-            ${isSelected ? `<div style="position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;background:${colors.badge};display:flex;align-items:center;justify-content:center;">
-              <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>` : `<div style="position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);"></div>`}
-            <div class="flex items-center gap-sm mb-sm">
-              <div style="width:24px;height:24px;border-radius:50%;background:${isSelected ? colors.badge : 'rgba(255,255,255,0.1)'};display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:900;flex-shrink:0;">${letter}</div>
-              <div class="font-bold" style="font-size:13px;">${a.name}</div>
+            <span style="font-size:18px;">${effectiveUseFace ? '🤳' : '🚫'}</span>
+            <div>
+              <div class="font-bold text-sm">${effectiveUseFace ? 'Incluir rostro en la miniatura' : 'Sin rostro'}</div>
+              <div class="text-xs text-muted">
+                ${effectiveUseFace && matchedFace
+                  ? `Match DNA: <strong>${matchedFace.expression_type}</strong>${emotionLabel ? ` → emoción "${emotionLabel}"` : ''}`
+                  : effectiveUseFace && !matchedFace && faceList.length > 0
+                    ? 'Seleccioná la expresión del select abajo'
+                    : effectiveUseFace && faceList.length === 0
+                      ? '⚠️ No hay fotos en Face Vault — subí fotos en Brand Kit'
+                      : 'La miniatura se generará sin cara'
+                }
+              </div>
             </div>
-            ${a.visual_twist ? `<div class="text-xs text-muted" style="font-style:italic; line-height:1.4; font-size:10px;">"${a.visual_twist}"</div>` : ''}
-            ${angleVariants.length > 0 ? `<div class="text-xs mt-sm" style="color:${colors.badge};">${icon('image', 10)} ${angleVariants.length} ya generada${angleVariants.length > 1 ? 's' : ''}</div>` : ''}
-          </div>`;
-        }).join('')}
+          </div>
+          <!-- Toggle switch -->
+          <label style="position:relative; display:inline-block; width:44px; height:24px; cursor:pointer; flex-shrink:0;">
+            <input type="checkbox" id="check-use-face" style="opacity:0;width:0;height:0;position:absolute;" ${effectiveUseFace ? 'checked' : ''} />
+            <span style="position:absolute;inset:0;border-radius:12px;background:${effectiveUseFace ? 'var(--accent)' : 'var(--bg-elevated)'};border:1px solid ${effectiveUseFace ? 'var(--accent)' : 'var(--border)'};transition:background 0.2s;"></span>
+            <span style="position:absolute;top:3px;left:${effectiveUseFace ? '23px' : '3px'};width:16px;height:16px;border-radius:50%;background:white;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+          </label>
+        </div>
+        ${effectiveUseFace && faceList.length > 0 ? `
+        <select class="form-select" id="select-expression-step3" style="font-size:12px; margin-top:10px;">
+          ${faceList.map(f => `<option value="${f.id}" ${f.id === effectiveExpressionId ? 'selected' : ''}>${f.expression_type || 'Sin etiqueta'}</option>`).join('')}
+        </select>` : ''}
       </div>
 
-      ${selectedAngles.length === 0 ? `
-        <p class="text-xs text-muted" style="text-align:center; opacity:0.6;">No hay ángulos. Volvé al Cerebro y generá ángulos de click.</p>
-      ` : selectedCount === 0 ? `
-        <div class="card" style="padding:var(--space-sm) var(--space-md); background:rgba(220,38,38,0.08); border-color:rgba(220,38,38,0.3); text-align:center;">
-          <span class="text-xs" style="color:#ef4444;">⚠️ Seleccioná al menos un ángulo para generar.</span>
+      <!-- ── 2. Ángulos ── -->
+      <div style="margin-bottom:var(--space-md);">
+        <div class="flex items-center justify-between mb-sm">
+          <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">
+            ${icon('crosshair', 12)} Ángulos a generar
+            <span style="color:var(--accent); margin-left:6px;">${selectedCount} de ${selectedAngles.length}</span>
+          </div>
+          <div class="flex gap-xs">
+            <button id="btn-batch-select-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(99,102,241,0.4); background:${allSelected ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#818cf8; cursor:pointer; font-weight:700;">Todos</button>
+            <button id="btn-batch-deselect-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:rgba(255,255,255,0.4); cursor:pointer; font-weight:700;">Ninguno</button>
+          </div>
         </div>
-      ` : `
-        <div class="card" style="padding:var(--space-sm) var(--space-md); background:rgba(99,102,241,0.08); border-color:rgba(99,102,241,0.3); text-align:center;">
-          <span class="text-xs" style="color:#818cf8;">🧬 Fusión de Capas lista — ${selectedCount === selectedAngles.length ? `las ${selectedCount} imágenes` : `${selectedCount} imagen${selectedCount !== 1 ? 'es' : ''} (de ${selectedAngles.length} ángulos)`} recibirán su propio <strong>Visual Twist</strong> como capa 4 del prompt.</span>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:var(--space-sm);">
+          ${selectedAngles.map((a, i) => {
+            const colors = PSYCH_COLORS[i % PSYCH_COLORS.length];
+            const letter = ['A', 'B', 'C', 'D', 'E'][i] || (i + 1);
+            const angleVariants = variants.filter(v => v.ai_metadata?.angle_name === a.name);
+            const isSelected = activeSelection.includes(i);
+            return `
+            <div class="batch-angle-card" data-angle-idx="${i}" style="
+              padding:12px 14px; border-radius:var(--radius-md); cursor:pointer; user-select:none;
+              background:${isSelected ? colors.bg : 'rgba(255,255,255,0.02)'};
+              border:1px solid ${isSelected ? colors.badge : 'rgba(255,255,255,0.07)'};
+              opacity:${isSelected ? '1' : '0.4'}; transition:all 0.15s ease; position:relative;">
+              <div style="position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;
+                ${isSelected
+                  ? `background:${colors.badge};display:flex;align-items:center;justify-content:center;`
+                  : 'border:1px solid rgba(255,255,255,0.2);'}">
+                ${isSelected ? `<svg width="9" height="9" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+              </div>
+              <div class="flex items-center gap-sm mb-xs">
+                <div style="width:22px;height:22px;border-radius:50%;background:${isSelected ? colors.badge : 'rgba(255,255,255,0.1)'};display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:900;flex-shrink:0;">${letter}</div>
+                <div class="font-bold" style="font-size:12px; line-height:1.3;">${a.name}</div>
+              </div>
+              ${a.visual_twist ? `<div class="text-xs text-muted" style="font-style:italic; line-height:1.4; font-size:10px; margin-top:2px;">"${a.visual_twist}"</div>` : ''}
+              ${angleVariants.length > 0 ? `<div class="text-xs" style="color:${colors.badge}; margin-top:6px;">${icon('image', 10)} ${angleVariants.length} ya generada${angleVariants.length > 1 ? 's' : ''}</div>` : ''}
+            </div>`;
+          }).join('')}
         </div>
-      `}`;
-      })()}
+        ${selectedCount === 0 ? `
+          <div style="margin-top:8px; padding:8px 14px; background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3); border-radius:var(--radius-sm); text-align:center;">
+            <span class="text-xs" style="color:#ef4444;">⚠️ Seleccioná al menos un ángulo para generar.</span>
+          </div>` : ''}
+      </div>
+
+      <!-- ── 3. Texto de overlay (colapsable) ── -->
+      <details style="margin-bottom:var(--space-md);">
+        <summary style="cursor:pointer; font-size:11px; font-weight:700; color:var(--text-secondary); letter-spacing:0.5px; list-style:none; user-select:none; display:flex; align-items:center; gap:6px;">
+          ${icon('bolt', 11)} Texto de overlay
+          ${td?.needs_text === true
+            ? `<span class="badge badge-accent" style="font-size:8px; pointer-events:none;">Recomendado</span>`
+            : td?.needs_text === false && td?.confidence === 'alta'
+              ? `<span class="badge" style="font-size:8px; background:rgba(16,185,129,0.15); color:var(--success); pointer-events:none;">No necesario</span>`
+              : ''}
+          <span style="opacity:0.4; font-size:10px; font-weight:400; margin-left:auto;">opcional</span>
+        </summary>
+        <div style="margin-top:10px; padding:14px; background:var(--bg-tertiary); border-radius:var(--radius-md); border:1px solid var(--border);">
+          ${td ? `<div class="text-xs text-muted mb-sm" style="opacity:0.7;">${td.reason || ''}</div>` : ''}
+          <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
+            <button class="badge btn-suggestion-text" style="cursor:pointer; border:1px solid rgba(100,100,100,0.3); background:transparent; font-size:10px; padding:5px 9px; color:var(--text-muted);" data-text="">Sin texto</button>
+            ${suggestions.map(txt => `
+              <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:5px 9px;" data-text="${txt}">${txt}</button>
+            `).join('')}
+          </div>
+          <input type="text" class="form-input" id="custom-overlay-text" placeholder="O escribí tu propio texto (1-3 palabras)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
+        </div>
+      </details>
+
     </div>`;
   }
 
@@ -848,10 +836,7 @@ export async function renderEngine(container) {
           ${imgSrc
           ? `<img src="${imgSrc}" alt="Miniatura" class="thumb-preview-trigger" data-preview="${imgSrc}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
           : isGen
-            ? `<div class="flex flex-col items-center justify-center h-full gap-sm">
-                   <div class="animate-pulse" style="color:var(--accent);">${icon('clock', 32)}</div>
-                   <div class="text-xs text-muted">Generando imagen...</div>
-                 </div>`
+            ? thumbLoaderHTML()
             : hasError
               ? `<div class="flex flex-col items-center justify-center h-full p-md text-center gap-xs">
                      <span style="color:var(--danger);">${icon('alertTriangle', 24)}</span>
@@ -1159,6 +1144,21 @@ export async function renderEngine(container) {
       });
     });
 
+    // Face toggle — update state WITHOUT re-render to avoid resetting the checkbox
+    container.querySelector('#check-use-face')?.addEventListener('change', (e) => {
+      faceEnabled = e.target.checked;
+      // Update only the toggle visual and border without full re-render
+      const card = e.target.closest('[style*="border"]');
+      if (card) {
+        card.style.borderColor = faceEnabled ? 'rgba(220,38,38,0.4)' : 'var(--border)';
+      }
+    });
+
+    // Face select — persist selection across renders
+    container.querySelector('#select-expression-step3')?.addEventListener('change', (e) => {
+      selectedExpressionId = e.target.value;
+    });
+
     document.getElementById('btn-batch-select-all')?.addEventListener('click', () => {
       batchAngleSelection = null; // null = all
       render();
@@ -1179,8 +1179,9 @@ export async function renderEngine(container) {
 
       const style = STYLES.find(s => s.id === selectedStyleId);
       const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
-      const useFace = document.getElementById('check-use-face')?.checked;
-      const expressionId = document.getElementById('select-expression-step3')?.value;
+      const matchedFaceAtGen = faceList.find(f => f.id === autoMatchedFaceId);
+      const useFace = faceEnabled !== null ? faceEnabled : !!matchedFaceAtGen;
+      const expressionId = selectedExpressionId || autoMatchedFaceId || document.getElementById('select-expression-step3')?.value;
       const selectedFace = faceList.find(f => f.id === expressionId);
       const customText = document.getElementById('custom-overlay-text')?.value || project.title;
 
@@ -1280,8 +1281,11 @@ export async function renderEngine(container) {
               const { data: sessionData } = await supabase.auth.getSession();
               const userId = sessionData?.session?.user?.id;
               const blob = await fetch(dataUrl).then(r => r.blob());
-              const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.png`;
-              await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: 'image/png', upsert: true });
+              const mimeType = blob.type || 'image/jpeg';
+              const ext = mimeType.includes('png') ? 'png' : 'jpg';
+              const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.${ext}`;
+              const { error: uploadError } = await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: mimeType });
+              if (uploadError) throw new Error(`Upload falló: ${uploadError.message}`);
               const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(fileName);
 
               await supabase.from('thumbnail_variants').update({
@@ -1386,10 +1390,13 @@ ${adnLayer}
 ━━━ LAYER 6: CREATOR FACE ━━━
 ${faceLayer}
 
-FINAL REQUIREMENTS: No borders. Ultra-sharp. Maximum visual punch. Vibrant. High contrast against competition.
+FINAL REQUIREMENTS: Ultra-sharp. Maximum visual punch. Vibrant. High contrast against competition.
 
 ━━━ REGLA ABSOLUTA — CERO TEXTO EN LA IMAGEN ━━━
-PROHIBIDO renderizar texto, palabras, letras, números o tipografía en cualquier parte de la imagen — ni en pantallas, señales, banners, barras, badges, carteles, ni en ningún otro lugar. Cualquier elemento de diseño que normalmente contendría texto (barras de chyron, tarjetas de título, etiquetas, marcas de agua, pantallas con código o mensajes) debe mostrar ÚNICAMENTE color sólido, formas geométricas, patrones visuales abstractos o íconos gráficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-producción como overlay. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.`;
+PROHIBIDO renderizar texto, palabras, letras, números o tipografía en cualquier parte de la imagen — ni en pantallas, señales, banners, barras, badges, carteles, ni en ningún otro lugar. Cualquier elemento de diseño que normalmente contendría texto (barras de chyron, tarjetas de título, etiquetas, marcas de agua, pantallas con código o mensajes) debe mostrar ÚNICAMENTE color sólido, formas geométricas, patrones visuales abstractos o íconos gráficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-producción como overlay. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.
+
+━━━ UNIVERSO VISUAL CERRADO — ANTI-ALUCINACIÓN ━━━
+Renderizá ÚNICAMENTE los elementos visuales explícitamente descritos en las capas anteriores. PROHIBIDO agregar elementos por asociación cultural o de género: no inventar logotipos, marcas, insignias, íconos no especificados, efectos de franquicia, pantallas con contenido, fondos de escenografía no mencionados, ni ningún elemento decorativo que no esté descripto literalmente arriba. Si el estilo evoca un género (noticiero, cine de acción, documental), renderizá SOLO la estética visual del género (iluminación, color, composición) — NO sus elementos de UI, marcos de programa, gráficos de producción ni branding inventado. Cada píxel debe justificarse en alguna de las 6 capas anteriores.`;
   }
 
   // ── Helper: generate one image and save to DB ─────────────────────────────
@@ -1428,8 +1435,11 @@ PROHIBIDO renderizar texto, palabras, letras, números o tipografía en cualquie
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id;
       const blob = await fetch(dataUrl).then(r => r.blob());
-      const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.png`;
-      await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: 'image/png', upsert: true });
+      const mimeType = blob.type || 'image/jpeg';
+      const ext = mimeType.includes('png') ? 'png' : 'jpg';
+      const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: mimeType });
+      if (uploadError) throw new Error(`Upload falló: ${uploadError.message}`);
       const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(fileName);
 
       await supabase.from('thumbnail_variants').update({

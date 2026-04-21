@@ -402,17 +402,28 @@ export async function callAI(promptType, userContent, context = {}) {
             // we'll rely on the text prompt containing the URLs, which we already do in brand.js.
         }
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeyData.trim()}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeyData.trim()}`;
+        const fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
+
+        let response;
+        const maxRetries = 3;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            response = await fetch(url, fetchOpts);
+            if (response.status !== 503) break;
+            if (attempt < maxRetries) {
+                const delay = (attempt + 1) * 8000; // 8s, 16s, 24s
+                await new Promise(res => setTimeout(res, delay));
+            }
+        }
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
             if (response.status === 401) {
                 setState({ apiKeyStatus: 'disconnected' });
                 throw new Error("API Key inválida.");
+            }
+            if (response.status === 503) {
+                throw new Error("El modelo de IA está sobrecargado. Esperá unos segundos y volvé a intentarlo.");
             }
             throw new Error(errData.error?.message || "Error en la API de Google");
         }
@@ -495,13 +506,19 @@ export async function generateImage(prompt, faceImageUrl = null) {
         }
     };
 
-    const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent?key=${apiKeyData.trim()}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
-    );
+    const imgUrl = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent?key=${apiKeyData.trim()}`;
+    const imgOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
+
+    let response;
+    for (let attempt = 0; attempt <= 3; attempt++) {
+        response = await fetch(imgUrl, imgOpts);
+        if (response.status !== 503) break;
+        if (attempt < 3) await new Promise(res => setTimeout(res, (attempt + 1) * 8000));
+    }
 
     if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
+        if (response.status === 503) throw new Error("El modelo de imagen está sobrecargado. Esperá unos segundos y volvé a intentarlo.");
         throw new Error(errData.error?.message || `Image generation failed (${response.status})`);
     }
 

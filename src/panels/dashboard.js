@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
+import { showLoader, hideLoader } from '../lib/loader.js';
 
 function drawChart(canvas, chartData) {
   const ctx = canvas.getContext('2d');
@@ -56,8 +57,7 @@ export async function renderDashboard(container) {
     return; 
   }
 
-  // Visual feedback immediate
-  container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
+  showLoader(container, { title: 'Cargando métricas del canal...', subtitle: 'Obteniendo tus estadísticas creativas', detail: 'CONSULTANDO BD' });
 
   try {
     // Fetch metrics with a catch-all for individual failures
@@ -150,6 +150,7 @@ export async function renderDashboard(container) {
       </div>`}
     </div>`;
 
+    hideLoader(false);
     container.innerHTML = html;
     requestAnimationFrame(() => {
       const canvas = document.getElementById('ctr-chart');
@@ -163,6 +164,7 @@ export async function renderDashboard(container) {
 
   } catch (err) {
     console.error('Dashboard error:', err);
+    hideLoader(false);
     container.innerHTML = `
       <div style="padding:40px;text-align:center;color:var(--text-secondary);">
         <div style="font-size:32px;margin-bottom:12px;color:var(--danger);">${icon('alertTriangle', 32)}</div>
