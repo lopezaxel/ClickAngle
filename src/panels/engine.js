@@ -121,7 +121,7 @@ export async function renderEngine(container) {
   const { activeChannelId } = getState();
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
 
-  container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
+  showLoader(container, { title: 'Cargando proyectos...', subtitle: 'Sincronizando miniaturas y configuración de marca', detail: 'CONSULTANDO BD' });
 
   let projects, brandKit, faceList;
   try {
@@ -147,7 +147,7 @@ export async function renderEngine(container) {
 
   // UI State
   let selectedProjectId = projects[0]?.id || null;
-  let workflowStep = 1;
+  let workflowStep = selectedProjectId ? 2 : 1;
   let selectedFormats = [];
   let selectedStyleId = null;
   let isGenerating = false;
@@ -168,10 +168,9 @@ export async function renderEngine(container) {
 
   function render() {
     const project = getProject();
-    const selectedAngles = project?.logic_dna?.selected_angles || [];
     const variants = project?.thumbnail_variants || [];
+    const selectedAngles = project?.logic_dna?.selected_angles || [];
 
-    // Ensure lightbox exists in the page (only once)
     if (!document.getElementById('thumb-lightbox')) {
       const lb = document.createElement('div');
       lb.id = 'thumb-lightbox';
@@ -183,7 +182,6 @@ export async function renderEngine(container) {
       });
     }
 
-    // Auto-match face from emotion_label in visual_briefing
     if (project?.logic_dna?.visual_briefing?.emotion_label && faceList.length > 0) {
       const emotionLabel = project.logic_dna.visual_briefing.emotion_label;
       const match = faceList.find(f => f.expression_type === emotionLabel);
@@ -192,114 +190,84 @@ export async function renderEngine(container) {
       autoMatchedFaceId = faceList[0]?.id || null;
     }
 
-    // Build project dropdown items
-    const projectDropdownItems = projects.map(p => {
-      const pAngles = p.logic_dna?.selected_angles || [];
-      const pVariants = p.thumbnail_variants || [];
-      const isActive = p.id === selectedProjectId;
-      const hasVB = !!p.logic_dna?.visual_briefing;
-      return `
-        <div class="project-folder" data-project-id="${p.id}"
-          style="display:flex; align-items:center; gap:var(--space-sm); padding:var(--space-sm) var(--space-md); cursor:pointer; border-radius:var(--radius-md); transition:background 0.12s;
-            ${isActive ? 'background:rgba(220,38,38,0.1);' : 'background:transparent;'}"
-          onmouseover="if(!this.classList.contains('active-proj')) this.style.background='var(--bg-elevated)';"
-          onmouseout="this.style.background='${isActive ? 'rgba(220,38,38,0.1)' : 'transparent'}';">
-          <span style="color:${isActive ? 'var(--accent)' : 'var(--text-tertiary)'}; flex-shrink:0;">${icon('folder', 14)}</span>
-          <div style="flex:1; min-width:0;">
-            <div class="text-sm font-bold" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${isActive ? 'var(--text-primary)' : 'var(--text-secondary)'};">${p.title}</div>
-            <div class="flex gap-xs mt-xs" style="flex-wrap:wrap;">
-              <span class="badge badge-neutral" style="font-size:9px;">${pAngles.length} ángulos</span>
-              <span class="badge ${pVariants.length > 0 ? 'badge-accent' : 'badge-neutral'}" style="font-size:9px;">${pVariants.length} miniaturas</span>
-              ${hasVB ? `<span class="badge" style="font-size:9px; background:rgba(99,102,241,0.2); color:#818cf8;">🧬 DNA</span>` : ''}
-            </div>
-          </div>
-          <div class="flex gap-xs" style="flex-shrink:0;">
-            <button class="btn-rename-project" data-project-id="${p.id}" data-project-title="${p.title.replace(/"/g, '&quot;')}"
-              style="background:rgba(129,140,248,0.12); border:1px solid rgba(129,140,248,0.3); cursor:pointer; color:#818cf8; padding:5px 8px; border-radius:6px; display:flex; align-items:center; gap:4px; transition:all 0.15s; font-size:10px; font-weight:700; letter-spacing:0.5px;"
-              onmouseover="this.style.background='rgba(129,140,248,0.25)';this.style.borderColor='#818cf8';"
-              onmouseout="this.style.background='rgba(129,140,248,0.12)';this.style.borderColor='rgba(129,140,248,0.3)';"
-              title="Renombrar proyecto">
-              ${icon('edit', 12)} <span>Editar</span>
-            </button>
-            <button class="btn-delete-project" data-project-id="${p.id}"
-              style="background:rgba(220,38,38,0.12); border:1px solid rgba(220,38,38,0.35); cursor:pointer; color:#ef4444; padding:5px 8px; border-radius:6px; display:flex; align-items:center; gap:4px; transition:all 0.15s; font-size:10px; font-weight:700; letter-spacing:0.5px;"
-              onmouseover="this.style.background='rgba(220,38,38,0.25)';this.style.borderColor='#ef4444';"
-              onmouseout="this.style.background='rgba(220,38,38,0.12)';this.style.borderColor='rgba(220,38,38,0.35)';"
-              title="Eliminar proyecto">
-              ${icon('trash', 12)} <span>Borrar</span>
-            </button>
-          </div>
-        </div>`;
-    }).join('');
+    const canGoStep2 = !!selectedProjectId;
+    const canGoStep3 = canGoStep2 && selectedFormats.length > 0;
+    const canGenerate = canGoStep3 && !!selectedStyleId && selectedAngles.length > 0;
+    const stepDone = [canGoStep2, canGoStep3, false];
+    const canAccess = [true, canGoStep2, canGoStep3];
+    const stepDefs = [
+      { label: 'Proyecto', desc: 'Guión analizado' },
+      { label: 'Formato', desc: 'Composición visual' },
+      { label: 'Estilo & Generar', desc: 'Look + rostro + acción' },
+    ];
 
     container.innerHTML = `<div class="animate-in">
-      <!-- ── Header ── -->
-      <div class="section-header" style="margin-bottom:var(--space-md);">
+      <div class="section-header" style="margin-bottom:var(--space-lg);">
         <div>
           <h2 class="section-title">${icon('cog', 22)} Fábrica Creativa</h2>
-          <p class="section-subtitle">Orquestador Maestro — DNA Chain → Miniatura</p>
+          <p class="section-subtitle">DNA Chain → Miniatura de alto CTR</p>
         </div>
       </div>
 
-      <!-- ── Project Selector (dropdown, full width) ── -->
-      <div style="position:relative; margin-bottom:var(--space-md);" id="project-selector-wrap">
-        ${projects.length === 0 ? `
-          <div class="card" style="text-align:center; padding:var(--space-lg); opacity:0.6;">
-            ${icon('brain', 24)}
-            <p class="text-sm text-muted mt-sm">Sin proyectos. Procesá un guión en El Cerebro.</p>
+      <!-- Progress bar -->
+      <div style="display:flex;align-items:center;margin-bottom:var(--space-xl);padding:0 2px;">
+        ${stepDefs.map((s, i) => {
+          const n = i + 1;
+          const isActive = workflowStep === n;
+          const isDone = stepDone[i];
+          const accessible = canAccess[i];
+          return `
+          <div class="step-tab" data-step="${n}" ${!accessible ? 'disabled' : ''}
+            style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;cursor:${accessible ? 'pointer' : 'default'};opacity:${!accessible ? 0.4 : 1};">
+            <div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;transition:all 0.2s;
+              ${isDone
+                ? 'background:var(--success);color:white;'
+                : isActive
+                  ? 'background:var(--accent);color:white;box-shadow:0 0 18px rgba(220,38,38,0.45);'
+                  : 'background:var(--bg-elevated);color:var(--text-tertiary);border:1px solid var(--border);'}">
+              ${isDone ? icon('check', 13) : n}
+            </div>
+            <div style="margin-top:7px;text-align:center;">
+              <div style="font-size:11px;font-weight:${isActive ? '800' : '600'};white-space:nowrap;
+                color:${isActive ? 'var(--text-primary)' : isDone ? 'var(--text-secondary)' : 'var(--text-tertiary)'};">${s.label}</div>
+              <div style="font-size:9px;color:var(--text-tertiary);white-space:nowrap;margin-top:1px;">${s.desc}</div>
+            </div>
+          </div>
+          ${i < stepDefs.length - 1 ? `<div style="flex:1;height:1px;margin:0 10px;margin-bottom:24px;
+            background:${isDone ? 'var(--success)' : 'var(--border)'};opacity:${isDone ? '0.5' : '0.2'};"></div>` : ''}`;
+        }).join('')}
+      </div>
+
+      <!-- Step content -->
+      <div id="step-content" style="min-height:300px;">
+        ${workflowStep === 1 ? renderProjectStep() : workflowStep === 2 ? renderFormatStep() : renderStyleGenStep(project, selectedAngles)}
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="flex justify-between items-center" style="margin-top:var(--space-lg);padding-top:var(--space-md);border-top:1px solid var(--border);">
+        <button class="btn btn-secondary btn-sm" id="btn-prev-step" ${workflowStep === 1 ? 'disabled' : ''}>
+          ${icon('arrowLeft', 14)} Anterior
+        </button>
+        ${workflowStep < 3 ? `
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${workflowStep === 1 && !canGoStep2 ? `<span class="text-xs text-muted">Seleccioná un proyecto</span>` : ''}
+            ${workflowStep === 2 && !canGoStep3 ? `<span class="text-xs text-muted">Elegí al menos un formato</span>` : ''}
+            <button class="btn btn-primary" id="btn-next-step" style="padding:8px 20px;"
+              ${(workflowStep === 1 && !canGoStep2) || (workflowStep === 2 && !canGoStep3) ? 'disabled' : ''}>
+              Siguiente ${icon('arrowRight', 14)}
+            </button>
           </div>
         ` : `
-          <!-- Trigger button -->
-          <div style="font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:5px; padding-left:2px; opacity:0.6;">
-            Proyecto activo — hacé click para cambiar
-          </div>
-          <button id="btn-project-dropdown" style="
-            width:100%; display:flex; align-items:center; gap:var(--space-md);
-            background:var(--bg-card); border:1px solid ${project ? 'var(--accent)' : 'var(--border)'};
-            border-radius:var(--radius-lg); padding:var(--space-sm) var(--space-md);
-            cursor:pointer; transition:all 0.15s; text-align:left;"
-            onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg-elevated)';"
-            onmouseout="this.style.borderColor='${project ? 'var(--accent)' : 'var(--border)'}';this.style.background='var(--bg-card)';">
-            <span style="color:var(--accent); flex-shrink:0;">${icon('folder', 16)}</span>
-            <div style="flex:1; min-width:0;">
-              ${project ? `
-                <div class="font-bold text-sm" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${project.title}</div>
-                <div class="flex gap-xs mt-xs" style="flex-wrap:wrap;">
-                  <span class="badge badge-neutral" style="font-size:9px;">${selectedAngles.length} ángulos</span>
-                  <span class="badge ${variants.length > 0 ? 'badge-accent' : 'badge-neutral'}" style="font-size:9px;">${variants.length} miniaturas</span>
-                  ${project.logic_dna?.visual_briefing ? `<span class="badge" style="font-size:9px; background:rgba(99,102,241,0.2); color:#818cf8;">🧬 DNA</span>` : ''}
-                </div>
-              ` : `
-                <div class="text-sm" style="color:var(--accent); font-weight:600;">Seleccioná un proyecto para comenzar →</div>
-              `}
-            </div>
-            <div style="flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:2px;">
-              <span style="color:var(--text-tertiary); transition:transform 0.2s;" id="dropdown-chevron">${icon('arrowDown', 14)}</span>
-              <span style="font-size:8px; color:var(--accent); font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">cambiar</span>
-            </div>
+          <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate || isGenerating ? 'disabled' : ''}
+            style="background:linear-gradient(135deg,var(--accent),#9333ea);font-size:14px;padding:12px 28px;font-weight:800;letter-spacing:0.5px;border-radius:var(--radius-md);">
+            ${isGenerating
+              ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando...`
+              : `${icon('rocket', 16)} GENERAR ${selectedAngles.length} MINIATURA${selectedAngles.length !== 1 ? 'S' : ''}`}
           </button>
-
-          <!-- Dropdown panel -->
-          <div id="project-dropdown-panel" style="
-            display:none; position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:200;
-            background:var(--bg-elevated); border:1px solid var(--border-light);
-            border-radius:var(--radius-lg); padding:var(--space-sm);
-            box-shadow:0 16px 48px rgba(0,0,0,0.6); max-height:320px; overflow-y:auto;">
-            ${projectDropdownItems}
-          </div>
         `}
       </div>
 
-      <!-- ── Main workflow (full width) ── -->
-      <div>
-        ${!project ? `
-          <div class="card" style="text-align:center; padding:var(--space-2xl); opacity:0.5;">
-            ${icon('folder', 48)}
-            <p class="text-sm text-muted mt-md">Seleccioná un proyecto arriba para comenzar</p>
-          </div>
-        ` : renderWorkflow(project, selectedAngles, variants)}
-      </div>
-
+      ${project && variants.length > 0 ? renderVariantsHistory(project, variants) : ''}
     </div>`;
 
     bindEvents();
@@ -347,106 +315,327 @@ export async function renderEngine(container) {
     </div>`;
   }
 
-  // ─── WORKFLOW ─────────────────────────────────────────────────────────────
+  // ─── Partial re-render (step content only — no header/progress/nav flash) ──
 
-  function renderWorkflow(project, selectedAngles, variants) {
-    const canGoStep2 = selectedFormats.length > 0;
-    const canGoStep3 = canGoStep2 && selectedStyleId;
-    const activeBatchIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
-    const batchCount = activeBatchIndices.length;
-    const canGenerate = canGoStep3 && batchCount > 0;
-
-    const stepLabels = ['Formato', 'Estilo Visual', 'Sintetizar'];
-    const stepDone = [canGoStep2, canGoStep3, false];
-
-    return `
-    <!-- ── Project header (compact + collapsible DNA) ── -->
-    <div style="background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 16px; margin-bottom:var(--space-md);">
-      <div class="flex items-center justify-between">
-        <div style="min-width:0; flex:1;">
-          <div class="font-bold" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</div>
-          ${project.logic_dna?.hook ? `<div class="text-xs text-muted" style="margin-top:2px; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.logic_dna.hook}</div>` : ''}
-        </div>
-        <details style="flex-shrink:0; margin-left:12px;">
-          <summary style="cursor:pointer; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:rgba(99,102,241,0.8); white-space:nowrap; list-style:none; user-select:none;">🧬 Ver contexto</summary>
-          <div style="position:absolute; right:0; z-index:50; margin-top:8px; width:360px; background:var(--bg-elevated); border:1px solid rgba(99,102,241,0.3); border-radius:var(--radius-md); padding:var(--space-md); box-shadow:0 8px 32px rgba(0,0,0,0.5);">
-            ${renderDNAChecklist(project)}
-          </div>
-        </details>
-      </div>
-    </div>
-
-    ${selectedAngles.length === 0 ? `
-      <div class="card" style="text-align:center; padding:var(--space-xl); opacity:0.6;">
-        ${icon('crosshair', 32)}
-        <p class="text-sm text-muted mt-sm">Este proyecto no tiene ángulos seleccionados.<br/>Volvé a El Cerebro y elegí ángulos.</p>
-      </div>
-    ` : `
-
-    <!-- ── Step progress indicator ── -->
-    <div style="display:flex; align-items:center; margin-bottom:var(--space-lg);">
-      ${stepLabels.map((label, i) => {
-        const n = i + 1;
-        const isActive = workflowStep === n;
-        const isDone = workflowStep > n;
-        const canAccess = n === 1 || (n === 2 && canGoStep2) || (n === 3 && canGoStep3);
-        return `
-        <button class="step-tab" data-step="${n}"
-          ${!canAccess ? 'disabled' : ''}
-          style="display:flex; align-items:center; gap:8px; background:none; border:none; cursor:${canAccess ? 'pointer' : 'default'}; padding:0; flex-shrink:0;">
-          <div style="width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; flex-shrink:0; transition:all 0.2s;
-            ${isDone
-              ? 'background:var(--success); color:white;'
-              : isActive
-                ? 'background:var(--accent); color:white; box-shadow:0 0 12px rgba(220,38,38,0.4);'
-                : 'background:var(--bg-tertiary); color:' + (canAccess ? 'var(--text-secondary)' : 'var(--text-tertiary)') + '; border:1px solid var(--border);'}">
-            ${isDone ? icon('check', 11) : n}
-          </div>
-          <span style="font-size:12px; font-weight:${isActive ? '800' : '500'}; color:${isActive ? 'var(--text-primary)' : isDone ? 'var(--text-secondary)' : (canAccess ? 'var(--text-secondary)' : 'var(--text-tertiary)')}; white-space:nowrap;">${label}</span>
-        </button>
-        ${i < stepLabels.length - 1 ? `
-          <div style="flex:1; height:1px; margin:0 10px; background:${isDone ? 'var(--success)' : 'var(--border)'}; opacity:${isDone ? '0.6' : '0.3'};"></div>
-        ` : ''}`;
-      }).join('')}
-    </div>
-
-    <!-- ── Step content ── -->
-    <div style="min-height:280px;">
-      ${workflowStep === 1 ? renderStep1() : workflowStep === 2 ? renderStep2() : renderStep3(project, selectedAngles, variants)}
-    </div>
-
-    <!-- ── Bottom navigation ── -->
-    <div class="flex justify-between items-center" style="margin-top:var(--space-lg); padding-top:var(--space-md); border-top:1px solid var(--border);">
-      <button class="btn btn-secondary btn-sm" id="btn-prev-step" ${workflowStep === 1 ? 'disabled' : ''}>
-        ${icon('arrowLeft', 14)} Anterior
-      </button>
-      ${workflowStep < 3 ? `
-        <div style="display:flex; align-items:center; gap:10px;">
-          ${workflowStep === 1 && !canGoStep2 ? `<span class="text-xs text-muted">Elegí al menos un formato</span>` : ''}
-          ${workflowStep === 2 && !canGoStep3 ? `<span class="text-xs text-muted">Elegí un estilo visual</span>` : ''}
-          <button class="btn btn-primary" id="btn-next-step" style="padding:8px 20px;"
-            ${workflowStep === 1 && !canGoStep2 ? 'disabled' : ''}
-            ${workflowStep === 2 && !canGoStep3 ? 'disabled' : ''}>
-            Siguiente ${icon('arrowRight', 14)}
-          </button>
-        </div>
-      ` : `
-        <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate || isGenerating ? 'disabled' : ''}
-          style="background:linear-gradient(135deg, var(--accent), #9333ea); font-size:14px; padding:12px 28px; font-weight:800; letter-spacing:0.5px; border-radius:var(--radius-md);">
-          ${isGenerating
-            ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando...`
-            : `${icon('rocket', 16)} GENERAR ${batchCount} MINIATURA${batchCount !== 1 ? 'S' : ''}`}
-        </button>
-      `}
-    </div>
-    `}
-
-    <!-- Generated variants (shown below workflow if any) -->
-    ${renderVariantsHistory(project, variants)}
-    `;
+  function rerenderStep() {
+    const el = document.getElementById('step-content');
+    if (!el) { render(); return; }
+    const project = getProject();
+    const selectedAngles = project?.logic_dna?.selected_angles || [];
+    el.innerHTML = workflowStep === 1 ? renderProjectStep()
+      : workflowStep === 2 ? renderFormatStep()
+      : renderStyleGenStep(project, selectedAngles);
+    bindStepContentEvents();
   }
 
-  // ─── STEP 1: Formato ──────────────────────────────────────────────────────
+  // ─── STEP 1: Proyecto ─────────────────────────────────────────────────────
+
+  function renderProjectStep() {
+    const selectedProject = getProject();
+
+    const projectListHTML = projects.length === 0 ? `
+      <div style="text-align:center;padding:var(--space-xl);opacity:0.5;">
+        ${icon('brain', 32)}
+        <p class="text-sm text-muted mt-md">Sin proyectos. Procesá un guión en El Cerebro.</p>
+      </div>
+    ` : `
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:var(--space-md);">
+        ${projects.map(p => {
+          const pAngles = p.logic_dna?.selected_angles || [];
+          const pVariants = p.thumbnail_variants || [];
+          const hasVB = !!p.logic_dna?.visual_briefing;
+          const isActive = p.id === selectedProjectId;
+          return `
+          <div class="project-row" data-project-id="${p.id}" style="
+            display:flex;align-items:center;gap:12px;padding:12px 14px;
+            background:${isActive ? 'rgba(220,38,38,0.08)' : 'var(--bg-card)'};
+            border:1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
+            border-radius:var(--radius-md);cursor:pointer;transition:all 0.15s;">
+            <span style="color:${isActive ? 'var(--accent)' : 'var(--text-tertiary)'};flex-shrink:0;">${icon('folder', 16)}</span>
+            <div style="flex:1;min-width:0;">
+              <div class="font-bold" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isActive ? 'var(--text-primary)' : 'var(--text-secondary)'};">${p.title}</div>
+              ${p.logic_dna?.hook ? `<div class="text-xs text-muted" style="margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.65;">${p.logic_dna.hook}</div>` : ''}
+              <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
+                ${pAngles.length > 0 ? `<span class="badge badge-neutral" style="font-size:9px;">${pAngles.length} ángulos</span>` : ''}
+                ${pVariants.length > 0 ? `<span class="badge badge-accent" style="font-size:9px;">${pVariants.length} miniatura${pVariants.length !== 1 ? 's' : ''}</span>` : ''}
+                ${hasVB ? `<span class="badge" style="font-size:9px;background:rgba(99,102,241,0.2);color:#818cf8;">🧬 DNA</span>` : ''}
+              </div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0;">
+              <button class="btn-rename-project" data-project-id="${p.id}" data-project-title="${p.title.replace(/"/g, '&quot;')}"
+                style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(129,140,248,0.1);border:1px solid rgba(129,140,248,0.25);border-radius:6px;cursor:pointer;color:#818cf8;"
+                title="Renombrar">
+                ${icon('edit', 11)}
+              </button>
+              <button class="btn-delete-project" data-project-id="${p.id}"
+                style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.25);border-radius:6px;cursor:pointer;color:#ef4444;"
+                title="Eliminar">
+                ${icon('trash', 11)}
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+    return `
+    <div>
+      ${selectedProject ? `
+      <!-- Selected project display -->
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(220,38,38,0.08);border:1px solid var(--accent);border-radius:var(--radius-md);margin-bottom:var(--space-md);">
+        <span style="color:var(--accent);flex-shrink:0;">${icon('folder', 16)}</span>
+        <div style="flex:1;min-width:0;">
+          <div class="font-bold" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selectedProject.title}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">
+            ${(selectedProject.logic_dna?.selected_angles||[]).length > 0 ? `<span class="badge badge-neutral" style="font-size:9px;">${selectedProject.logic_dna.selected_angles.length} ángulos</span>` : ''}
+            ${(selectedProject.thumbnail_variants||[]).length > 0 ? `<span class="badge badge-accent" style="font-size:9px;">${selectedProject.thumbnail_variants.length} miniatura${selectedProject.thumbnail_variants.length !== 1 ? 's' : ''}</span>` : ''}
+            ${selectedProject.logic_dna?.visual_briefing ? `<span class="badge" style="font-size:9px;background:rgba(99,102,241,0.2);color:#818cf8;">🧬 DNA</span>` : ''}
+          </div>
+        </div>
+        <span style="color:var(--success);font-size:18px;flex-shrink:0;">✓</span>
+      </div>
+      ` : ''}
+
+      <!-- CTA button -->
+      <button id="btn-open-project-modal"
+        style="width:100%;padding:14px 20px;background:var(--accent);border:none;border-radius:var(--radius-md);cursor:pointer;color:white;font-size:13px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:8px;">
+        ${icon('folder', 15)} ${selectedProject ? 'CAMBIAR PROYECTO O VIDEO' : 'ELEGÍ TU PROYECTO O VIDEO'}
+      </button>
+    </div>`;
+  }
+
+  // ─── Project modal overlay ────────────────────────────────────────────────
+
+  function openProjectModal() {
+    document.getElementById('project-modal-overlay')?.remove();
+
+    let modalSelectedId = selectedProjectId;
+
+    function buildProjectRows(filter) {
+      const q = (filter || '').toLowerCase();
+      const filtered = q
+        ? projects.filter(p =>
+            p.title.toLowerCase().includes(q) ||
+            (p.logic_dna?.hook || '').toLowerCase().includes(q))
+        : projects;
+
+      if (filtered.length === 0) return `
+        <div style="text-align:center;padding:40px;opacity:0.5;">
+          ${icon('brain', 32)}
+          <p class="text-sm text-muted" style="margin-top:12px;">Sin resultados.</p>
+        </div>`;
+
+      return filtered.map(p => {
+        const pAngles = p.logic_dna?.selected_angles || [];
+        const pVariants = p.thumbnail_variants || [];
+        const hasVB = !!p.logic_dna?.visual_briefing;
+        const isActive = p.id === modalSelectedId;
+        return `
+        <div class="modal-project-row" data-project-id="${p.id}" style="
+          display:flex;align-items:center;gap:12px;padding:14px 16px;
+          background:${isActive ? 'rgba(220,38,38,0.12)' : 'rgba(255,255,255,0.03)'};
+          border:1.5px solid ${isActive ? 'var(--accent)' : 'rgba(255,255,255,0.07)'};
+          border-radius:10px;cursor:pointer;transition:all 0.15s;margin-bottom:8px;">
+          <span style="color:${isActive ? 'var(--accent)' : 'var(--text-tertiary)'};flex-shrink:0;">${icon('folder', 18)}</span>
+          <div style="flex:1;min-width:0;">
+            <div class="font-bold" style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isActive ? 'var(--text-primary)' : 'var(--text-secondary)'};">${p.title}</div>
+            ${p.logic_dna?.hook ? `<div class="text-xs text-muted" style="margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.6;">${p.logic_dna.hook}</div>` : ''}
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">
+              ${pAngles.length > 0 ? `<span class="badge badge-neutral" style="font-size:9px;">${pAngles.length} ángulos</span>` : ''}
+              ${pVariants.length > 0 ? `<span class="badge badge-accent" style="font-size:9px;">${pVariants.length} miniatura${pVariants.length !== 1 ? 's' : ''}</span>` : ''}
+              ${hasVB ? `<span class="badge" style="font-size:9px;background:rgba(99,102,241,0.2);color:#818cf8;">🧬 DNA</span>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0;">
+            <button class="modal-btn-rename" data-project-id="${p.id}" data-project-title="${p.title.replace(/"/g, '&quot;')}"
+              style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(129,140,248,0.1);border:1px solid rgba(129,140,248,0.25);border-radius:7px;cursor:pointer;color:#818cf8;"
+              title="Renombrar">
+              ${icon('edit', 12)}
+            </button>
+            <button class="modal-btn-delete" data-project-id="${p.id}"
+              style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.25);border-radius:7px;cursor:pointer;color:#ef4444;"
+              title="Eliminar">
+              ${icon('trash', 12)}
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'project-modal-overlay';
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:9999;
+      background:rgba(0,0,0,0.75);
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      display:flex;align-items:center;justify-content:center;
+      padding:20px;
+    `;
+
+    overlay.innerHTML = `
+      <div style="
+        background:var(--bg-secondary);
+        border:1px solid var(--border);
+        border-radius:16px;
+        width:100%;
+        max-width:680px;
+        max-height:85vh;
+        display:flex;
+        flex-direction:column;
+        overflow:hidden;
+        box-shadow:0 24px 80px rgba(0,0,0,0.6);
+      ">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+          <div>
+            <div class="font-bold" style="font-size:16px;">Seleccioná tu proyecto o video</div>
+            <div class="text-xs text-muted" style="margin-top:2px;">${projects.length} proyecto${projects.length !== 1 ? 's' : ''} disponible${projects.length !== 1 ? 's' : ''}</div>
+          </div>
+          <button id="modal-close-btn" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--text-secondary);font-size:16px;">✕</button>
+        </div>
+
+        <div style="padding:14px 24px;border-bottom:1px solid var(--border);flex-shrink:0;">
+          <div style="position:relative;">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);pointer-events:none;">${icon('search', 14)}</span>
+            <input id="modal-search-input" type="text" placeholder="Buscá por título o tema del video..."
+              style="width:100%;padding:10px 12px 10px 36px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:13px;box-sizing:border-box;outline:none;" />
+          </div>
+        </div>
+
+        <div id="modal-project-list" style="flex:1;overflow-y:auto;padding:16px 24px;">
+          ${buildProjectRows()}
+        </div>
+
+        <div style="padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0;">
+          <button id="modal-confirm-btn"
+            ${!modalSelectedId ? 'disabled' : ''}
+            style="width:100%;padding:14px 20px;background:${modalSelectedId ? 'var(--accent)' : 'rgba(255,255,255,0.08)'};border:none;border-radius:10px;cursor:${modalSelectedId ? 'pointer' : 'not-allowed'};color:${modalSelectedId ? 'white' : 'var(--text-tertiary)'};font-size:14px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;transition:all 0.2s;">
+            ${modalSelectedId ? '🚀 VAMOS A CREAR' : 'Seleccioná un proyecto primero'}
+          </button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    setTimeout(() => document.getElementById('modal-search-input')?.focus(), 50);
+
+    function updateConfirmBtn() {
+      const btn = document.getElementById('modal-confirm-btn');
+      if (!btn) return;
+      if (modalSelectedId) {
+        btn.disabled = false;
+        btn.style.background = 'var(--accent)';
+        btn.style.color = 'white';
+        btn.style.cursor = 'pointer';
+        btn.textContent = '🚀 VAMOS A CREAR';
+      } else {
+        btn.disabled = true;
+        btn.style.background = 'rgba(255,255,255,0.08)';
+        btn.style.color = 'var(--text-tertiary)';
+        btn.style.cursor = 'not-allowed';
+        btn.textContent = 'Seleccioná un proyecto primero';
+      }
+    }
+
+    function refreshList() {
+      const filter = document.getElementById('modal-search-input')?.value || '';
+      const list = document.getElementById('modal-project-list');
+      if (list) list.innerHTML = buildProjectRows(filter);
+      bindModalRowEvents();
+    }
+
+    function bindModalRowEvents() {
+      overlay.querySelectorAll('.modal-project-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.modal-btn-rename') || e.target.closest('.modal-btn-delete')) return;
+          modalSelectedId = row.dataset.projectId;
+          refreshList();
+          updateConfirmBtn();
+        });
+      });
+
+      overlay.querySelectorAll('.modal-btn-rename').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const projectId = btn.dataset.projectId;
+          const currentTitle = btn.dataset.projectTitle;
+          const newTitle = await inputDialog('Ingresá el nuevo nombre para este proyecto', {
+            title: 'Renombrar Proyecto',
+            defaultValue: currentTitle,
+            placeholder: 'Nombre del proyecto...',
+            confirmLabel: 'Renombrar',
+          });
+          if (!newTitle || newTitle === currentTitle) return;
+          try {
+            const { error } = await supabase.from('projects').update({ title: newTitle }).eq('id', projectId);
+            if (error) throw error;
+            await reloadProjects();
+            refreshList();
+            toast('Proyecto renombrado', 'success', 2500);
+          } catch (err) {
+            toast('Error al renombrar: ' + err.message, 'error');
+          }
+        });
+      });
+
+      overlay.querySelectorAll('.modal-btn-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const projectId = btn.dataset.projectId;
+          const project = projects.find(p => p.id === projectId);
+          if (!project) return;
+          const variantCount = (project.thumbnail_variants || []).length;
+          const ok = await confirmDialog(
+            `¿Eliminar "${project.title}"?\nSe borrarán ${variantCount} miniatura${variantCount !== 1 ? 's' : ''} y todos los datos. Esta acción no se puede deshacer.`,
+            { title: 'Eliminar Proyecto', confirmLabel: 'Eliminar', danger: true }
+          );
+          if (!ok) return;
+          try {
+            for (const v of (project.thumbnail_variants || [])) {
+              if (v.image_url) {
+                const parts = v.image_url.split('/public/thumbnails/');
+                if (parts.length > 1) await supabase.storage.from('thumbnails').remove([parts[1]]).catch(() => {});
+              }
+            }
+            await supabase.from('thumbnail_variants').delete().eq('project_id', projectId);
+            const { error } = await supabase.from('projects').delete().eq('id', projectId);
+            if (error) throw error;
+            if (modalSelectedId === projectId) modalSelectedId = null;
+            if (selectedProjectId === projectId) {
+              selectedProjectId = null;
+              workflowStep = 1;
+              selectedFormats = [];
+              selectedStyleId = null;
+              batchAngleSelection = null;
+            }
+            await reloadProjects();
+            refreshList();
+            updateConfirmBtn();
+            toast('Proyecto eliminado', 'success', 2500);
+          } catch (err) {
+            toast('Error al eliminar: ' + err.message, 'error');
+          }
+        });
+      });
+    }
+
+    document.getElementById('modal-close-btn').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('modal-search-input').addEventListener('input', refreshList);
+    document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+      if (!modalSelectedId) return;
+      if (selectedProjectId !== modalSelectedId) {
+        selectedProjectId = modalSelectedId;
+        selectedFormats = [];
+        selectedStyleId = null;
+        batchAngleSelection = null;
+      }
+      overlay.remove();
+      rerenderStep();
+    });
+
+    bindModalRowEvents();
+  }
+
+  // ─── STEP 2: Formato ──────────────────────────────────────────────────────
 
   // Analyzes project DNA and returns format recommendations with reasons.
   // Deterministic — no API call. Runs on the logic_dna already in the project.
@@ -521,290 +710,146 @@ export async function renderEngine(container) {
     return recs;
   }
 
-  function renderStep1() {
+  function renderFormatStep() {
     const project = getProject();
     const recs = project ? recommendFormats(project) : [];
     const recMap = Object.fromEntries(recs.map(r => [r.id, r]));
-    const topRec = recs.find(r => r.confidence === 'alta') || recs[0] || null;
 
     return `
     <div>
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
+        Elegí el formato de composición — podés seleccionar varios
+      </div>
 
       ${recs.length > 0 ? `
-      <!-- IA Recommendation banner -->
-      <div style="
-        background: linear-gradient(135deg, rgba(220,38,38,0.08), rgba(168,85,247,0.06));
-        border: 1px solid rgba(220,38,38,0.25);
-        border-radius: var(--radius-md);
-        padding: var(--space-md);
-        margin-bottom: var(--space-md);
-      ">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-          <div style="
-            background: rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.4);
-            border-radius:4px; padding:3px 7px;
-            font-size:9px; font-weight:900; letter-spacing:1.5px; color:#ef4444; text-transform:uppercase;
-          ">✦ IA</div>
-          <div style="font-size:12px; font-weight:700; color:var(--text-primary);">
-            Formatos recomendados basados en tu guión y ángulos psicológicos
-          </div>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; gap:var(--space-sm);">
-          ${recs.map(r => {
-            const f = FORMATS.find(x => x.id === r.id);
-            return `
-            <div style="
-              display:flex; align-items:flex-start; gap:8px;
-              background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
-              border-radius:var(--radius-sm); padding:8px 10px; flex:1; min-width:180px;
-            ">
-              <span style="font-size:18px; flex-shrink:0; margin-top:1px;">${f?.emoji}</span>
-              <div>
-                <div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">
-                  <span style="font-size:11px; font-weight:800; color:var(--text-primary);">${f?.label}</span>
-                  <span style="
-                    font-size:8px; font-weight:900; letter-spacing:1px; text-transform:uppercase; padding:1px 5px;
-                    border-radius:3px; flex-shrink:0;
-                    ${r.confidence === 'alta'
-                      ? 'background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3);'
-                      : 'background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3);'}
-                  ">${r.confidence === 'alta' ? 'Alta' : 'Media'}</span>
-                </div>
-                <div style="font-size:10px; color:rgba(255,255,255,0.45); line-height:1.5;">${r.reason}</div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:var(--space-md);">
+        <span style="font-size:10px;font-weight:700;color:var(--text-tertiary);white-space:nowrap;">✦ IA recomienda:</span>
+        ${recs.map(r => {
+          const f = FORMATS.find(x => x.id === r.id);
+          return `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;
+            ${r.confidence === 'alta'
+              ? 'background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35);'
+              : 'background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);'}
+          ">${f?.emoji} ${f?.label}</span>`;
+        }).join('')}
       </div>
       ` : ''}
 
-      <div class="text-xs font-bold text-muted mb-md" style="letter-spacing:1px; text-transform:uppercase;">${icon('layout', 12)} Elegí el formato de composición (podés seleccionar varios)</div>
-
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
         ${FORMATS.map(f => {
           const isSelected = selectedFormats.includes(f.id);
           const rec = recMap[f.id];
           const isHighRec = rec?.confidence === 'alta';
-          const isMedRec  = rec?.confidence === 'media';
           return `
-          <div class="card format-card" data-format-id="${f.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
+          <div class="card format-card" data-format-id="${f.id}" style="cursor:pointer;padding:var(--space-md);transition:all 0.15s;position:relative;
             ${isSelected
-              ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);'
+              ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);'
               : isHighRec
-                ? 'border-color:rgba(16,185,129,0.45); background:rgba(16,185,129,0.04);'
-                : isMedRec
-                  ? 'border-color:rgba(245,158,11,0.35); background:rgba(245,158,11,0.03);'
-                  : ''}">
-
-            <!-- Check circle -->
-            <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
+                ? 'border-color:rgba(16,185,129,0.35);'
+                : ''}">
+            <div style="position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;
               border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
               background:${isSelected ? 'var(--accent)' : 'transparent'};
-              display:flex; align-items:center; justify-content:center; color:white; font-size:11px;">
+              display:flex;align-items:center;justify-content:center;color:white;">
               ${isSelected ? icon('check', 10) : ''}
             </div>
-
-            <!-- IA badge -->
-            ${rec ? `
-            <div style="
-              position:absolute; top:10px; left:10px;
-              font-size:8px; font-weight:900; letter-spacing:1px; text-transform:uppercase;
-              padding:2px 6px; border-radius:3px;
-              ${isHighRec
-                ? 'background:rgba(16,185,129,0.18); color:#10b981; border:1px solid rgba(16,185,129,0.4);'
-                : 'background:rgba(245,158,11,0.18); color:#f59e0b; border:1px solid rgba(245,158,11,0.35);'}
-            ">✦ IA ${isHighRec ? '★★★' : '★★'}</div>
-            ` : ''}
-
-            <div style="font-size:28px; margin-bottom:var(--space-sm); margin-top:${rec ? '20px' : '0'};">${f.emoji}</div>
+            ${isHighRec && !isSelected ? `<div style="position:absolute;top:10px;left:10px;font-size:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35);">✦ IA</div>` : ''}
+            <div style="font-size:32px;margin-bottom:8px;margin-top:${isHighRec ? '18px' : '0'};">${f.emoji}</div>
             <div class="font-bold" style="font-size:14px;">${f.label}</div>
-            <div class="text-xs mb-xs" style="color:${isHighRec ? '#10b981' : isMedRec ? '#f59e0b' : 'var(--accent)'};">${f.subtitle}</div>
-            <div class="text-xs text-muted" style="line-height:1.5;">${f.desc}</div>
+            <div class="text-xs" style="color:${isHighRec ? '#10b981' : 'var(--accent)'};margin-top:2px;">${f.subtitle}</div>
           </div>`;
         }).join('')}
       </div>
-
-      ${selectedFormats.length === 0 ? `
-        <p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná al menos un formato para continuar${topRec ? ` — IA recomienda empezar con <strong>${FORMATS.find(x=>x.id===topRec.id)?.label}</strong>` : ''}</p>
-      ` : `
-        <p class="text-xs text-accent mt-md" style="text-align:center;">${icon('check', 12)} ${selectedFormats.length} formato${selectedFormats.length > 1 ? 's' : ''} seleccionado${selectedFormats.length > 1 ? 's' : ''}</p>
-      `}
     </div>`;
   }
 
-  // ─── STEP 2: Estilo ───────────────────────────────────────────────────────
+  // ─── STEP 3: Estilo + Rostro + Generar ────────────────────────────────────
 
-  function renderStep2() {
-    const styleSummary = brandKit?.style_summary;
-    return `
-    <div>
-      <div class="text-xs font-bold text-muted mb-md" style="letter-spacing:1px; text-transform:uppercase;">${icon('palette', 12)} Elegí el estilo visual base</div>
+  function renderStyleGenStep(project, selectedAngles) {
+    if (!project) return `<div class="card" style="text-align:center;padding:var(--space-2xl);opacity:0.5;">${icon('folder', 40)}<p class="text-sm text-muted mt-md">Seleccioná un proyecto primero</p></div>`;
+    if (selectedAngles.length === 0) return `<div class="card" style="text-align:center;padding:var(--space-xl);opacity:0.6;">${icon('crosshair', 32)}<p class="text-sm text-muted mt-sm">Este proyecto no tiene ángulos.<br/>Volvé a El Cerebro y elegí ángulos.</p></div>`;
 
-      ${styleSummary ? `
-      <div class="card mb-md" style="background:rgba(99,102,241,0.08); border-color:rgba(99,102,241,0.3); padding:var(--space-md);">
-        <div class="text-xs font-bold mb-sm" style="color:#818cf8; letter-spacing:1px;">✨ Firma Visual de tu Galería de Éxitos</div>
-        <div class="text-xs text-muted mb-xs"><strong>Estilo:</strong> ${styleSummary.visual_style || '—'}</div>
-        <div class="text-xs text-muted mb-xs"><strong>Patrón Ganador:</strong> ${styleSummary.winning_pattern || '—'}</div>
-        ${styleSummary.palette?.length ? `
-        <div class="flex gap-xs mt-sm" style="align-items:center;">
-          <span class="text-xs text-muted">Paleta:</span>
-          ${styleSummary.palette.map(c => `<div title="${c}" style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid rgba(255,255,255,0.15);"></div>`).join('')}
-        </div>` : ''}
-      </div>
-      ` : ''}
-
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
-        ${STYLES.map(s => {
-      const isSelected = selectedStyleId === s.id;
-      return `
-          <div class="card style-card" data-style-id="${s.id}" style="cursor:pointer; padding:var(--space-md); transition:all 0.15s; position:relative;
-            ${isSelected ? 'border-color:var(--accent); background:rgba(220,38,38,0.07);' : ''}">
-            <div style="position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
-              border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
-              background:${isSelected ? 'var(--accent)' : 'transparent'};
-              display:flex; align-items:center; justify-content:center; color:white; font-size:11px;">
-              ${isSelected ? icon('check', 10) : ''}
-            </div>
-            <div style="font-size:28px; margin-bottom:var(--space-sm);">${s.emoji}</div>
-            <div class="font-bold" style="font-size:14px;">${s.label}</div>
-            <div class="text-xs text-accent mb-xs">${s.subtitle}</div>
-            <div class="text-xs text-muted" style="line-height:1.5; font-style:italic; font-size:10px;">${s.lighting.replace('LIGHTING & TEXTURE: ', '').split('.')[0]}.</div>
-          </div>`;
-    }).join('')}
-      </div>
-      ${!selectedStyleId ? `<p class="text-xs text-muted mt-md" style="text-align:center; opacity:0.6;">Seleccioná un estilo visual para continuar</p>` : `
-        <p class="text-xs text-accent mt-md" style="text-align:center;">${icon('check', 12)} Estilo: <strong>${STYLES.find(s => s.id === selectedStyleId)?.label}</strong></p>
-      `}
-    </div>`;
-  }
-
-  // ─── STEP 3: Ángulo + Sintetizar ─────────────────────────────────────────
-
-  function renderStep3(project, selectedAngles, variants) {
     const vb = project?.logic_dna?.visual_briefing;
     const emotionLabel = vb?.emotion_label;
     const matchedFace = faceList.find(f => f.id === autoMatchedFaceId);
     const effectiveUseFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
     const effectiveExpressionId = selectedExpressionId || autoMatchedFaceId;
 
-    const td = project.logic_dna?.text_decision;
-    const suggestions = project.logic_dna?.text_suggestions || [];
-    const typeLabels = { pregunta: '¿...?', numero: '0-9', palabra_choque: '⚡', frase_corta: 'AB', ninguno: '—' };
-
-    const activeSelection = batchAngleSelection ?? selectedAngles.map((_, i) => i);
-    const allSelected = activeSelection.length === selectedAngles.length;
-    const selectedCount = activeSelection.length;
-    const PSYCH_COLORS = [
-      { badge: '#ef4444', bg: 'rgba(220,38,38,0.08)' },
-      { badge: '#a855f7', bg: 'rgba(168,85,247,0.08)' },
-      { badge: '#3b82f6', bg: 'rgba(59,130,246,0.08)' },
-      { badge: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
-      { badge: '#10b981', bg: 'rgba(16,185,129,0.08)' },
-    ];
-
     return `
     <div>
+      <!-- Estilo visual -->
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
+        Elegí el estilo visual
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:var(--space-lg);">
+        ${STYLES.map(s => {
+          const isSelected = selectedStyleId === s.id;
+          return `
+          <div class="card style-card" data-style-id="${s.id}" style="cursor:pointer;padding:12px;transition:all 0.15s;position:relative;
+            ${isSelected ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);' : ''}">
+            <div style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;
+              border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
+              background:${isSelected ? 'var(--accent)' : 'transparent'};
+              display:flex;align-items:center;justify-content:center;color:white;">
+              ${isSelected ? icon('check', 9) : ''}
+            </div>
+            <div style="font-size:24px;margin-bottom:6px;">${s.emoji}</div>
+            <div class="font-bold" style="font-size:12px;">${s.label}</div>
+            <div class="text-xs" style="color:var(--accent);margin-top:2px;">${s.subtitle}</div>
+          </div>`;
+        }).join('')}
+      </div>
 
-      <!-- ── 1. Rostro ── -->
-      <div style="background:var(--bg-tertiary); border:1px solid ${effectiveUseFace ? 'rgba(220,38,38,0.4)' : 'var(--border)'}; border-radius:var(--radius-md); padding:14px 16px; margin-bottom:var(--space-md); transition:border-color 0.2s;">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-sm">
-            <span style="font-size:18px;">${effectiveUseFace ? '🤳' : '🚫'}</span>
-            <div>
-              <div class="font-bold text-sm">${effectiveUseFace ? 'Incluir rostro en la miniatura' : 'Sin rostro'}</div>
-              <div class="text-xs text-muted">
-                ${effectiveUseFace && matchedFace
-                  ? `Match DNA: <strong>${matchedFace.expression_type}</strong>${emotionLabel ? ` → emoción "${emotionLabel}"` : ''}`
-                  : effectiveUseFace && !matchedFace && faceList.length > 0
-                    ? 'Seleccioná la expresión del select abajo'
-                    : effectiveUseFace && faceList.length === 0
-                      ? '⚠️ No hay fotos en Face Vault — subí fotos en Brand Kit'
-                      : 'La miniatura se generará sin cara'
-                }
-              </div>
+      <!-- Rostro -->
+      <div style="border-top:1px solid var(--border);padding-top:var(--space-md);margin-bottom:var(--space-md);">
+        <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:10px;">
+          Rostro del creador
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+          background:var(--bg-tertiary);border:1px solid ${effectiveUseFace ? 'rgba(220,38,38,0.4)' : 'var(--border)'};
+          border-radius:var(--radius-md);transition:border-color 0.2s;">
+          <div>
+            <div class="font-bold text-sm">${effectiveUseFace ? '🤳 Con rostro' : '🚫 Sin rostro'}</div>
+            <div class="text-xs text-muted" style="margin-top:2px;">
+              ${effectiveUseFace && matchedFace
+                ? `${matchedFace.expression_type}${emotionLabel ? ` — match DNA "${emotionLabel}"` : ''}`
+                : effectiveUseFace && faceList.length === 0
+                  ? '⚠️ No hay fotos en Face Vault — subí fotos en Brand Kit'
+                  : effectiveUseFace
+                    ? 'Seleccioná la expresión abajo'
+                    : 'La miniatura se genera sin cara'}
             </div>
           </div>
-          <!-- Toggle switch -->
-          <label style="position:relative; display:inline-block; width:44px; height:24px; cursor:pointer; flex-shrink:0;">
+          <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;flex-shrink:0;">
             <input type="checkbox" id="check-use-face" style="opacity:0;width:0;height:0;position:absolute;" ${effectiveUseFace ? 'checked' : ''} />
             <span style="position:absolute;inset:0;border-radius:12px;background:${effectiveUseFace ? 'var(--accent)' : 'var(--bg-elevated)'};border:1px solid ${effectiveUseFace ? 'var(--accent)' : 'var(--border)'};transition:background 0.2s;"></span>
             <span style="position:absolute;top:3px;left:${effectiveUseFace ? '23px' : '3px'};width:16px;height:16px;border-radius:50%;background:white;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
           </label>
         </div>
         ${effectiveUseFace && faceList.length > 0 ? `
-        <select class="form-select" id="select-expression-step3" style="font-size:12px; margin-top:10px;">
+        <select class="form-select" id="select-expression-step3" style="font-size:12px;margin-top:8px;">
           ${faceList.map(f => `<option value="${f.id}" ${f.id === effectiveExpressionId ? 'selected' : ''}>${f.expression_type || 'Sin etiqueta'}</option>`).join('')}
         </select>` : ''}
       </div>
 
-      <!-- ── 2. Ángulos ── -->
-      <div style="margin-bottom:var(--space-md);">
-        <div class="flex items-center justify-between mb-sm">
-          <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">
-            ${icon('crosshair', 12)} Ángulos a generar
-            <span style="color:var(--accent); margin-left:6px;">${selectedCount} de ${selectedAngles.length}</span>
-          </div>
-          <div class="flex gap-xs">
-            <button id="btn-batch-select-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(99,102,241,0.4); background:${allSelected ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#818cf8; cursor:pointer; font-weight:700;">Todos</button>
-            <button id="btn-batch-deselect-all" style="font-size:10px; padding:3px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:rgba(255,255,255,0.4); cursor:pointer; font-weight:700;">Ninguno</button>
-          </div>
+      <!-- Ángulos — resumen (solo info, todos incluidos automáticamente) -->
+      <div style="padding:10px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius-md);margin-bottom:var(--space-md);">
+        <div style="font-size:10px;font-weight:700;color:#818cf8;margin-bottom:5px;">
+          ${icon('crosshair', 10)} ${selectedAngles.length} ángulo${selectedAngles.length !== 1 ? 's' : ''} — se generará 1 miniatura por ángulo
         </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:var(--space-sm);">
-          ${selectedAngles.map((a, i) => {
-            const colors = PSYCH_COLORS[i % PSYCH_COLORS.length];
-            const letter = ['A', 'B', 'C', 'D', 'E'][i] || (i + 1);
-            const angleVariants = variants.filter(v => v.ai_metadata?.angle_name === a.name);
-            const isSelected = activeSelection.includes(i);
-            return `
-            <div class="batch-angle-card" data-angle-idx="${i}" style="
-              padding:12px 14px; border-radius:var(--radius-md); cursor:pointer; user-select:none;
-              background:${isSelected ? colors.bg : 'rgba(255,255,255,0.02)'};
-              border:1px solid ${isSelected ? colors.badge : 'rgba(255,255,255,0.07)'};
-              opacity:${isSelected ? '1' : '0.4'}; transition:all 0.15s ease; position:relative;">
-              <div style="position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;
-                ${isSelected
-                  ? `background:${colors.badge};display:flex;align-items:center;justify-content:center;`
-                  : 'border:1px solid rgba(255,255,255,0.2);'}">
-                ${isSelected ? `<svg width="9" height="9" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
-              </div>
-              <div class="flex items-center gap-sm mb-xs">
-                <div style="width:22px;height:22px;border-radius:50%;background:${isSelected ? colors.badge : 'rgba(255,255,255,0.1)'};display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:900;flex-shrink:0;">${letter}</div>
-                <div class="font-bold" style="font-size:12px; line-height:1.3;">${a.name}</div>
-              </div>
-              ${a.visual_twist ? `<div class="text-xs text-muted" style="font-style:italic; line-height:1.4; font-size:10px; margin-top:2px;">"${a.visual_twist}"</div>` : ''}
-              ${angleVariants.length > 0 ? `<div class="text-xs" style="color:${colors.badge}; margin-top:6px;">${icon('image', 10)} ${angleVariants.length} ya generada${angleVariants.length > 1 ? 's' : ''}</div>` : ''}
-            </div>`;
-          }).join('')}
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          ${selectedAngles.map((a, i) => `
+            <span style="font-size:10px;padding:2px 9px;border-radius:20px;background:rgba(99,102,241,0.15);color:#818cf8;font-weight:600;">
+              ${['A','B','C','D','E'][i] || i+1} · ${a.name}
+            </span>`).join('')}
         </div>
-        ${selectedCount === 0 ? `
-          <div style="margin-top:8px; padding:8px 14px; background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3); border-radius:var(--radius-sm); text-align:center;">
-            <span class="text-xs" style="color:#ef4444;">⚠️ Seleccioná al menos un ángulo para generar.</span>
-          </div>` : ''}
       </div>
 
-      <!-- ── 3. Texto de overlay (colapsable) ── -->
-      <details style="margin-bottom:var(--space-md);">
-        <summary style="cursor:pointer; font-size:11px; font-weight:700; color:var(--text-secondary); letter-spacing:0.5px; list-style:none; user-select:none; display:flex; align-items:center; gap:6px;">
-          ${icon('bolt', 11)} Texto de overlay
-          ${td?.needs_text === true
-            ? `<span class="badge badge-accent" style="font-size:8px; pointer-events:none;">Recomendado</span>`
-            : td?.needs_text === false && td?.confidence === 'alta'
-              ? `<span class="badge" style="font-size:8px; background:rgba(16,185,129,0.15); color:var(--success); pointer-events:none;">No necesario</span>`
-              : ''}
-          <span style="opacity:0.4; font-size:10px; font-weight:400; margin-left:auto;">opcional</span>
-        </summary>
-        <div style="margin-top:10px; padding:14px; background:var(--bg-tertiary); border-radius:var(--radius-md); border:1px solid var(--border);">
-          ${td ? `<div class="text-xs text-muted mb-sm" style="opacity:0.7;">${td.reason || ''}</div>` : ''}
-          <div class="flex gap-xs mb-sm" style="flex-wrap:wrap;">
-            <button class="badge btn-suggestion-text" style="cursor:pointer; border:1px solid rgba(100,100,100,0.3); background:transparent; font-size:10px; padding:5px 9px; color:var(--text-muted);" data-text="">Sin texto</button>
-            ${suggestions.map(txt => `
-              <button class="badge badge-accent btn-suggestion-text" style="cursor:pointer; border:none; font-size:10px; padding:5px 9px;" data-text="${txt}">${txt}</button>
-            `).join('')}
-          </div>
-          <input type="text" class="form-input" id="custom-overlay-text" placeholder="O escribí tu propio texto (1-3 palabras)..." value="" style="font-size:12px; font-weight:800; letter-spacing:1px;" />
-        </div>
-      </details>
-
+      <!-- Texto overlay (opcional, simple) -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:6px;">Texto de overlay (opcional)</div>
+        <input type="text" class="form-input" id="custom-overlay-text" placeholder="1-3 palabras en mayúsculas..." style="font-size:12px;font-weight:800;letter-spacing:1px;" />
+      </div>
     </div>`;
   }
 
@@ -901,6 +946,230 @@ export async function renderEngine(container) {
   // ─── EVENTS ───────────────────────────────────────────────────────────────
 
   function bindEvents() {
+    bindStepContentEvents();
+
+    container.querySelectorAll('.step-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const n = parseInt(btn.dataset.step);
+        if (!btn.disabled) { workflowStep = n; render(); }
+      });
+    });
+
+    document.getElementById('btn-prev-step')?.addEventListener('click', () => {
+      if (workflowStep > 1) { workflowStep--; render(); }
+    });
+    document.getElementById('btn-next-step')?.addEventListener('click', () => {
+      if (workflowStep < 3) { workflowStep++; render(); }
+    });
+
+    container.querySelectorAll('.btn-delete-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const variantId = btn.dataset.variantId;
+        const project = getProject();
+        if (!project) return;
+        const variant = (project.thumbnail_variants || []).find(v => v.id === variantId);
+        try {
+          if (variant?.image_url) {
+            const urlParts = variant.image_url.split('/public/thumbnails/');
+            if (urlParts.length > 1) {
+              await supabase.storage.from('thumbnails').remove([urlParts[1]]).catch(() => { });
+            }
+          }
+          const { error } = await supabase.from('thumbnail_variants').delete().eq('id', variantId);
+          if (error) throw error;
+          await reloadProjects();
+          render();
+        } catch (err) {
+          console.error('Delete variant error:', err);
+          toast('Error al eliminar: ' + err.message, 'error');
+        }
+      });
+    });
+
+    container.querySelectorAll('.thumb-preview-trigger').forEach(img => {
+      img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const lb = document.getElementById('thumb-lightbox');
+        const lbImg = document.getElementById('thumb-lightbox-img');
+        if (!lb || !lbImg) return;
+        lbImg.src = img.dataset.preview;
+        lb.classList.add('active');
+      });
+    });
+
+    container.querySelectorAll('.btn-download').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const src = btn.dataset.src;
+        const name = btn.dataset.name;
+        try {
+          const resp = await fetch(src);
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch {
+          const a = document.createElement('a');
+          a.href = src;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+      });
+    });
+
+    // ── GENERATE MASTER BATCH ──
+    document.getElementById('btn-generate-master')?.addEventListener('click', async () => {
+      const project = getProject();
+      const selectedAngles = project?.logic_dna?.selected_angles || [];
+      const activeIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
+      const anglesToGenerate = selectedAngles.filter((_, i) => activeIndices.includes(i));
+      if (!project || anglesToGenerate.length === 0 || !selectedStyleId || selectedFormats.length === 0) return;
+
+      const style = STYLES.find(s => s.id === selectedStyleId);
+      const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
+      const matchedFaceAtGen = faceList.find(f => f.id === autoMatchedFaceId);
+      const useFace = faceEnabled !== null ? faceEnabled : !!matchedFaceAtGen;
+      const expressionId = selectedExpressionId || autoMatchedFaceId || document.getElementById('select-expression-step3')?.value;
+      const selectedFace = faceList.find(f => f.id === expressionId);
+      const customText = document.getElementById('custom-overlay-text')?.value || project.title;
+
+      isGenerating = true;
+      render();
+
+      showLoader(container, {
+        title: 'Sintetizando Miniaturas',
+        subtitle: `Generando ${anglesToGenerate.length} variante${anglesToGenerate.length !== 1 ? 's' : ''} — DNA Chain completo activo`,
+        detail: `ÁNGULO 1 / ${anglesToGenerate.length} — INICIANDO`,
+      });
+
+      try {
+        for (let i = 0; i < anglesToGenerate.length; i++) {
+          const angle = anglesToGenerate[i];
+          const angleLetter = ['A', 'B', 'C', 'D', 'E'][activeIndices[i]] || (activeIndices[i] + 1);
+          updateLoader({
+            title: `Sintetizando Ángulo ${angleLetter}`,
+            subtitle: `"${angle.name}" — aplicando Visual Twist único + ADN de Marca`,
+            detail: `VARIANTE ${i + 1} DE ${anglesToGenerate.length} — IMAGE GENERATION`,
+          });
+          const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit });
+          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase(), faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
+        }
+        hideLoader();
+        toast(`✅ Batch completado — ${anglesToGenerate.length} miniatura${anglesToGenerate.length !== 1 ? 's' : ''} generada${anglesToGenerate.length !== 1 ? 's' : ''}`, 'success', 4000);
+      } catch (err) {
+        hideLoader();
+        console.error('Batch generate error:', err);
+        toast('Error al generar batch: ' + err.message, 'error');
+      } finally {
+        isGenerating = false;
+        await reloadProjects();
+        render();
+      }
+    });
+
+    // ── EXPAND variants ──
+    container.querySelectorAll('.btn-expand-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (expandingVariantId) return;
+
+        const variantId = btn.dataset.variantId;
+        const countSelect = document.getElementById(`expand-count-${variantId}`);
+        const count = Math.min(parseInt(countSelect?.value || '1'), 5);
+        const project = getProject();
+        if (!project) return;
+
+        const allVariants = project.thumbnail_variants || [];
+        const baseVariant = allVariants.find(v => v.id === variantId);
+        if (!baseVariant) return;
+
+        expandingVariantId = variantId;
+        render();
+
+        showLoader(container, {
+          title: 'Generando Variaciones',
+          subtitle: `Creando ${count} interpretación${count !== 1 ? 'es' : ''} alternativa${count !== 1 ? 's' : ''} del mismo ángulo psicológico`,
+          detail: `VARIACIÓN 1 DE ${count} — IMAGE GENERATION`,
+        });
+
+        try {
+          const basePrompt = baseVariant.ai_metadata?.prompt || project.title;
+          for (let i = 0; i < count; i++) {
+            updateLoader({ detail: `VARIACIÓN ${i + 1} DE ${count} — IMAGE GENERATION` });
+            const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle, branding ADN, and video context. Change composition or color treatment while keeping the face (if present) and core message.`;
+
+            const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
+            const { data: inserted, error: insertErr } = await supabase
+              .from('thumbnail_variants')
+              .insert({
+                project_id: project.id,
+                angle_id: isRealAngleId ? baseVariant.angle_id : null,
+                overlay_text: baseVariant.overlay_text,
+                style_preset: baseVariant.style_preset,
+                impact_score: Math.floor(Math.random() * 20) + 80,
+                ai_metadata: {
+                  prompt: variationPrompt.slice(0, 300),
+                  angle_name: baseVariant.ai_metadata?.angle_name || '',
+                  format: baseVariant.ai_metadata?.format || '',
+                  style: baseVariant.style_preset,
+                  generating: true,
+                  parent_id: variantId,
+                  face_image_url: baseVariant.ai_metadata?.face_image_url || null,
+                }
+              })
+              .select()
+              .single();
+            if (insertErr) throw insertErr;
+
+            try {
+              const variationFaceUrl = baseVariant.ai_metadata?.face_image_url || null;
+              const dataUrl = await generateImage(variationPrompt, variationFaceUrl);
+              const { data: sessionData } = await supabase.auth.getSession();
+              const userId = sessionData?.session?.user?.id;
+              const blob = await fetch(dataUrl).then(r => r.blob());
+              const mimeType = blob.type || 'image/jpeg';
+              const ext = mimeType.includes('png') ? 'png' : 'jpg';
+              const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.${ext}`;
+              const { error: uploadError } = await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: mimeType });
+              if (uploadError) throw new Error(`Upload falló: ${uploadError.message}`);
+              const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(fileName);
+              await supabase.from('thumbnail_variants').update({
+                image_url: urlData.publicUrl,
+                ai_metadata: { ...inserted.ai_metadata, generating: false }
+              }).eq('id', inserted.id);
+            } catch (imgErr) {
+              console.error('Variation image gen failed:', imgErr);
+              await supabase.from('thumbnail_variants').update({
+                ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message }
+              }).eq('id', inserted.id);
+            }
+          }
+        } catch (err) {
+          hideLoader();
+          console.error('Expand error:', err);
+          toast('Error al generar variaciones: ' + err.message, 'error');
+        } finally {
+          hideLoader();
+          expandingVariantId = null;
+          await reloadProjects();
+          render();
+        }
+      });
+    });
+  }
+
+  // ── Step-content events: re-bound after rerenderStep() ───────────────────
+
+  function bindStepContentEvents_REMOVE() {
+    // ── Rename project ──
     container.querySelectorAll('.btn-rename-project').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -979,48 +1248,8 @@ export async function renderEngine(container) {
       });
     });
 
-    // ── Project dropdown toggle ──
-    const dropdownBtn = document.getElementById('btn-project-dropdown');
-    const dropdownPanel = document.getElementById('project-dropdown-panel');
-    const dropdownChevron = document.getElementById('dropdown-chevron');
 
-    if (dropdownBtn && dropdownPanel) {
-      dropdownBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = dropdownPanel.style.display !== 'none';
-        dropdownPanel.style.display = isOpen ? 'none' : 'block';
-        if (dropdownChevron) dropdownChevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
-      });
-
-      // Close on outside click
-      document.addEventListener('click', function closeDropdown(e) {
-        const wrap = document.getElementById('project-selector-wrap');
-        if (wrap && !wrap.contains(e.target)) {
-          dropdownPanel.style.display = 'none';
-          if (dropdownChevron) dropdownChevron.style.transform = 'rotate(0deg)';
-          document.removeEventListener('click', closeDropdown);
-        }
-      });
-    }
-
-    // ── Project selection from dropdown ──
-    container.querySelectorAll('.project-folder').forEach(el => {
-      el.addEventListener('click', (e) => {
-        // Don't select if clicking rename/delete buttons inside
-        if (e.target.closest('.btn-rename-project') || e.target.closest('.btn-delete-project')) return;
-        if (selectedProjectId !== el.dataset.projectId) {
-          selectedProjectId = el.dataset.projectId;
-          workflowStep = 1;
-          selectedFormats = [];
-          selectedStyleId = null;
-          batchAngleSelection = null;
-        }
-        // Close dropdown
-        if (dropdownPanel) dropdownPanel.style.display = 'none';
-        if (dropdownChevron) dropdownChevron.style.transform = 'rotate(0deg)';
-        render();
-      });
-    });
+    bindStepContentEvents();
 
     container.querySelectorAll('.step-tab').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1035,7 +1264,39 @@ export async function renderEngine(container) {
     document.getElementById('btn-next-step')?.addEventListener('click', () => {
       if (workflowStep < 3) { workflowStep++; render(); }
     });
+  }
 
+  // ── Step-content events (re-bound after rerenderStep) ────────────────────
+
+  function bindStepContentEvents_REMOVE2() {
+    // ── Project list toggle button ──
+    document.getElementById('btn-toggle-project-list')?.addEventListener('click', () => {
+      const panel = document.getElementById('project-list-panel');
+      if (!panel) return;
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // ── Project row selection (Step 1) — no auto-advance ──
+    container.querySelectorAll('.project-row').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-rename-project') || e.target.closest('.btn-delete-project')) return;
+        if (selectedProjectId !== el.dataset.projectId) {
+          selectedProjectId = el.dataset.projectId;
+          selectedFormats = [];
+          selectedStyleId = null;
+          batchAngleSelection = null;
+        }
+        // Close dropdown, update selected display — no step advance
+        const panel = document.getElementById('project-list-panel');
+        if (panel) panel.style.display = 'none';
+        // Update next button state
+        const nextBtn = document.getElementById('btn-next-step');
+        if (nextBtn) nextBtn.disabled = false;
+        rerenderStep();
+      });
+    });
+
+    // ── Format card selection (no full re-render) ──
     container.querySelectorAll('.format-card').forEach(card => {
       card.addEventListener('click', () => {
         const fid = card.dataset.formatId;
@@ -1044,14 +1305,23 @@ export async function renderEngine(container) {
         } else {
           selectedFormats.push(fid);
         }
-        render();
+        rerenderStep();
+        // Update next button state
+        const nextBtn = document.getElementById('btn-next-step');
+        if (nextBtn) nextBtn.disabled = selectedFormats.length === 0;
       });
     });
 
+    // ── Style card selection (no full re-render) ──
     container.querySelectorAll('.style-card').forEach(card => {
       card.addEventListener('click', () => {
         selectedStyleId = selectedStyleId === card.dataset.styleId ? null : card.dataset.styleId;
-        render();
+        rerenderStep();
+        // Update generate button state
+        const project = getProject();
+        const selectedAngles = project?.logic_dna?.selected_angles || [];
+        const genBtn = document.getElementById('btn-generate-master');
+        if (genBtn) genBtn.disabled = !selectedStyleId || selectedAngles.length === 0;
       });
     });
 
@@ -1128,30 +1398,11 @@ export async function renderEngine(container) {
       });
     });
 
-    // ── BATCH ANGLE SELECTION ──
-    container.querySelectorAll('.batch-angle-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const project = getProject();
-        const allAngles = project?.logic_dna?.selected_angles || [];
-        const idx = parseInt(card.dataset.angleIdx, 10);
-        const current = batchAngleSelection ?? allAngles.map((_, i) => i);
-        if (current.includes(idx)) {
-          batchAngleSelection = current.filter(i => i !== idx);
-        } else {
-          batchAngleSelection = [...current, idx].sort((a, b) => a - b);
-        }
-        render();
-      });
-    });
 
-    // Face toggle — update state WITHOUT re-render to avoid resetting the checkbox
+    // Face toggle — re-render so the visual (slider position, colors) updates correctly
     container.querySelector('#check-use-face')?.addEventListener('change', (e) => {
       faceEnabled = e.target.checked;
-      // Update only the toggle visual and border without full re-render
-      const card = e.target.closest('[style*="border"]');
-      if (card) {
-        card.style.borderColor = faceEnabled ? 'rgba(220,38,38,0.4)' : 'var(--border)';
-      }
+      render();
     });
 
     // Face select — persist selection across renders
@@ -1159,15 +1410,6 @@ export async function renderEngine(container) {
       selectedExpressionId = e.target.value;
     });
 
-    document.getElementById('btn-batch-select-all')?.addEventListener('click', () => {
-      batchAngleSelection = null; // null = all
-      render();
-    });
-
-    document.getElementById('btn-batch-deselect-all')?.addEventListener('click', () => {
-      batchAngleSelection = [];
-      render();
-    });
 
     // ── GENERATE MASTER BATCH ──
     document.getElementById('btn-generate-master')?.addEventListener('click', async () => {
@@ -1310,6 +1552,51 @@ export async function renderEngine(container) {
           render();
         }
       });
+    });
+  }
+
+  // ── Step-content events: re-bound after rerenderStep() ──────────────────
+
+  function bindStepContentEvents() {
+    // ── Project modal button ──
+    document.getElementById('btn-open-project-modal')?.addEventListener('click', openProjectModal);
+
+    // ── Format card selection ──
+    container.querySelectorAll('.format-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const fid = card.dataset.formatId;
+        if (selectedFormats.includes(fid)) {
+          selectedFormats = selectedFormats.filter(x => x !== fid);
+        } else {
+          selectedFormats.push(fid);
+        }
+        rerenderStep();
+        const nextBtn = document.getElementById('btn-next-step');
+        if (nextBtn) nextBtn.disabled = selectedFormats.length === 0;
+      });
+    });
+
+    // ── Style card selection ──
+    container.querySelectorAll('.style-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedStyleId = selectedStyleId === card.dataset.styleId ? null : card.dataset.styleId;
+        rerenderStep();
+        const project = getProject();
+        const selectedAngles = project?.logic_dna?.selected_angles || [];
+        const genBtn = document.getElementById('btn-generate-master');
+        if (genBtn) genBtn.disabled = !selectedStyleId || selectedAngles.length === 0;
+      });
+    });
+
+    // ── Face toggle ──
+    container.querySelector('#check-use-face')?.addEventListener('change', (e) => {
+      faceEnabled = e.target.checked;
+      rerenderStep();
+    });
+
+    // ── Face select ──
+    container.querySelector('#select-expression-step3')?.addEventListener('change', (e) => {
+      selectedExpressionId = e.target.value;
     });
   }
 

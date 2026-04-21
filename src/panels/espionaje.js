@@ -173,7 +173,7 @@ export async function renderEspionaje(container) {
   const { activeChannelId, session } = getState();
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
 
-  container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
+  showLoader(container, { title: 'Cargando referencias visuales...', subtitle: 'Recuperando miniaturas de la competencia', detail: 'CONSULTANDO BD' });
 
   const { data: refs } = await supabase
     .from('visual_references')

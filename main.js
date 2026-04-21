@@ -49,14 +49,6 @@ function initApp() {
   function renderApp() {
     const { session, currentUser, activeChannelId, isAuthInitializing, isLoadingChannels, channels, subscription } = getState();
 
-    // 0. Handle Initialization (Prevent flicker to login)
-    if (isAuthInitializing) {
-      if (!document.getElementById('ca-global-loader')) {
-        showLoader(app, { title: 'Iniciando ClickAngles...', subtitle: 'Preparando tu espacio de trabajo', detail: 'AUTENTICANDO' });
-      }
-      return;
-    }
-
     // 1. Recover/Initialize DOM structure if needed
     if (!app.querySelector('#main-area')) {
       hideLoader(false);

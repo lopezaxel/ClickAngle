@@ -69,7 +69,7 @@ export function renderSidebar(container) {
       <div class="sidebar-logo-icon">${icon('crosshair', 18)}</div>
       <div class="sidebar-logo-text">
         <span class="sidebar-logo-name">ClickAngles</span>
-        <span class="version-badge">v2.0</span>
+        <span class="version-badge">v1.0</span>
       </div>
       <button class="sidebar-toggle-btn" id="sidebar-toggle" title="Contraer / expandir sidebar">
         ${icon('menu', 18)}

@@ -110,7 +110,7 @@ export async function renderBrand(container) {
     return;
   }
 
-  container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
+  showLoader(container, { title: 'Cargando identidad de marca...', subtitle: 'Obteniendo tu Brand Kit y referencias de estilo', detail: 'CONSULTANDO BD' });
 
   try {
     // Fetch data in parallel

@@ -1,11 +1,12 @@
 import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
+import { showLoader } from '../lib/loader.js';
 
 export async function renderAngulos(container) {
   const { activeChannelId } = getState();
 
-  container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
+  showLoader(container, { title: 'Cargando biblioteca de ángulos...', subtitle: 'Obteniendo ángulos psicológicos y tus favoritos', detail: 'CONSULTANDO BD' });
 
   // Fetch all angles from global table
   const { data: angles } = await supabase

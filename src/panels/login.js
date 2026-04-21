@@ -400,16 +400,12 @@ export function renderLogin(container) {
             </div>
             <div>
               <h1 style="font-size:24px;font-weight:800;margin:0;">ClickAngles</h1>
-              <span class="version-badge" style="font-size:10px;">v2.0</span>
+              <span class="version-badge" style="font-size:10px;">v1.0</span>
             </div>
           </div>
           <p class="text-sm text-muted" style="margin-top:var(--space-md);text-align:center;">
             Plataforma de Ingeniería de CTR para Creadores de Contenido
           </p>
-        </div>
-
-        <div class="login-tabs">
-          <button class="login-tab active">Iniciar Sesión</button>
         </div>
 
         ${errorMsg ? `<div class="login-error">${icon('alertTriangle', 14)} ${errorMsg}</div>` : ''}
