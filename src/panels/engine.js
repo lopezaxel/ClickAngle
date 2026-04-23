@@ -155,6 +155,10 @@ export async function renderEngine(container) {
   let batchAngleSelection = null; // null = all selected; array of indices = specific selection
   let faceEnabled = null;         // null = follow DNA match default; true/false = explicit user choice
   let selectedExpressionId = null; // persists face select across renders
+  let overlayText = '';            // persists overlay text across renders
+  let anglesPage = 0;              // pagination for step 5 angle cards
+  let variantsPage = 0;            // pagination for history section
+  let generatingAngleIndex = null; // which angle card is currently generating
 
   // Auto-matched face from DNA (set during render based on emotion_label)
   let autoMatchedFaceId = null;
@@ -192,13 +196,18 @@ export async function renderEngine(container) {
 
     const canGoStep2 = !!selectedProjectId;
     const canGoStep3 = canGoStep2 && selectedFormats.length > 0;
-    const canGenerate = canGoStep3 && !!selectedStyleId && selectedAngles.length > 0;
-    const stepDone = [canGoStep2, canGoStep3, false];
-    const canAccess = [true, canGoStep2, canGoStep3];
+    const canGoStep4 = canGoStep3 && !!selectedStyleId;
+    const canGoStep5 = canGoStep4;
+    const activeAngleIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
+    const canGenerate = canGoStep5 && activeAngleIndices.length > 0 && !isGenerating;
+    const stepDone = [canGoStep2, canGoStep3, canGoStep4, canGoStep5, false];
+    const canAccess = [true, canGoStep2, canGoStep3, canGoStep4, canGoStep5];
     const stepDefs = [
       { label: 'Proyecto', desc: 'Guión analizado' },
       { label: 'Formato', desc: 'Composición visual' },
-      { label: 'Estilo & Generar', desc: 'Look + rostro + acción' },
+      { label: 'Estilo', desc: 'Look visual' },
+      { label: 'Rostro', desc: 'Face Vault' },
+      { label: 'Ángulos', desc: 'Generar' },
     ];
 
     container.innerHTML = `<div class="animate-in">
@@ -219,28 +228,41 @@ export async function renderEngine(container) {
           return `
           <div class="step-tab" data-step="${n}" ${!accessible ? 'disabled' : ''}
             style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;cursor:${accessible ? 'pointer' : 'default'};opacity:${!accessible ? 0.4 : 1};">
-            <div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;transition:all 0.2s;
+            <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;transition:all 0.2s;
               ${isDone
                 ? 'background:var(--success);color:white;'
                 : isActive
-                  ? 'background:var(--accent);color:white;box-shadow:0 0 18px rgba(220,38,38,0.45);'
+                  ? 'background:var(--accent);color:white;box-shadow:0 0 14px rgba(220,38,38,0.45);'
                   : 'background:var(--bg-elevated);color:var(--text-tertiary);border:1px solid var(--border);'}">
-              ${isDone ? icon('check', 13) : n}
+              ${isDone ? icon('check', 10) : n}
             </div>
-            <div style="margin-top:7px;text-align:center;">
-              <div style="font-size:11px;font-weight:${isActive ? '800' : '600'};white-space:nowrap;
+            <div style="margin-top:5px;text-align:center;">
+              <div style="font-size:10px;font-weight:${isActive ? '800' : '600'};white-space:nowrap;
                 color:${isActive ? 'var(--text-primary)' : isDone ? 'var(--text-secondary)' : 'var(--text-tertiary)'};">${s.label}</div>
-              <div style="font-size:9px;color:var(--text-tertiary);white-space:nowrap;margin-top:1px;">${s.desc}</div>
+              <div style="font-size:8px;color:var(--text-tertiary);white-space:nowrap;margin-top:1px;">${s.desc}</div>
             </div>
           </div>
-          ${i < stepDefs.length - 1 ? `<div style="flex:1;height:1px;margin:0 10px;margin-bottom:24px;
+          ${i < stepDefs.length - 1 ? `<div style="flex:1;height:1px;margin:0 8px;margin-bottom:20px;
             background:${isDone ? 'var(--success)' : 'var(--border)'};opacity:${isDone ? '0.5' : '0.2'};"></div>` : ''}`;
         }).join('')}
       </div>
 
+      <!-- Project title pill -->
+      ${project ? `
+      <div style="text-align:center;margin-bottom:var(--space-lg);">
+        <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 16px 5px 10px;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.22);border-radius:20px;max-width:90%;">
+          <span style="display:flex;align-items:center;opacity:0.7;">${icon('folder', 12)}</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</span>
+        </div>
+      </div>` : ''}
+
       <!-- Step content -->
       <div id="step-content" style="min-height:300px;">
-        ${workflowStep === 1 ? renderProjectStep() : workflowStep === 2 ? renderFormatStep() : renderStyleGenStep(project, selectedAngles)}
+        ${workflowStep === 1 ? renderProjectStep()
+          : workflowStep === 2 ? renderFormatStep()
+          : workflowStep === 3 ? renderStyleStep()
+          : workflowStep === 4 ? renderFaceStep()
+          : renderAnglesStep(project, selectedAngles)}
       </div>
 
       <!-- Bottom nav -->
@@ -248,21 +270,22 @@ export async function renderEngine(container) {
         <button class="btn btn-secondary btn-sm" id="btn-prev-step" ${workflowStep === 1 ? 'disabled' : ''}>
           ${icon('arrowLeft', 14)} Anterior
         </button>
-        ${workflowStep < 3 ? `
+        ${workflowStep < 5 ? `
           <div style="display:flex;align-items:center;gap:10px;">
             ${workflowStep === 1 && !canGoStep2 ? `<span class="text-xs text-muted">Seleccioná un proyecto</span>` : ''}
             ${workflowStep === 2 && !canGoStep3 ? `<span class="text-xs text-muted">Elegí al menos un formato</span>` : ''}
+            ${workflowStep === 3 && !canGoStep4 ? `<span class="text-xs text-muted">Elegí un estilo visual</span>` : ''}
             <button class="btn btn-primary" id="btn-next-step" style="padding:8px 20px;"
-              ${(workflowStep === 1 && !canGoStep2) || (workflowStep === 2 && !canGoStep3) ? 'disabled' : ''}>
+              ${(workflowStep === 1 && !canGoStep2) || (workflowStep === 2 && !canGoStep3) || (workflowStep === 3 && !canGoStep4) ? 'disabled' : ''}>
               Siguiente ${icon('arrowRight', 14)}
             </button>
           </div>
         ` : `
-          <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate || isGenerating ? 'disabled' : ''}
+          <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate ? 'disabled' : ''}
             style="background:linear-gradient(135deg,var(--accent),#9333ea);font-size:14px;padding:12px 28px;font-weight:800;letter-spacing:0.5px;border-radius:var(--radius-md);">
             ${isGenerating
               ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando...`
-              : `${icon('rocket', 16)} GENERAR ${selectedAngles.length} MINIATURA${selectedAngles.length !== 1 ? 'S' : ''}`}
+              : `${icon('rocket', 16)} GENERAR ${activeAngleIndices.length} MINIATURA${activeAngleIndices.length !== 1 ? 'S' : ''}`}
           </button>
         `}
       </div>
@@ -324,7 +347,9 @@ export async function renderEngine(container) {
     const selectedAngles = project?.logic_dna?.selected_angles || [];
     el.innerHTML = workflowStep === 1 ? renderProjectStep()
       : workflowStep === 2 ? renderFormatStep()
-      : renderStyleGenStep(project, selectedAngles);
+      : workflowStep === 3 ? renderStyleStep()
+      : workflowStep === 4 ? renderFaceStep()
+      : renderAnglesStep(project, selectedAngles);
     bindStepContentEvents();
   }
 
@@ -622,14 +647,25 @@ export async function renderEngine(container) {
     document.getElementById('modal-search-input').addEventListener('input', refreshList);
     document.getElementById('modal-confirm-btn').addEventListener('click', () => {
       if (!modalSelectedId) return;
-      if (selectedProjectId !== modalSelectedId) {
+      const projectChanged = selectedProjectId !== modalSelectedId;
+      if (projectChanged) {
         selectedProjectId = modalSelectedId;
         selectedFormats = [];
         selectedStyleId = null;
         batchAngleSelection = null;
+        faceEnabled = null;
+        selectedExpressionId = null;
+        overlayText = '';
+        anglesPage = 0;
+        variantsPage = 0;
+        workflowStep = 2;
       }
       overlay.remove();
-      rerenderStep();
+      if (projectChanged) {
+        render();
+      } else {
+        rerenderStep();
+      }
     });
 
     bindModalRowEvents();
@@ -763,93 +799,357 @@ export async function renderEngine(container) {
     </div>`;
   }
 
-  // ─── STEP 3: Estilo + Rostro + Generar ────────────────────────────────────
+  // ─── STEP 3: Estilo visual ────────────────────────────────────────────────
 
-  function renderStyleGenStep(project, selectedAngles) {
-    if (!project) return `<div class="card" style="text-align:center;padding:var(--space-2xl);opacity:0.5;">${icon('folder', 40)}<p class="text-sm text-muted mt-md">Seleccioná un proyecto primero</p></div>`;
-    if (selectedAngles.length === 0) return `<div class="card" style="text-align:center;padding:var(--space-xl);opacity:0.6;">${icon('crosshair', 32)}<p class="text-sm text-muted mt-sm">Este proyecto no tiene ángulos.<br/>Volvé a El Cerebro y elegí ángulos.</p></div>`;
-
-    const vb = project?.logic_dna?.visual_briefing;
-    const emotionLabel = vb?.emotion_label;
-    const matchedFace = faceList.find(f => f.id === autoMatchedFaceId);
-    const effectiveUseFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
-    const effectiveExpressionId = selectedExpressionId || autoMatchedFaceId;
-
+  function renderStyleStep() {
     return `
     <div>
-      <!-- Estilo visual -->
       <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
-        Elegí el estilo visual
+        Elegí el estilo visual de tu miniatura
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:var(--space-lg);">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
         ${STYLES.map(s => {
           const isSelected = selectedStyleId === s.id;
           return `
-          <div class="card style-card" data-style-id="${s.id}" style="cursor:pointer;padding:12px;transition:all 0.15s;position:relative;
-            ${isSelected ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);' : ''}">
-            <div style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;
+          <div class="card style-card" data-style-id="${s.id}" style="cursor:pointer;padding:14px;transition:all 0.15s;position:relative;
+            ${isSelected ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);box-shadow:0 0 0 1px var(--accent);' : ''}">
+            <div style="position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;
               border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
               background:${isSelected ? 'var(--accent)' : 'transparent'};
               display:flex;align-items:center;justify-content:center;color:white;">
               ${isSelected ? icon('check', 9) : ''}
             </div>
-            <div style="font-size:24px;margin-bottom:6px;">${s.emoji}</div>
+            <div style="font-size:28px;margin-bottom:8px;">${s.emoji}</div>
             <div class="font-bold" style="font-size:12px;">${s.label}</div>
             <div class="text-xs" style="color:var(--accent);margin-top:2px;">${s.subtitle}</div>
+            <div class="text-xs text-muted" style="margin-top:6px;font-size:10px;line-height:1.4;">${s.desc}</div>
           </div>`;
         }).join('')}
       </div>
+    </div>`;
+  }
 
-      <!-- Rostro -->
-      <div style="border-top:1px solid var(--border);padding-top:var(--space-md);margin-bottom:var(--space-md);">
-        <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:10px;">
-          Rostro del creador
+  // ─── STEP 4: Rostro del creador ───────────────────────────────────────────
+
+  function renderFaceStep() {
+    const matchedFace = faceList.find(f => f.id === autoMatchedFaceId);
+    const effectiveUseFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
+    const effectiveExpressionId = selectedExpressionId || autoMatchedFaceId;
+    const hasFaces = faceList.length > 0;
+
+    return `
+    <div>
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
+        ¿Incluir el rostro del creador?
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:var(--space-lg);">
+
+        <!-- CON ROSTRO -->
+        <div id="face-opt-yes" style="cursor:pointer;padding:24px 20px;border-radius:var(--radius-lg);border:2px solid ${effectiveUseFace ? 'var(--accent)' : 'var(--border)'};
+          background:${effectiveUseFace ? 'rgba(220,38,38,0.07)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
+          <div style="font-size:36px;margin-bottom:10px;">🤳</div>
+          <div class="font-bold" style="font-size:14px;margin-bottom:4px;">Con rostro</div>
+          <div class="text-xs text-muted">Incluye la foto del creador cargada en Face Vault</div>
+          ${effectiveUseFace ? `<div style="margin-top:8px;font-size:10px;padding:3px 10px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
-          background:var(--bg-tertiary);border:1px solid ${effectiveUseFace ? 'rgba(220,38,38,0.4)' : 'var(--border)'};
-          border-radius:var(--radius-md);transition:border-color 0.2s;">
+
+        <!-- SIN ROSTRO -->
+        <div id="face-opt-no" style="cursor:pointer;padding:24px 20px;border-radius:var(--radius-lg);border:2px solid ${!effectiveUseFace ? 'rgba(99,102,241,0.6)' : 'var(--border)'};
+          background:${!effectiveUseFace ? 'rgba(99,102,241,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
+          <div style="font-size:36px;margin-bottom:10px;">🎬</div>
+          <div class="font-bold" style="font-size:14px;margin-bottom:4px;">Sin rostro</div>
+          <div class="text-xs text-muted">Miniatura centrada en el objeto o escena, sin cara</div>
+          ${!effectiveUseFace ? `<div style="margin-top:8px;font-size:10px;padding:3px 10px;border-radius:20px;background:rgba(99,102,241,0.7);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+        </div>
+      </div>
+
+      ${effectiveUseFace ? `
+      <div style="border-top:1px solid var(--border);padding-top:var(--space-md);">
+        ${!hasFaces ? `
+        <div style="padding:16px;background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.2);border-radius:var(--radius-md);display:flex;align-items:center;gap:12px;">
+          ${icon('alertTriangle', 18)}
           <div>
-            <div class="font-bold text-sm">${effectiveUseFace ? '🤳 Con rostro' : '🚫 Sin rostro'}</div>
-            <div class="text-xs text-muted" style="margin-top:2px;">
-              ${effectiveUseFace && matchedFace
-                ? `${matchedFace.expression_type}${emotionLabel ? ` — match DNA "${emotionLabel}"` : ''}`
-                : effectiveUseFace && faceList.length === 0
-                  ? '⚠️ No hay fotos en Face Vault — subí fotos en Brand Kit'
-                  : effectiveUseFace
-                    ? 'Seleccioná la expresión abajo'
-                    : 'La miniatura se genera sin cara'}
-            </div>
+            <div class="font-bold text-sm" style="color:var(--accent);">No hay fotos en Face Vault</div>
+            <div class="text-xs text-muted">Subí fotos del creador en Brand Kit → Face Vault para usar esta opción.</div>
           </div>
-          <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;flex-shrink:0;">
-            <input type="checkbox" id="check-use-face" style="opacity:0;width:0;height:0;position:absolute;" ${effectiveUseFace ? 'checked' : ''} />
-            <span style="position:absolute;inset:0;border-radius:12px;background:${effectiveUseFace ? 'var(--accent)' : 'var(--bg-elevated)'};border:1px solid ${effectiveUseFace ? 'var(--accent)' : 'var(--border)'};transition:background 0.2s;"></span>
-            <span style="position:absolute;top:3px;left:${effectiveUseFace ? '23px' : '3px'};width:16px;height:16px;border-radius:50%;background:white;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
-          </label>
         </div>
-        ${effectiveUseFace && faceList.length > 0 ? `
-        <select class="form-select" id="select-expression-step3" style="font-size:12px;margin-top:8px;">
-          ${faceList.map(f => `<option value="${f.id}" ${f.id === effectiveExpressionId ? 'selected' : ''}>${f.expression_type || 'Sin etiqueta'}</option>`).join('')}
-        </select>` : ''}
+        ` : `
+        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:8px;">Elegí la expresión a usar</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          ${faceList.map(f => {
+            const isActive = (f.id === effectiveExpressionId);
+            return `
+            <div class="face-opt-card" data-face-id="${f.id}" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--radius-md);
+              border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
+              background:${isActive ? 'rgba(220,38,38,0.07)' : 'var(--bg-tertiary)'};transition:all 0.15s;">
+              ${f.image_url ? `<img src="${f.image_url}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />` : `<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;">${icon('user', 14)}</div>`}
+              <div>
+                <div class="font-bold" style="font-size:11px;">${f.expression_type || 'Sin etiqueta'}</div>
+              </div>
+              ${isActive ? `<span style="margin-left:4px;color:var(--accent);">${icon('check', 12)}</span>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        `}
+      </div>` : ''}
+    </div>`;
+  }
+
+  // ─── Generation helpers ───────────────────────────────────────────────────
+
+  function getGenContext() {
+    const project = getProject();
+    if (!project) return null;
+    const style = STYLES.find(s => s.id === selectedStyleId);
+    const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
+    if (!style || formats.length === 0) return null;
+    const matchedFace = faceList.find(f => f.id === autoMatchedFaceId);
+    const useFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
+    const expressionId = selectedExpressionId || autoMatchedFaceId;
+    const selectedFace = faceList.find(f => f.id === expressionId);
+    overlayText = document.getElementById('custom-overlay-text')?.value ?? overlayText;
+    const customText = overlayText || project.title;
+    return { project, style, formats, useFace, selectedFace, customText };
+  }
+
+  async function generateSingleAngle(angleIndex) {
+    const ctx = getGenContext();
+    if (!ctx) return;
+    const { project, style, formats, useFace, selectedFace, customText } = ctx;
+    const angle = (project.logic_dna?.selected_angles || [])[angleIndex];
+    if (!angle) return;
+    const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit });
+    await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase(), faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
+  }
+
+  // ─── STEP 5: Ángulos + Generar ────────────────────────────────────────────
+
+  function renderAnglesStep(project, selectedAngles) {
+    if (!project) return `<div class="card" style="text-align:center;padding:var(--space-2xl);opacity:0.5;">${icon('folder', 40)}<p class="text-sm text-muted mt-md">Seleccioná un proyecto primero</p></div>`;
+    if (selectedAngles.length === 0) return `<div class="card" style="text-align:center;padding:var(--space-xl);opacity:0.6;">${icon('crosshair', 32)}<p class="text-sm text-muted mt-sm">Este proyecto no tiene ángulos.<br/>Volvé a El Cerebro y elegí ángulos.</p></div>`;
+
+    const CARDS_PER_PAGE = 4;
+    const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const totalPages = Math.ceil(selectedAngles.length / CARDS_PER_PAGE);
+    const safePage = Math.min(anglesPage, Math.max(0, totalPages - 1));
+    const pageAngles = selectedAngles.slice(safePage * CARDS_PER_PAGE, (safePage + 1) * CARDS_PER_PAGE);
+    const variants = project.thumbnail_variants || [];
+    const masters = variants.filter(v => !v.ai_metadata?.parent_id);
+    const children = variants.filter(v => !!v.ai_metadata?.parent_id);
+    const allGenerated = selectedAngles.every(a => masters.some(v => v.ai_metadata?.angle_name === a.name));
+
+    const renderAngleCard = (angle, globalIdx) => {
+      const angleMasters = masters
+        .filter(v => v.ai_metadata?.angle_name === angle.name)
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      const latest = angleMasters[0] || null;
+      const angleChildren = latest ? children.filter(c => c.ai_metadata?.parent_id === latest.id) : [];
+      const isGen = latest?.ai_metadata?.generating || generatingAngleIndex === globalIdx;
+      const hasImg = !!latest?.image_url;
+      const hasError = !!latest?.ai_metadata?.error;
+      const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
+      const isExpanding = expandingVariantId === latest?.id;
+
+      return `
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;animation:fadeIn 0.3s ease both;">
+        <div style="display:flex;min-height:140px;">
+          <!-- Left: info + actions -->
+          <div style="flex:1;padding:18px 20px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:8px;min-width:0;">
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+              <div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;">
+                ${letters[globalIdx] || globalIdx + 1}
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14px;font-weight:800;line-height:1.3;">${angle.name}</div>
+                ${angle.psychology || angle.psychology_text
+                  ? `<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;margin-top:4px;">${(angle.psychology || angle.psychology_text).slice(0, 160)}</div>`
+                  : ''}
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                ${latest?.style_preset ? `<span class="badge badge-accent" style="font-size:9px;">${latest.style_preset}</span>` : ''}
+                ${hasImg ? `<span style="font-size:13px;font-weight:800;color:${(latest.impact_score||0)>=90?'var(--success)':'var(--accent)'};">${latest.impact_score||0}</span>` : ''}
+              </div>
+            </div>
+            <!-- Actions -->
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);">
+              ${isGen
+                ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando...</span>`
+                : hasImg
+                  ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${letters[globalIdx]}.png">${icon('download', 11)} Descargar</button>
+                     <button class="btn btn-secondary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating ? 'disabled' : ''} style="font-size:10px;">${icon('rocket', 10)} Regenerar</button>
+                     ${!isExpanding ? `
+                     <div style="display:flex;align-items:center;gap:4px;margin-left:auto;">
+                       <select class="form-select" id="expand-count-${latest.id}" style="font-size:10px;padding:2px 4px;height:26px;width:60px;">
+                         ${[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}"${n===1?' selected':''}>${n}x</option>`).join('')}
+                       </select>
+                       <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${latest.id}" ${isGenerating||expandingVariantId?'disabled':''} style="white-space:nowrap;">${icon('plus',10)} Variación</button>
+                     </div>` : `<span class="text-xs text-accent animate-pulse" style="margin-left:auto;">${icon('clock',10)} Variando...</span>`}`
+                  : hasError
+                    ? `<span class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 11)} Error</span>
+                       <button class="btn btn-primary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating ? 'disabled' : ''}>Reintentar</button>`
+                    : `<button class="btn btn-primary btn-sm btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating ? 'disabled' : ''} style="font-weight:700;">${icon('rocket', 13)} Generar miniatura</button>`
+              }
+            </div>
+            ${angleChildren.length > 0 ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">${icon('image',10)} ${angleChildren.length} variación${angleChildren.length!==1?'es':''}</div>` : ''}
+          </div>
+          <!-- Right: thumbnail -->
+          <div style="width:260px;flex-shrink:0;position:relative;background:var(--bg-tertiary);">
+            ${isGen
+              ? thumbLoaderHTML()
+              : hasImg
+                ? `<img src="${latest.image_url}" class="thumb-preview-trigger" data-preview="${latest.image_url}"
+                     style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block;" />
+                   ${latest.overlay_text ? `<div style="position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));">
+                     <div style="font-family:var(--font-impact);font-size:13px;color:white;letter-spacing:2px;">${latest.overlay_text}</div>
+                   </div>` : ''}`
+                : hasError
+                  ? `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px;padding:16px;text-align:center;">
+                       <span style="color:var(--danger);opacity:0.7;">${icon('alertTriangle', 28)}</span>
+                       <div style="font-size:10px;color:var(--text-tertiary);line-height:1.4;">${latest.ai_metadata.error.slice(0,80)}</div>
+                     </div>`
+                  : `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;opacity:0.3;">
+                       ${icon('image', 36)}
+                       <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;">Sin generar</div>
+                     </div>`
+            }
+          </div>
+        </div>
+        ${angleChildren.length > 0 ? `
+        <div style="border-top:1px solid var(--border);padding:12px 20px;background:rgba(0,0,0,0.15);">
+          <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Variaciones (${angleChildren.length})</div>
+          <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
+            ${angleChildren.map((c, ci) => `
+            <div style="flex-shrink:0;width:140px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);">
+              ${c.image_url ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />` : thumbLoaderHTML('', '')}
+              <button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;font-size:10px;">${icon('trash',9)}</button>
+              ${c.image_url ? `<button class="btn-download" data-src="${c.image_url}" data-name="var-${letters[globalIdx]}-${ci+1}.png" style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:var(--radius-sm);padding:2px 6px;cursor:pointer;color:white;font-size:9px;display:flex;align-items:center;gap:3px;">${icon('download',9)}</button>` : ''}
+            </div>`).join('')}
+          </div>
+        </div>` : ''}
+      </div>`;
+    };
+
+    return `
+    <div>
+      <!-- Header: overlay text + Generar Todas -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:var(--space-lg);padding:14px 16px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:var(--radius-md);">
+        <div style="flex:1;">
+          <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:5px;">Texto de overlay (opcional)</div>
+          <input type="text" class="form-input" id="custom-overlay-text" value="${overlayText}" placeholder="1-3 palabras en mayúsculas..." style="font-size:12px;font-weight:800;letter-spacing:1px;" />
+        </div>
+        <button id="btn-generate-all" class="btn btn-primary" ${isGenerating ? 'disabled' : ''}
+          style="background:linear-gradient(135deg,var(--accent),#9333ea);font-weight:800;white-space:nowrap;flex-shrink:0;">
+          ${isGenerating
+            ? `<span class="animate-pulse">${icon('clock',14)}</span> Generando...`
+            : `${icon('rocket',14)} Generar Todas`}
+        </button>
       </div>
 
-      <!-- Ángulos — resumen (solo info, todos incluidos automáticamente) -->
-      <div style="padding:10px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius-md);margin-bottom:var(--space-md);">
-        <div style="font-size:10px;font-weight:700;color:#818cf8;margin-bottom:5px;">
-          ${icon('crosshair', 10)} ${selectedAngles.length} ángulo${selectedAngles.length !== 1 ? 's' : ''} — se generará 1 miniatura por ángulo
-        </div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          ${selectedAngles.map((a, i) => `
-            <span style="font-size:10px;padding:2px 9px;border-radius:20px;background:rgba(99,102,241,0.15);color:#818cf8;font-weight:600;">
-              ${['A','B','C','D','E'][i] || i+1} · ${a.name}
-            </span>`).join('')}
-        </div>
-      </div>
-
-      <!-- Texto overlay (opcional, simple) -->
+      <!-- Angle cards (paginated) -->
       <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:6px;">Texto de overlay (opcional)</div>
-        <input type="text" class="form-input" id="custom-overlay-text" placeholder="1-3 palabras en mayúsculas..." style="font-size:12px;font-weight:800;letter-spacing:1px;" />
+        ${pageAngles.map((a, pi) => renderAngleCard(a, safePage * CARDS_PER_PAGE + pi)).join('')}
       </div>
+
+      ${totalPages > 1 ? `
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:var(--space-md);">
+        <button class="btn btn-secondary btn-sm angles-page-btn" data-page="${safePage - 1}" ${safePage === 0 ? 'disabled' : ''}>${icon('arrowLeft',12)}</button>
+        ${Array.from({length:totalPages},(_,i)=>`
+          <button class="btn btn-sm angles-page-btn ${i===safePage?'btn-primary':'btn-secondary'}" data-page="${i}"
+            style="min-width:32px;font-size:12px;">${i+1}</button>`).join('')}
+        <button class="btn btn-secondary btn-sm angles-page-btn" data-page="${safePage + 1}" ${safePage >= totalPages-1 ? 'disabled' : ''}>${icon('arrowRight',12)}</button>
+      </div>` : ''}
+    </div>`;
+  }
+
+  // ─── Shared thumbnail drawer card (for history section) ──────────────────
+
+  function renderVariantDrawerCard(latest, olderVersions, variantChildren, project, cardIdx) {
+    const isGen = !!latest.ai_metadata?.generating;
+    const hasImg = !!latest.image_url;
+    const hasError = !!latest.ai_metadata?.error;
+    const isExpanding = expandingVariantId === latest.id;
+    const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
+    const angleName = latest.ai_metadata?.angle_name || '—';
+    const allSubItems = [...variantChildren, ...olderVersions]; // shown in bottom strip
+
+    return `
+    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;animation:fadeIn 0.3s ease both;animation-delay:${cardIdx*0.04}s;">
+      <div style="display:flex;min-height:140px;">
+        <!-- Left: info + actions -->
+        <div style="flex:1;padding:18px 20px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:6px;min-width:0;">
+          <!-- Title row -->
+          <div style="display:flex;align-items:flex-start;gap:8px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:15px;font-weight:800;line-height:1.3;color:var(--text-primary);">${angleName}</div>
+              ${latest.overlay_text ? `<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-tertiary);margin-top:2px;text-transform:uppercase;">${latest.overlay_text}</div>` : ''}
+            </div>
+            <span style="flex-shrink:0;font-size:13px;font-weight:800;color:${(latest.impact_score||0)>=90?'var(--success)':'var(--accent)'};">${latest.impact_score||0}</span>
+          </div>
+          <!-- Badges -->
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            ${latest.style_preset ? `<span class="badge badge-accent" style="font-size:9px;">${latest.style_preset}</span>` : ''}
+            ${latest.ai_metadata?.format ? `<span class="badge" style="font-size:9px;background:rgba(99,102,241,0.15);color:#818cf8;">${latest.ai_metadata.format}</span>` : ''}
+            ${olderVersions.length > 0 ? `<span class="badge badge-neutral" style="font-size:9px;">${olderVersions.length} versión${olderVersions.length!==1?'es':''} anterior${olderVersions.length!==1?'es':''}</span>` : ''}
+          </div>
+          <!-- Actions -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);">
+            ${isGen
+              ? `<span class="text-xs text-accent animate-pulse">${icon('clock',12)} Generando...</span>`
+              : hasImg
+                ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${cardIdx+1}.png">${icon('download',11)} Descargar</button>
+                   ${!isExpanding ? `
+                   <div style="display:flex;align-items:center;gap:4px;">
+                     <select class="form-select" id="expand-count-${latest.id}" style="font-size:10px;padding:2px 4px;height:26px;width:60px;">
+                       ${[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}"${n===1?' selected':''}>${n}x</option>`).join('')}
+                     </select>
+                     <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${latest.id}" ${isGenerating||expandingVariantId?'disabled':''} style="white-space:nowrap;">${icon('plus',10)} Variación</button>
+                   </div>` : `<span class="text-xs text-accent animate-pulse">${icon('clock',10)} Variando...</span>`}
+                   <button class="btn-delete-variant btn btn-secondary btn-xs" data-variant-id="${latest.id}" style="margin-left:auto;color:var(--danger);">${icon('trash',11)}</button>`
+                : hasError
+                  ? `<span class="text-xs" style="color:var(--danger);">${icon('alertTriangle',11)} Error</span>
+                     <button class="btn-delete-variant btn btn-secondary btn-xs" data-variant-id="${latest.id}" style="margin-left:auto;color:var(--danger);">${icon('trash',11)}</button>`
+                  : `<span class="text-xs text-muted">Sin imagen</span>`
+            }
+          </div>
+        </div>
+        <!-- Right: thumbnail -->
+        <div style="width:260px;flex-shrink:0;position:relative;background:var(--bg-tertiary);">
+          ${isGen
+            ? thumbLoaderHTML()
+            : hasImg
+              ? `<img src="${latest.image_url}" class="thumb-preview-trigger" data-preview="${latest.image_url}"
+                   style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block;" />
+                 ${latest.overlay_text ? `<div style="position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));">
+                   <div style="font-family:var(--font-impact);font-size:13px;color:white;letter-spacing:2px;">${latest.overlay_text}</div>
+                 </div>` : ''}`
+              : hasError
+                ? `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:16px;opacity:0.5;">${icon('alertTriangle',28)}</div>`
+                : `<div style="display:flex;align-items:center;justify-content:center;height:100%;opacity:0.2;">${icon('image',36)}</div>`
+          }
+        </div>
+      </div>
+      ${allSubItems.length > 0 ? `
+      <div style="border-top:1px solid var(--border);padding:12px 20px;background:rgba(0,0,0,0.15);">
+        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">
+          ${variantChildren.length > 0 && olderVersions.length > 0
+            ? `Variaciones (${variantChildren.length}) · Versiones previas (${olderVersions.length})`
+            : variantChildren.length > 0
+              ? `Variaciones (${variantChildren.length})`
+              : `Versiones previas (${olderVersions.length})`}
+        </div>
+        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
+          ${allSubItems.map((c, ci) => {
+            const isOld = olderVersions.includes(c);
+            return `
+            <div style="flex-shrink:0;width:140px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);${isOld?'opacity:0.7;':''}">
+              ${c.image_url ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />` : thumbLoaderHTML('','')}
+              ${isOld ? `<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.7);border-radius:3px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,0.7);">anterior</div>` : ''}
+              <button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;">${icon('trash',9)}</button>
+              ${c.image_url ? `<button class="btn-download" data-src="${c.image_url}" data-name="var-${cardIdx+1}-${ci+1}.png" style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:var(--radius-sm);padding:2px 5px;cursor:pointer;color:white;font-size:9px;display:flex;align-items:center;gap:3px;">${icon('download',9)}</button>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
     </div>`;
   }
 
@@ -857,89 +1157,47 @@ export async function renderEngine(container) {
 
   function renderVariantsHistory(project, variants) {
     if (variants.length === 0) return '';
-    const generating = variants.filter(v => v.ai_metadata?.generating).length;
-    const masters = variants.filter(v => !v.ai_metadata?.parent_id);
+    const CARDS_PER_PAGE = 4;
+    const allMasters = variants.filter(v => !v.ai_metadata?.parent_id)
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
     const children = variants.filter(v => !!v.ai_metadata?.parent_id);
+    if (allMasters.length === 0) return '';
 
-    const renderCard = (v, i, isChild = false) => {
-      const isGen = v.ai_metadata?.generating;
-      const hasError = v.ai_metadata?.error;
-      const isExpanding = expandingVariantId === v.id;
-      const imgSrc = v.image_url || null;
-      const childCount = children.filter(c => c.ai_metadata?.parent_id === v.id).length;
-      const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
+    // Group masters by angle_name so duplicates collapse into one card
+    const groupMap = new Map();
+    for (const m of allMasters) {
+      const key = m.ai_metadata?.angle_name || m.id;
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key).push(m);
+    }
+    const groups = [...groupMap.values()]; // each group: [latest, ...older]
+    const generating = variants.filter(v => v.ai_metadata?.generating).length;
 
-      return `
-      <div class="thumbnail-card${isChild ? ' variant-child' : ''}" style="animation:fadeIn 0.35s ease both; animation-delay:${i * 0.05}s;${isChild ? 'margin-left:var(--space-sm); border-left:2px solid var(--accent);' : ''}">
-        <div class="thumb-img" style="background:linear-gradient(${135 + i * 30}deg,#0a0a1a,#1a0a2e); position:relative; aspect-ratio:16/9;">
-          <button class="btn-delete-variant" data-variant-id="${v.id}" title="Eliminar miniatura"
-            style="position:absolute;top:6px;right:6px;z-index:10;background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.15);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,0.7);transition:all 0.15s;"
-            onmouseover="this.style.background='rgba(220,38,38,0.85)';this.style.color='white';"
-            onmouseout="this.style.background='rgba(0,0,0,0.65)';this.style.color='rgba(255,255,255,0.7)';">
-            ${icon('trash', 12)}
-          </button>
-          ${imgSrc
-          ? `<img src="${imgSrc}" alt="Miniatura" class="thumb-preview-trigger" data-preview="${imgSrc}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
-          : isGen
-            ? thumbLoaderHTML()
-            : hasError
-              ? `<div class="flex flex-col items-center justify-center h-full p-md text-center gap-xs">
-                     <span style="color:var(--danger);">${icon('alertTriangle', 24)}</span>
-                     <div class="text-xs text-muted" style="font-size:10px;">${v.ai_metadata.error.slice(0, 60)}</div>
-                   </div>`
-              : `<div class="flex flex-col items-center justify-center h-full p-md text-center">
-                     <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; opacity:0.4; margin-bottom:4px;">Concepto Visual</div>
-                     <div style="font-size:11px; opacity:0.75; line-height:1.4;">${(v.ai_metadata?.prompt || '').slice(0, 80)}...</div>
-                   </div>`}
-          ${imgSrc ? `
-          <div style="position:absolute;bottom:0;left:0;right:0;padding:8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));">
-            <div style="font-family:var(--font-impact);font-size:14px;color:white;letter-spacing:2px;">${v.overlay_text || ''}</div>
-          </div>` : ''}
-        </div>
-        <div class="thumb-info">
-          <div class="flex gap-xs mb-xs" style="flex-wrap:wrap;">
-            <span class="badge badge-accent" style="font-size:9px;">${v.style_preset || 'default'}</span>
-            ${v.ai_metadata?.angle_name ? `<span class="badge badge-neutral" style="font-size:9px;">${v.ai_metadata.angle_name}</span>` : ''}
-            ${isChild ? `<span class="badge badge-neutral" style="font-size:9px;">Variación</span>` : ''}
-            <span class="font-bold ${(v.impact_score || 0) >= 90 ? 'text-success' : 'text-accent'}" style="font-size:12px; margin-left:auto;">${v.impact_score || 0}</span>
-          </div>
-          ${imgSrc && !isGen ? `
-          <div class="flex gap-xs">
-            <button class="btn btn-secondary btn-xs btn-download" data-src="${imgSrc}" data-name="miniatura-${safeTitle}-${i + 1}.png"
-              title="Descargar" style="flex:0;">
-              ${icon('download', 12)} Descargar
-            </button>
-            ${!isChild ? `
-            <div class="flex gap-xs" style="flex:1; align-items:center;">
-              <select class="form-select" id="expand-count-${v.id}" style="font-size:10px; padding:3px 6px; flex:1; height:26px;">
-                ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${n === 1 ? ' selected' : ''}>${n} variación${n > 1 ? 'es' : ''}</option>`).join('')}
-              </select>
-              <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${v.id}" data-count="3"
-                ${isExpanding || expandingVariantId ? 'disabled' : ''} style="white-space:nowrap;">
-                ${isExpanding ? `<span class="animate-pulse">${icon('clock', 10)}</span>` : icon('plus', 10)} Variar
-              </button>
-            </div>` : ''}
-          </div>
-          ${childCount > 0 && !isChild ? `<div class="text-xs text-muted mt-xs" style="font-size:10px;">${icon('image', 10)} ${childCount} variación${childCount > 1 ? 'es' : ''} generada${childCount > 1 ? 's' : ''}</div>` : ''}
-          ` : ''}
-        </div>
-      </div>`;
-    };
-
-    let cards = '';
-    masters.forEach((m, i) => {
-      cards += renderCard(m, i, false);
-      const mChildren = children.filter(c => c.ai_metadata?.parent_id === m.id);
-      mChildren.forEach((c, j) => { cards += renderCard(c, j, true); });
-    });
+    const totalPages = Math.ceil(groups.length / CARDS_PER_PAGE);
+    const safePage = Math.min(variantsPage, Math.max(0, totalPages - 1));
+    const pageGroups = groups.slice(safePage * CARDS_PER_PAGE, (safePage + 1) * CARDS_PER_PAGE);
 
     return `
-    <div class="mt-lg">
-      <div class="flex items-center justify-between mb-sm">
-        <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">${icon('image', 12)} Miniaturas (${variants.length})</div>
-        ${generating > 0 ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando ${generating}...</span>` : ''}
+    <div class="mt-lg" id="variants-history-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-md);">
+        <div class="text-xs font-bold text-muted" style="letter-spacing:1px;text-transform:uppercase;">${icon('image',12)} Miniaturas generadas (${groups.length} ángulo${groups.length!==1?'s':''}${allMasters.length > groups.length ? ` · ${allMasters.length} total` : ''})</div>
+        ${generating > 0 ? `<span class="text-xs text-accent animate-pulse">${icon('clock',12)} Generando ${generating}...</span>` : ''}
       </div>
-      <div class="grid-3">${cards}</div>
+
+      ${pageGroups.map((group, pi) => {
+        const [latest, ...olderVersions] = group;
+        const mChildren = children.filter(c => c.ai_metadata?.parent_id === latest.id);
+        return renderVariantDrawerCard(latest, olderVersions, mChildren, project, safePage * CARDS_PER_PAGE + pi);
+      }).join('')}
+
+      ${totalPages > 1 ? `
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:var(--space-md);">
+        <button class="btn btn-secondary btn-sm variants-page-btn" data-page="${safePage-1}" ${safePage===0?'disabled':''}>${icon('arrowLeft',12)}</button>
+        ${Array.from({length:totalPages},(_,i)=>`
+          <button class="btn btn-sm variants-page-btn ${i===safePage?'btn-primary':'btn-secondary'}" data-page="${i}"
+            style="min-width:32px;font-size:12px;">${i+1}</button>`).join('')}
+        <button class="btn btn-secondary btn-sm variants-page-btn" data-page="${safePage+1}" ${safePage>=totalPages-1?'disabled':''}>${icon('arrowRight',12)}</button>
+      </div>` : ''}
     </div>`;
   }
 
@@ -959,153 +1217,84 @@ export async function renderEngine(container) {
       if (workflowStep > 1) { workflowStep--; render(); }
     });
     document.getElementById('btn-next-step')?.addEventListener('click', () => {
-      if (workflowStep < 3) { workflowStep++; render(); }
+      if (workflowStep < 5) { workflowStep++; render(); }
     });
 
-    container.querySelectorAll('.btn-delete-variant').forEach(btn => {
+    // ── nav GENERAR TODAS (step 5 bottom nav) — delegates to in-step btn ──
+    document.getElementById('btn-generate-master')?.addEventListener('click', () => {
+      document.getElementById('btn-generate-all')?.click();
+    });
+
+    // ── History section: pagination ──
+    container.querySelectorAll('.variants-page-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        variantsPage = parseInt(btn.dataset.page);
+        render();
+      });
+    });
+
+    // ── History section: delete-variant ──
+    document.querySelectorAll('#variants-history-section .btn-delete-variant').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const variantId = btn.dataset.variantId;
         const project = getProject();
         if (!project) return;
         const variant = (project.thumbnail_variants || []).find(v => v.id === variantId);
-        try {
-          if (variant?.image_url) {
-            const urlParts = variant.image_url.split('/public/thumbnails/');
-            if (urlParts.length > 1) {
-              await supabase.storage.from('thumbnails').remove([urlParts[1]]).catch(() => { });
-            }
-          }
-          const { error } = await supabase.from('thumbnail_variants').delete().eq('id', variantId);
-          if (error) throw error;
-          await reloadProjects();
-          render();
-        } catch (err) {
-          console.error('Delete variant error:', err);
-          toast('Error al eliminar: ' + err.message, 'error');
+        if (variant?.image_url) {
+          const parts = variant.image_url.split('/public/thumbnails/');
+          if (parts.length > 1) await supabase.storage.from('thumbnails').remove([parts[1]]).catch(()=>{});
         }
+        const { error } = await supabase.from('thumbnail_variants').delete().eq('id', variantId);
+        if (error) { toast('Error al eliminar: ' + error.message, 'error'); return; }
+        await reloadProjects();
+        render();
       });
     });
 
-    container.querySelectorAll('.thumb-preview-trigger').forEach(img => {
+    // ── History section: lightbox + download ──
+    document.querySelectorAll('#variants-history-section .thumb-preview-trigger').forEach(img => {
       img.addEventListener('click', (e) => {
         e.stopPropagation();
         const lb = document.getElementById('thumb-lightbox');
         const lbImg = document.getElementById('thumb-lightbox-img');
-        if (!lb || !lbImg) return;
-        lbImg.src = img.dataset.preview;
-        lb.classList.add('active');
+        if (lb && lbImg) { lbImg.src = img.dataset.preview; lb.classList.add('active'); }
       });
     });
-
-    container.querySelectorAll('.btn-download').forEach(btn => {
+    document.querySelectorAll('#variants-history-section .btn-download').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const src = btn.dataset.src;
-        const name = btn.dataset.name;
+        const src = btn.dataset.src, name = btn.dataset.name;
         try {
           const resp = await fetch(src);
           const blob = await resp.blob();
           const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = name;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch {
-          const a = document.createElement('a');
-          a.href = src;
-          a.download = name;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        }
+          const a = document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(()=>URL.revokeObjectURL(url),1000);
+        } catch { const a=document.createElement('a'); a.href=src; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
       });
     });
 
-    // ── GENERATE MASTER BATCH ──
-    document.getElementById('btn-generate-master')?.addEventListener('click', async () => {
-      const project = getProject();
-      const selectedAngles = project?.logic_dna?.selected_angles || [];
-      const activeIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
-      const anglesToGenerate = selectedAngles.filter((_, i) => activeIndices.includes(i));
-      if (!project || anglesToGenerate.length === 0 || !selectedStyleId || selectedFormats.length === 0) return;
-
-      const style = STYLES.find(s => s.id === selectedStyleId);
-      const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
-      const matchedFaceAtGen = faceList.find(f => f.id === autoMatchedFaceId);
-      const useFace = faceEnabled !== null ? faceEnabled : !!matchedFaceAtGen;
-      const expressionId = selectedExpressionId || autoMatchedFaceId || document.getElementById('select-expression-step3')?.value;
-      const selectedFace = faceList.find(f => f.id === expressionId);
-      const customText = document.getElementById('custom-overlay-text')?.value || project.title;
-
-      isGenerating = true;
-      render();
-
-      showLoader(container, {
-        title: 'Sintetizando Miniaturas',
-        subtitle: `Generando ${anglesToGenerate.length} variante${anglesToGenerate.length !== 1 ? 's' : ''} — DNA Chain completo activo`,
-        detail: `ÁNGULO 1 / ${anglesToGenerate.length} — INICIANDO`,
-      });
-
-      try {
-        for (let i = 0; i < anglesToGenerate.length; i++) {
-          const angle = anglesToGenerate[i];
-          const angleLetter = ['A', 'B', 'C', 'D', 'E'][activeIndices[i]] || (activeIndices[i] + 1);
-          updateLoader({
-            title: `Sintetizando Ángulo ${angleLetter}`,
-            subtitle: `"${angle.name}" — aplicando Visual Twist único + ADN de Marca`,
-            detail: `VARIANTE ${i + 1} DE ${anglesToGenerate.length} — IMAGE GENERATION`,
-          });
-          const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit });
-          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase(), faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
-        }
-        hideLoader();
-        toast(`✅ Batch completado — ${anglesToGenerate.length} miniatura${anglesToGenerate.length !== 1 ? 's' : ''} generada${anglesToGenerate.length !== 1 ? 's' : ''}`, 'success', 4000);
-      } catch (err) {
-        hideLoader();
-        console.error('Batch generate error:', err);
-        toast('Error al generar batch: ' + err.message, 'error');
-      } finally {
-        isGenerating = false;
-        await reloadProjects();
-        render();
-      }
-    });
-
-    // ── EXPAND variants ──
-    container.querySelectorAll('.btn-expand-variant').forEach(btn => {
+    // ── History section: expand-variant ──
+    document.querySelectorAll('#variants-history-section .btn-expand-variant').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (expandingVariantId) return;
-
         const variantId = btn.dataset.variantId;
         const countSelect = document.getElementById(`expand-count-${variantId}`);
-        const count = Math.min(parseInt(countSelect?.value || '1'), 5);
+        const count = Math.min(parseInt(countSelect?.value || '1'), 8);
         const project = getProject();
         if (!project) return;
-
-        const allVariants = project.thumbnail_variants || [];
-        const baseVariant = allVariants.find(v => v.id === variantId);
+        const baseVariant = (project.thumbnail_variants || []).find(v => v.id === variantId);
         if (!baseVariant) return;
-
         expandingVariantId = variantId;
+        isGenerating = true;
         render();
-
-        showLoader(container, {
-          title: 'Generando Variaciones',
-          subtitle: `Creando ${count} interpretación${count !== 1 ? 'es' : ''} alternativa${count !== 1 ? 's' : ''} del mismo ángulo psicológico`,
-          detail: `VARIACIÓN 1 DE ${count} — IMAGE GENERATION`,
-        });
-
+        showLoader(container, { title: 'Generando Variaciones', subtitle: `${count} variación${count!==1?'es':''}`, detail: `VARIACIÓN 1 DE ${count}` });
         try {
-          const basePrompt = baseVariant.ai_metadata?.prompt || project.title;
           for (let i = 0; i < count; i++) {
-            updateLoader({ detail: `VARIACIÓN ${i + 1} DE ${count} — IMAGE GENERATION` });
-            const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle, branding ADN, and video context. Change composition or color treatment while keeping the face (if present) and core message.`;
-
+            updateLoader({ detail: `VARIACIÓN ${i+1} DE ${count} — IMAGE GENERATION` });
+            const variationPrompt = buildVariationPrompt(baseVariant, project, i, count);
             const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
             const { data: inserted, error: insertErr } = await supabase
               .from('thumbnail_variants')
@@ -1116,7 +1305,7 @@ export async function renderEngine(container) {
                 style_preset: baseVariant.style_preset,
                 impact_score: Math.floor(Math.random() * 20) + 80,
                 ai_metadata: {
-                  prompt: variationPrompt.slice(0, 300),
+                  prompt: variationPrompt,
                   angle_name: baseVariant.ai_metadata?.angle_name || '',
                   format: baseVariant.ai_metadata?.format || '',
                   style: baseVariant.style_preset,
@@ -1262,7 +1451,7 @@ export async function renderEngine(container) {
       if (workflowStep > 1) { workflowStep--; render(); }
     });
     document.getElementById('btn-next-step')?.addEventListener('click', () => {
-      if (workflowStep < 3) { workflowStep++; render(); }
+      if (workflowStep < 5) { workflowStep++; render(); }
     });
   }
 
@@ -1423,9 +1612,10 @@ export async function renderEngine(container) {
       const formats = selectedFormats.map(fid => FORMATS.find(f => f.id === fid)).filter(Boolean);
       const matchedFaceAtGen = faceList.find(f => f.id === autoMatchedFaceId);
       const useFace = faceEnabled !== null ? faceEnabled : !!matchedFaceAtGen;
-      const expressionId = selectedExpressionId || autoMatchedFaceId || document.getElementById('select-expression-step3')?.value;
+      const expressionId = selectedExpressionId || autoMatchedFaceId;
       const selectedFace = faceList.find(f => f.id === expressionId);
-      const customText = document.getElementById('custom-overlay-text')?.value || project.title;
+      overlayText = document.getElementById('custom-overlay-text')?.value ?? overlayText;
+      const customText = overlayText || project.title;
 
       isGenerating = true;
       render();
@@ -1487,12 +1677,11 @@ export async function renderEngine(container) {
         });
 
         try {
-          const basePrompt = baseVariant.ai_metadata?.prompt || project.title;
           for (let i = 0; i < count; i++) {
             updateLoader({
               detail: `VARIACIÓN ${i + 1} DE ${count} — IMAGE GENERATION`,
             });
-            const variationPrompt = `${basePrompt}\n\nVariation ${i + 1} of ${count}: create a distinctly different interpretation keeping the same psychological angle, branding ADN, and video context. Change composition or color treatment while keeping the face (if present) and core message.`;
+            const variationPrompt = buildVariationPrompt(baseVariant, project, i, count);
 
             const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
             const { data: inserted, error: insertErr } = await supabase
@@ -1504,7 +1693,7 @@ export async function renderEngine(container) {
                 style_preset: baseVariant.style_preset,
                 impact_score: Math.floor(Math.random() * 20) + 80,
                 ai_metadata: {
-                  prompt: variationPrompt.slice(0, 300),
+                  prompt: variationPrompt,
                   angle_name: baseVariant.ai_metadata?.angle_name || '',
                   format: baseVariant.ai_metadata?.format || '',
                   style: baseVariant.style_preset,
@@ -1561,7 +1750,7 @@ export async function renderEngine(container) {
     // ── Project modal button ──
     document.getElementById('btn-open-project-modal')?.addEventListener('click', openProjectModal);
 
-    // ── Format card selection ──
+    // ── Format card selection (step 2) ──
     container.querySelectorAll('.format-card').forEach(card => {
       card.addEventListener('click', () => {
         const fid = card.dataset.formatId;
@@ -1576,27 +1765,217 @@ export async function renderEngine(container) {
       });
     });
 
-    // ── Style card selection ──
+    // ── Style card selection (step 3) ──
     container.querySelectorAll('.style-card').forEach(card => {
       card.addEventListener('click', () => {
         selectedStyleId = selectedStyleId === card.dataset.styleId ? null : card.dataset.styleId;
         rerenderStep();
-        const project = getProject();
-        const selectedAngles = project?.logic_dna?.selected_angles || [];
-        const genBtn = document.getElementById('btn-generate-master');
-        if (genBtn) genBtn.disabled = !selectedStyleId || selectedAngles.length === 0;
+        const nextBtn = document.getElementById('btn-next-step');
+        if (nextBtn) nextBtn.disabled = !selectedStyleId;
       });
     });
 
-    // ── Face toggle ──
-    container.querySelector('#check-use-face')?.addEventListener('change', (e) => {
-      faceEnabled = e.target.checked;
+    // ── Face YES/NO (step 4) ──
+    document.getElementById('face-opt-yes')?.addEventListener('click', () => {
+      faceEnabled = true;
+      rerenderStep();
+    });
+    document.getElementById('face-opt-no')?.addEventListener('click', () => {
+      faceEnabled = false;
       rerenderStep();
     });
 
-    // ── Face select ──
-    container.querySelector('#select-expression-step3')?.addEventListener('change', (e) => {
-      selectedExpressionId = e.target.value;
+    // ── Face expression card selection (step 4) ──
+    container.querySelectorAll('.face-opt-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedExpressionId = card.dataset.faceId;
+        rerenderStep();
+      });
+    });
+
+    // ── Overlay text persist (step 5) ──
+    document.getElementById('custom-overlay-text')?.addEventListener('input', (e) => {
+      overlayText = e.target.value;
+    });
+
+    // ── Angle pagination (step 5) ──
+    container.querySelectorAll('.angles-page-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        anglesPage = parseInt(btn.dataset.page);
+        rerenderStep();
+      });
+    });
+
+    // ── Per-card generate (step 5) ──
+    container.querySelectorAll('.btn-generate-angle').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (isGenerating) return;
+        const angleIdx = parseInt(btn.dataset.angleIndex);
+        generatingAngleIndex = angleIdx;
+        isGenerating = true;
+        rerenderStep();
+        try {
+          await generateSingleAngle(angleIdx);
+        } catch (err) {
+          toast('Error al generar: ' + err.message, 'error');
+        } finally {
+          generatingAngleIndex = null;
+          isGenerating = false;
+          await reloadProjects();
+          render();
+        }
+      });
+    });
+
+    // ── Generate All (step 5) ──
+    document.getElementById('btn-generate-all')?.addEventListener('click', async () => {
+      if (isGenerating) return;
+      const project = getProject();
+      if (!project) return;
+      const angles = project.logic_dna?.selected_angles || [];
+      const variants = project.thumbnail_variants || [];
+      const masters = variants.filter(v => !v.ai_metadata?.parent_id);
+      const pending = angles.reduce((acc, a, i) => {
+        if (!masters.some(v => v.ai_metadata?.angle_name === a.name)) acc.push(i);
+        return acc;
+      }, []);
+      if (pending.length === 0) {
+        toast('Todas las miniaturas ya fueron generadas.', 'info', 2500);
+        return;
+      }
+      isGenerating = true;
+      render();
+      showLoader(container, {
+        title: 'Generando Todas las Miniaturas',
+        subtitle: `${pending.length} ángulo${pending.length!==1?'s':''} en cola`,
+        detail: `INICIANDO`,
+      });
+      try {
+        for (let qi = 0; qi < pending.length; qi++) {
+          const angleIdx = pending[qi];
+          const angle = angles[angleIdx];
+          const letters = ['A','B','C','D','E','F','G','H'];
+          updateLoader({
+            title: `Generando Ángulo ${letters[angleIdx] || angleIdx+1}`,
+            subtitle: `"${angle.name}"`,
+            detail: `MINIATURA ${qi+1} DE ${pending.length}`,
+          });
+          generatingAngleIndex = angleIdx;
+          await generateSingleAngle(angleIdx);
+          await reloadProjects();
+          generatingAngleIndex = null;
+        }
+        hideLoader();
+        toast(`✅ ${pending.length} miniatura${pending.length!==1?'s':''} generada${pending.length!==1?'s':''}`, 'success', 4000);
+      } catch (err) {
+        hideLoader();
+        toast('Error al generar: ' + err.message, 'error');
+      } finally {
+        generatingAngleIndex = null;
+        isGenerating = false;
+        await reloadProjects();
+        render();
+      }
+    });
+
+    // ── Step-content expand-variant (step 5 cards) ──
+    container.querySelectorAll('#step-content .btn-expand-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (expandingVariantId) return;
+        const variantId = btn.dataset.variantId;
+        const countSelect = document.getElementById(`expand-count-${variantId}`);
+        const count = Math.min(parseInt(countSelect?.value || '1'), 8);
+        const project = getProject();
+        if (!project) return;
+        const baseVariant = (project.thumbnail_variants || []).find(v => v.id === variantId);
+        if (!baseVariant) return;
+        expandingVariantId = variantId;
+        isGenerating = true;
+        rerenderStep();
+        showLoader(container, { title: 'Generando Variaciones', subtitle: `${count} variación${count!==1?'es':''}`, detail: `VARIACIÓN 1 DE ${count}` });
+        try {
+          for (let i = 0; i < count; i++) {
+            updateLoader({ detail: `VARIACIÓN ${i+1} DE ${count} — IMAGE GENERATION` });
+            const variationPrompt = buildVariationPrompt(baseVariant, project, i, count);
+            const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
+            const { data: inserted, error: insertErr } = await supabase.from('thumbnail_variants').insert({
+              project_id: project.id,
+              angle_id: isRealAngleId ? baseVariant.angle_id : null,
+              overlay_text: baseVariant.overlay_text,
+              style_preset: baseVariant.style_preset,
+              impact_score: Math.floor(Math.random() * 20) + 80,
+              ai_metadata: { prompt: variationPrompt, angle_name: baseVariant.ai_metadata?.angle_name||'', format: baseVariant.ai_metadata?.format||'', style: baseVariant.style_preset, generating: true, parent_id: variantId, face_image_url: baseVariant.ai_metadata?.face_image_url||null }
+            }).select().single();
+            if (insertErr) throw insertErr;
+            if (!project.thumbnail_variants) project.thumbnail_variants = [];
+            project.thumbnail_variants.push(inserted);
+            try {
+              const dataUrl = await generateImage(variationPrompt, baseVariant.ai_metadata?.face_image_url || null);
+              const { data: sessionData } = await supabase.auth.getSession();
+              const userId = sessionData?.session?.user?.id;
+              const blob = await fetch(dataUrl).then(r => r.blob());
+              const mimeType = blob.type || 'image/jpeg';
+              const ext = mimeType.includes('png') ? 'png' : 'jpg';
+              const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.${ext}`;
+              await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: mimeType });
+              const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(fileName);
+              await supabase.from('thumbnail_variants').update({ image_url: urlData.publicUrl, ai_metadata: { ...inserted.ai_metadata, generating: false } }).eq('id', inserted.id);
+              const lv = project.thumbnail_variants.find(v => v.id === inserted.id);
+              if (lv) { lv.image_url = urlData.publicUrl; lv.ai_metadata = { ...inserted.ai_metadata, generating: false }; }
+            } catch (imgErr) {
+              await supabase.from('thumbnail_variants').update({ ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message } }).eq('id', inserted.id);
+            }
+          }
+          hideLoader();
+          toast(`✅ ${count} variación${count!==1?'es':''} generada${count!==1?'s':''}`, 'success', 3000);
+        } catch (err) {
+          hideLoader();
+          toast('Error al variar: ' + err.message, 'error');
+        } finally {
+          expandingVariantId = null;
+          isGenerating = false;
+          await reloadProjects();
+          render();
+        }
+      });
+    });
+
+    // ── Step-content delete-variant + download + lightbox (step 5 cards) ──
+    container.querySelectorAll('#step-content .btn-delete-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const variantId = btn.dataset.variantId;
+        const project = getProject();
+        if (!project) return;
+        const variant = (project.thumbnail_variants || []).find(v => v.id === variantId);
+        if (variant?.image_url) {
+          const parts = variant.image_url.split('/public/thumbnails/');
+          if (parts.length > 1) await supabase.storage.from('thumbnails').remove([parts[1]]).catch(()=>{});
+        }
+        await supabase.from('thumbnail_variants').delete().eq('id', variantId);
+        await reloadProjects();
+        render();
+      });
+    });
+    container.querySelectorAll('#step-content .btn-download, #step-content .thumb-preview-trigger').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (el.classList.contains('thumb-preview-trigger')) {
+          const lb = document.getElementById('thumb-lightbox');
+          const lbImg = document.getElementById('thumb-lightbox-img');
+          if (lb && lbImg) { lbImg.src = el.dataset.preview; lb.classList.add('active'); }
+        } else {
+          const src = el.dataset.src, name = el.dataset.name;
+          try {
+            const resp = await fetch(src);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(()=>URL.revokeObjectURL(url),1000);
+          } catch { const a=document.createElement('a'); a.href=el.dataset.src; a.download=el.dataset.name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+        }
+      });
     });
   }
 
@@ -1686,6 +2065,44 @@ PROHIBIDO renderizar texto, palabras, letras, números o tipografía en cualquie
 Renderizá ÚNICAMENTE los elementos visuales explícitamente descritos en las capas anteriores. PROHIBIDO agregar elementos por asociación cultural o de género: no inventar logotipos, marcas, insignias, íconos no especificados, efectos de franquicia, pantallas con contenido, fondos de escenografía no mencionados, ni ningún elemento decorativo que no esté descripto literalmente arriba. Si el estilo evoca un género (noticiero, cine de acción, documental), renderizá SOLO la estética visual del género (iluminación, color, composición) — NO sus elementos de UI, marcos de programa, gráficos de producción ni branding inventado. Cada píxel debe justificarse en alguna de las 6 capas anteriores.`;
   }
 
+  // ── Helper: build a full variation prompt from project data ──────────────
+  function buildVariationPrompt(baseVariant, project, variationIndex, totalCount) {
+    const angleName = baseVariant.ai_metadata?.angle_name || '';
+    const angle = (project.logic_dna?.selected_angles || []).find(a => a.name === angleName)
+      || { name: angleName, visual_twist: '', psychology_text: '' };
+
+    const styleLabel = baseVariant.style_preset || '';
+    const style = STYLES.find(s => s.label === styleLabel) || STYLES[0];
+
+    const formatStr = baseVariant.ai_metadata?.format || '';
+    const formatLabels = formatStr.split(' + ').map(s => s.trim()).filter(Boolean);
+    const resolvedFormats = formatLabels.map(lbl => FORMATS.find(f => f.label === lbl)).filter(Boolean);
+    const safeFormats = resolvedFormats.length > 0 ? resolvedFormats : [FORMATS[0]];
+
+    const faceImageUrl = baseVariant.ai_metadata?.face_image_url || null;
+    const useFace = !!faceImageUrl;
+    const selectedFace = faceList.find(f => f.image_url === faceImageUrl) || null;
+
+    const masterPrompt = buildMasterPrompt({ project, angle, style, formats: safeFormats, selectedFace, useFace, brandKit });
+
+    const dimensionOptions = [
+      'Shift the dominant color temperature significantly (if warm palette → go cool; if cool → go warm). Keep all other elements intact.',
+      'Reframe the composition (if tight close-up → go wider with environmental context; if wide → go tighter on the hero element). Keep angle and subject identical.',
+      'Change the lighting drama (if subtle atmospheric → push to extreme high-contrast; if harsh → go moody and cinematic). Same subject, same angle, different emotional intensity.',
+    ];
+    const dimension = dimensionOptions[variationIndex % dimensionOptions.length];
+
+    return `${masterPrompt}
+
+━━━ VARIATION DIRECTIVE — VARIANT ${variationIndex + 1} OF ${totalCount} ━━━
+This is a creative variation of an existing thumbnail for the same video, psychological angle, and brand identity.
+PRESERVE ABSOLUTELY: the psychological angle "${angleName}", the brand ADN, the subject matter and video context${useFace ? ', and the creator face identity (same real person)' : ''}.
+CHANGE — exactly one creative dimension:
+→ ${dimension}
+The viewer must instantly recognize this as the same concept and video, but with a distinctly different visual energy.
+Do NOT replicate the same composition, color palette, or lighting mood as the base version.`;
+  }
+
   // ── Helper: generate one image and save to DB ─────────────────────────────
   // Inserts placeholder, immediately updates UI, then generates image in background
   async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText, faceImageUrl = null, parentId = null }) {
@@ -1699,7 +2116,7 @@ Renderizá ÚNICAMENTE los elementos visuales explícitamente descritos en las c
         style_preset: style.label,
         impact_score: Math.floor(Math.random() * 20) + 80,
         ai_metadata: {
-          prompt: imagePrompt.slice(0, 300),
+          prompt: imagePrompt,
           angle_name: angle.name,
           format: formats.map(f => f.label).join(' + '),
           style: style.label,
