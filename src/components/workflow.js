@@ -2,11 +2,10 @@ import { navigateTo, getCurrentRoute } from '../router.js';
 import { icon } from '../icons.js';
 
 const WORKFLOW_STEPS = [
-    { route: 'brand', label: 'Brand Kit', desc: 'Identidad Visual', icon: 'palette', step: 1 },
-    { route: 'cerebro', label: 'El Cerebro', desc: 'ADN del Video', icon: 'brain', step: 2 },
-    { route: 'espionaje', label: 'Espionaje', desc: 'Análisis de Competencia', icon: 'eye', step: 3 },
-    { route: 'engine', label: 'Fábrica Creativa', desc: 'Generación', icon: 'cog', step: 4 },
-    { route: 'editor', label: 'Editor & Simulador', desc: 'Edición Final', icon: 'scissors', step: 5 },
+    { route: 'cerebro',  label: 'El Cerebro',       desc: 'ADN del Video',             icon: 'brain',    step: 1 },
+    { route: 'espionaje', label: 'Espionaje',        desc: 'Análisis de Competencia',   icon: 'eye',      step: 2 },
+    { route: 'engine',   label: 'Fábrica Creativa',  desc: 'Generación',                icon: 'cog',      step: 3 },
+    { route: 'editor',   label: 'Editor & Simulador', desc: 'Edición Final',            icon: 'scissors', step: 4 },
 ];
 
 export function renderWorkflow(container) {

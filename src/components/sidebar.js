@@ -5,7 +5,6 @@ import { signOut } from '../lib/auth.js';
 
 const NAV_ITEMS = [
   { route: 'dashboard', icon: 'barChart',  label: 'Dashboard', section: 'Principal' },
-  { route: 'brand',     icon: 'palette',   label: 'Brand Kit',  section: 'Workflow'  },
   { route: 'cerebro',   icon: 'brain',     label: 'Cerebro',    section: 'Workflow'  },
   { route: 'espionaje', icon: 'eye',       label: 'Espionaje',  section: 'Workflow'  },
   { route: 'engine',    icon: 'cog',       label: 'Fábrica',    section: 'Workflow'  },

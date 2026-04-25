@@ -104,7 +104,6 @@ async function uploadToStorage(bucket, file, channelId) {
 
 export async function renderBrand(container) {
   const { activeChannelId } = getState();
-  const route = 'brand';
   if (!activeChannelId) {
     container.innerHTML = '<div class="loading-spinner">Selecciona un canal para continuar</div>';
     return;
@@ -120,8 +119,8 @@ export async function renderBrand(container) {
       supabase.from('style_references').select('*').eq('channel_id', activeChannelId).order('created_at', { ascending: false })
     ]);
 
-    // Safety check: is this route still active?
-    if (window.location.hash.slice(1) !== route) return;
+    // Safety check: container still mounted (user may have navigated away)
+    if (!container.isConnected) return;
 
     if (brandRes.error || facesRes.error) {
       throw new Error("No pudimos conectar con la base de datos de identidad.");
@@ -736,4 +735,316 @@ async function showADNInterview(channelId, onComplete) {
     }
     overlay.remove();
   }
+}
+
+// ── Standalone section renders (used by Settings accordions) ──────────────
+
+const EMOTION_CONFIG_MAP = {
+  SORPRESA:  { color: '#F59E0B', icon: '⚡', desc: 'Shock y novedades' },
+  AUTORIDAD: { color: '#3B82F6', icon: '👁️', desc: 'Tutoriales y experto' },
+  DUDA:      { color: '#8B5CF6', icon: '🤔', desc: 'Comparativas y preguntas' },
+  MIEDO:     { color: '#EF4444', icon: '🚨', desc: 'Advertencias y noticias' },
+  SEÑALANDO: { color: '#10B981', icon: '👇', desc: 'Dirigir atención' },
+};
+
+function showLabelPickerModal(title = 'Elegí la expresión de esta foto') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;`;
+    overlay.innerHTML = `
+      <div style="background:var(--bg-secondary);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;max-width:340px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+        <div style="font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:4px;">Face Vault</div>
+        <div style="font-size:15px;font-weight:700;color:white;margin-bottom:18px;">${title}</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${Object.entries(EMOTION_CONFIG_MAP).map(([label, em]) => `
+            <button class="label-opt" data-label="${label}" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);text-align:left;width:100%;"
+              onmouseover="this.style.background='${em.color}22';this.style.borderColor='${em.color}66'"
+              onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.08)'">
+              <span style="font-size:20px;min-width:28px;text-align:center;">${em.icon}</span>
+              <div>
+                <div style="font-size:12px;font-weight:800;letter-spacing:1px;color:${em.color};text-transform:uppercase;">${label}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px;">${em.desc}</div>
+              </div>
+            </button>`).join('')}
+        </div>
+        <button id="label-cancel" style="margin-top:14px;width:100%;padding:8px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);font-size:11px;cursor:pointer;">Cancelar</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelectorAll('.label-opt').forEach(btn => {
+      btn.addEventListener('click', () => { overlay.remove(); resolve(btn.dataset.label); });
+    });
+    document.getElementById('label-cancel').addEventListener('click', () => { overlay.remove(); resolve(null); });
+  });
+}
+
+export async function renderADNSection(container, channelId) {
+  const { data: brandKit } = await supabase.from('brand_kits').select('*').eq('channel_id', channelId).maybeSingle();
+  if (!container.isConnected) return;
+
+  const adn = brandKit?.detailed_adn || brandKit?.channel_adn || null;
+  const pillars = ['🎯 Nicho', '👥 Público', '✨ Tono de Marca'];
+  const pillarColors = ['var(--accent)', '#3B82F6', '#10B981'];
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">${icon('brain', 16)} ADN Estratégico</div>
+        <div class="flex gap-xs items-center">
+          <span class="badge ${adn ? 'badge-accent' : 'badge-neutral'}">${adn ? 'Activo' : 'Pendiente'}</span>
+          <button class="btn btn-primary btn-sm" id="btn-start-adn" style="font-size:11px;">
+            ${icon('zap', 12)} ${adn ? 'Reiniciar' : 'Iniciar Análisis'}
+          </button>
+        </div>
+      </div>
+      ${adn?.interview ? `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-md);padding:var(--space-md);">
+          ${adn.interview.map((item, idx) => `
+            <div class="adn-answer-item" data-index="${idx}" style="background:var(--bg-tertiary);border-radius:var(--radius-md);border:1px solid var(--border);overflow:hidden;">
+              <div style="padding:6px 12px;font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:${pillarColors[idx] || 'var(--accent)'};border-bottom:1px solid var(--border);background:rgba(255,255,255,0.03);">
+                ${pillars[idx] || `Pilar ${idx + 1}`}
+              </div>
+              <div class="adn-answer-text" contenteditable="true" style="padding:var(--space-sm) var(--space-md);font-size:12px;line-height:1.5;color:var(--text-secondary);outline:none;min-height:60px;">${item.a}</div>
+            </div>`).join('')}
+        </div>
+        <div style="padding:0 var(--space-md) var(--space-md);display:flex;justify-content:flex-end;">
+          <button class="btn btn-secondary btn-xs hidden" id="btn-save-adn">${icon('save', 12)} Guardar y Re-Sintetizar</button>
+        </div>
+      ` : `
+        <div style="padding:var(--space-xl);text-align:center;opacity:0.5;">
+          <div style="font-size:32px;margin-bottom:var(--space-sm);">${icon('brain', 32)}</div>
+          <p class="text-sm text-muted">Iniciá el análisis para definir los 3 pilares estratégicos de tu canal</p>
+        </div>
+      `}
+    </div>`;
+
+  container.querySelector('#btn-start-adn')?.addEventListener('click', () => {
+    showADNInterview(channelId, () => renderADNSection(container, channelId));
+  });
+
+  container.querySelectorAll('.adn-answer-text').forEach(el => {
+    el.addEventListener('input', () => container.querySelector('#btn-save-adn')?.classList.remove('hidden'));
+  });
+
+  container.querySelector('#btn-save-adn')?.addEventListener('click', async () => {
+    const btn = container.querySelector('#btn-save-adn');
+    const originalHtml = btn.innerHTML;
+    try {
+      btn.disabled = true;
+      showLoader(container, { title: 'Re-Sintetizando ADN', subtitle: 'La IA está procesando tus respuestas actualizadas.', detail: 'ADN SYNTHESIS' });
+      const updatedAnswers = Array.from(container.querySelectorAll('.adn-answer-item')).map(div => ({
+        q: adn.interview[div.dataset.index]?.q || '',
+        a: div.querySelector('.adn-answer-text').innerText.trim()
+      }));
+      const { data: channel } = await supabase.from('channels').select('*').eq('id', channelId).single();
+      const synthesis = await callAI('ADN_SYNTHESIS', JSON.stringify({
+        channel_info: { name: channel.name, description: channel.description, niche: channel.niche },
+        interview: updatedAnswers
+      }));
+      await supabase.from('brand_kits').upsert({ channel_id: channelId, detailed_adn: { synthesis, interview: updatedAnswers } }, { onConflict: 'channel_id' });
+      hideLoader();
+      renderADNSection(container, channelId);
+    } catch (err) {
+      hideLoader();
+      alert('Error: ' + err.message);
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  });
+}
+
+export async function renderFaceVaultSection(container, channelId) {
+  const { data } = await supabase.from('face_vault').select('*').eq('channel_id', channelId).order('created_at', { ascending: true });
+  if (!container.isConnected) return;
+
+  const faces = data || [];
+  const validLabels = Object.keys(EMOTION_CONFIG_MAP);
+
+  const faceCards = faces.map(face => {
+    const label = face.expression_type;
+    const isTagged = validLabels.includes(label);
+    const em = isTagged ? EMOTION_CONFIG_MAP[label] : null;
+    return `
+      <div style="position:relative;border-radius:var(--radius-md);overflow:hidden;">
+        <img src="${face.image_url}" alt="Face" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block;border:2px solid ${isTagged ? em.color : 'rgba(255,255,255,0.15)'};border-radius:var(--radius-md);"/>
+        <button class="btn-change-label" data-face-id="${face.id}" style="position:absolute;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 6px;background:${isTagged ? em.color + 'DD' : 'rgba(0,0,0,0.75)'};border:none;cursor:pointer;width:100%;border-top:1px solid ${isTagged ? em.color + '88' : 'rgba(255,255,255,0.1)'};">
+          <span style="font-size:11px;">${isTagged ? em.icon : '◌'}</span>
+          <span style="font-size:9px;font-weight:800;letter-spacing:1px;color:white;text-transform:uppercase;">${isTagged ? label : 'PENDIENTE'}</span>
+          <span style="font-size:9px;color:rgba(255,255,255,0.5);margin-left:2px;">✎</span>
+        </button>
+        <button class="btn-delete-face" data-face-id="${face.id}" style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,0.7);border:none;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;" title="Eliminar foto">${icon('trash', 11)}</button>
+        ${!isTagged ? `<div style="position:absolute;top:5px;left:5px;background:#EF444488;border-radius:3px;padding:2px 5px;font-size:8px;font-weight:800;color:white;letter-spacing:1px;">SIN ETIQUETA</div>` : ''}
+      </div>`;
+  });
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">${icon('camera', 16)} Face Vault</div>
+        <span class="badge badge-neutral">${faces.length} foto${faces.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-sm);padding:var(--space-md);">
+        ${faceCards.join('')}
+        <div id="face-empty-slot" style="aspect-ratio:1/1;border:2px dashed rgba(255,255,255,0.15);border-radius:var(--radius-md);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:6px;background:rgba(255,255,255,0.02);"
+          onmouseover="this.style.borderColor='rgba(255,255,255,0.35)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+          <span style="font-size:20px;opacity:0.4;">${icon('plus', 22)}</span>
+          <span style="font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;">Agregar foto</span>
+        </div>
+      </div>
+      <div style="padding:0 var(--space-md) var(--space-md);">
+        <button class="btn btn-secondary btn-sm w-full" id="btn-upload-face">${icon('upload', 14)} Subir Nueva Foto</button>
+      </div>
+    </div>`;
+
+  const uploadFace = () => {
+    triggerFileInput('image/*', async (file) => {
+      const chosenLabel = await showLabelPickerModal('¿Qué expresión muestra esta foto?');
+      if (!chosenLabel) return;
+      const btn = container.querySelector('#btn-upload-face');
+      const emptySlot = container.querySelector('#face-empty-slot');
+      const originalBtnHtml = btn ? btn.innerHTML : '';
+      if (emptySlot) { emptySlot.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="width:28px;height:28px;border-radius:50%;border:3px solid ${EMOTION_CONFIG_MAP[chosenLabel].color};border-top-color:transparent;animation:spin 0.8s linear infinite;"></div><span style="font-size:9px;color:rgba(255,255,255,0.4);">Subiendo...</span></div>`; emptySlot.style.pointerEvents = 'none'; }
+      if (btn) { btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Subiendo...`; btn.disabled = true; }
+      try {
+        const compressedFile = await compressImage(file);
+        const url = await uploadToStorage('faces', compressedFile, channelId);
+        const { error: dbError } = await supabase.from('face_vault').insert({ channel_id: channelId, expression_type: chosenLabel, image_url: url });
+        if (dbError) throw dbError;
+        renderFaceVaultSection(container, channelId);
+      } catch (err) {
+        alert('No se pudo guardar la foto: ' + err.message);
+        if (btn) { btn.innerHTML = originalBtnHtml; btn.disabled = false; }
+      }
+    });
+  };
+
+  container.querySelector('#btn-upload-face')?.addEventListener('click', uploadFace);
+  container.querySelector('#face-empty-slot')?.addEventListener('click', uploadFace);
+
+  container.querySelectorAll('.btn-change-label').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const newLabel = await showLabelPickerModal('Cambiar expresión de esta foto');
+      if (!newLabel) return;
+      const { error } = await supabase.from('face_vault').update({ expression_type: newLabel }).eq('id', btn.dataset.faceId);
+      if (error) { alert('Error al actualizar etiqueta: ' + error.message); return; }
+      renderFaceVaultSection(container, channelId);
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-face').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar rostro permanentemente?')) return;
+      try {
+        const face = faces.find(f => f.id === btn.dataset.faceId);
+        if (face?.image_url) {
+          const parts = face.image_url.split('/public/faces/');
+          if (parts.length > 1) await supabase.storage.from('faces').remove([parts[1]]).catch(() => {});
+        }
+        const { error } = await supabase.from('face_vault').delete().eq('id', btn.dataset.faceId);
+        if (error) throw error;
+        renderFaceVaultSection(container, channelId);
+      } catch (err) {
+        alert('Error al eliminar: ' + err.message);
+      }
+    });
+  });
+}
+
+export async function renderGaleriaSection(container, channelId) {
+  const [styleRefsRes, brandRes] = await Promise.all([
+    supabase.from('style_references').select('*').eq('channel_id', channelId).order('created_at', { ascending: false }),
+    supabase.from('brand_kits').select('style_summary').eq('channel_id', channelId).maybeSingle()
+  ]);
+  if (!container.isConnected) return;
+
+  const styleRefList = styleRefsRes.data || [];
+  const styleSummary = brandRes.data?.style_summary || null;
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">${icon('star', 16)} Galería de Éxitos</div>
+        <div class="flex gap-xs items-center">
+          <button class="btn btn-secondary btn-xs" id="btn-analyze-style" ${styleRefList.length === 0 ? 'disabled' : ''}>
+            ${icon('brain', 12)} Analizar Estilo
+          </button>
+          <span class="badge badge-neutral">${styleRefList.length} / 5</span>
+        </div>
+      </div>
+      ${styleSummary ? `
+        <div style="margin:0 var(--space-md) var(--space-sm);padding:10px 12px;border-radius:8px;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(59,130,246,0.08));border:1px solid rgba(16,185,129,0.2);">
+          <div style="font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#10B981;margin-bottom:6px;">✦ Firma Visual Detectada</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.8);line-height:1.5;margin-bottom:6px;">${styleSummary.visual_style || '—'}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+            ${(styleSummary.palette || []).map(hex => `<div style="display:flex;align-items:center;gap:3px;"><div style="width:10px;height:10px;border-radius:2px;background:${hex};border:1px solid rgba(255,255,255,0.2);"></div><span style="font-size:9px;color:rgba(255,255,255,0.4);">${hex}</span></div>`).join('')}
+          </div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);font-style:italic;">${styleSummary.winning_pattern || ''}</div>
+        </div>
+      ` : ''}
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-sm);padding:var(--space-sm) var(--space-md);">
+        ${styleRefList.map(ref => `
+          <div style="position:relative;aspect-ratio:16/9;border-radius:var(--radius-sm);overflow:hidden;">
+            <img src="${ref.image_url}" style="width:100%;height:100%;object-fit:cover;display:block;"/>
+            <button class="btn-delete-styleref" data-ref-id="${ref.id}" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.7);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;">${icon('x', 10)}</button>
+          </div>`).join('')}
+        ${styleRefList.length < 5 ? `
+          <div id="btn-upload-styleref" style="aspect-ratio:16/9;border:2px dashed rgba(255,255,255,0.15);border-radius:var(--radius-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:4px;background:rgba(255,255,255,0.02);"
+            onmouseover="this.style.borderColor='rgba(255,255,255,0.35)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+            <span style="opacity:0.4;">${icon('plus', 16)}</span>
+            <span style="font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:1px;text-transform:uppercase;">Agregar</span>
+          </div>` : ''}
+      </div>
+      <div style="padding:0 var(--space-md) var(--space-md);">
+        <button class="btn btn-secondary btn-sm w-full" id="btn-upload-styleref-main">${icon('upload', 14)} Subir Miniatura Exitosa</button>
+      </div>
+    </div>`;
+
+  const uploadStyleRef = () => {
+    triggerFileInput('image/*', async (file) => {
+      try {
+        const compressed = await compressImage(file, 1280, 720, 0.85);
+        const url = await uploadToStorage('references', compressed, channelId);
+        const { error } = await supabase.from('style_references').insert({ channel_id: channelId, image_url: url });
+        if (error) throw error;
+        renderGaleriaSection(container, channelId);
+      } catch (err) {
+        alert('No se pudo guardar la miniatura: ' + err.message);
+      }
+    });
+  };
+
+  container.querySelector('#btn-upload-styleref')?.addEventListener('click', uploadStyleRef);
+  container.querySelector('#btn-upload-styleref-main')?.addEventListener('click', uploadStyleRef);
+
+  container.querySelector('#btn-analyze-style')?.addEventListener('click', async () => {
+    const btn = container.querySelector('#btn-analyze-style');
+    if (styleRefList.length === 0) return;
+    const originalHtml = btn.innerHTML;
+    try {
+      btn.disabled = true;
+      showLoader(container, { title: 'Analizando Firma Visual', subtitle: `Extrayendo paleta, composición y patrón ganador de ${styleRefList.length} miniatura${styleRefList.length !== 1 ? 's' : ''}.`, detail: 'STYLE ANALYSIS' });
+      const urls = styleRefList.map(r => r.image_url).join('\n');
+      const summary = await callAI('STYLE_ANALYSIS', `Analiza estas ${styleRefList.length} miniaturas exitosas del creador y extrae su firma visual:\n${urls}`, { style_refs: styleRefList });
+      await supabase.from('brand_kits').upsert({ channel_id: channelId, style_summary: summary }, { onConflict: 'channel_id' });
+      renderGaleriaSection(container, channelId);
+    } catch (err) {
+      hideLoader();
+      alert('Error al analizar estilo: ' + err.message);
+    } finally {
+      hideLoader();
+      if (btn) { btn.innerHTML = originalHtml; btn.disabled = styleRefList.length === 0; }
+    }
+  });
+
+  container.querySelectorAll('.btn-delete-styleref').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ref = styleRefList.find(r => r.id === btn.dataset.refId);
+      if (ref?.image_url) {
+        const parts = ref.image_url.split('/public/references/');
+        if (parts.length > 1) await supabase.storage.from('references').remove([parts[1]]).catch(() => {});
+      }
+      await supabase.from('style_references').delete().eq('id', btn.dataset.refId);
+      renderGaleriaSection(container, channelId);
+    });
+  });
 }

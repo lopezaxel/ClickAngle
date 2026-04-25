@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase.js';
 import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { checkApiKey } from '../lib/intelligence.js';
+import { renderADNSection, renderFaceVaultSection, renderGaleriaSection } from './brand.js';
 
 export function renderSettings(container) {
   const { currentUser } = getState();
@@ -25,60 +26,83 @@ function renderSettingsUI(container, maskedKeys) {
   const googlePlaceholder = (maskedKeys?.google_ai_key_set) ? maskedKeys.google_ai_key_masked : 'AIza...';
   const keyStatus = maskedKeys?.google_ai_key_set;
 
+  const apiKeyStatusClass = getState().apiKeyStatus === 'connected' ? 'badge-success' : (getState().apiKeyStatus === 'disconnected' ? 'badge-warning' : 'badge-danger');
+  const apiKeyStatusLabel = getState().apiKeyStatus === 'connected' ? 'Conectada' : (getState().apiKeyStatus === 'disconnected' ? 'Desconectada' : 'No Vinculada');
+
   const html = `<div class="animate-in">
     <div class="section-header">
       <div>
         <h2 class="section-title">${icon('cog', 22)} Configuración</h2>
-        <p class="section-subtitle">API keys y preferencias del sistema</p>
+        <p class="section-subtitle">API key e identidad de marca del canal</p>
       </div>
     </div>
-    
-    <div>
-      <div class="card" style="max-width:600px;">
-        <div class="card-header">
-          <div class="card-title">${icon('key', 16)} API Keys</div>
-          <div class="flex items-center gap-xs">
-            <span class="badge ${getState().apiKeyStatus === 'connected' ? 'badge-success' : (getState().apiKeyStatus === 'disconnected' ? 'badge-warning' : 'badge-danger')}">
-                ${getState().apiKeyStatus === 'connected' ? 'Conectada' : (getState().apiKeyStatus === 'disconnected' ? 'Desconectada' : 'No Vinculada')}
-            </span>
-            <span class="badge badge-accent">${icon('lock', 12)} Encriptado</span>
+
+    <div class="settings-accordions">
+
+      <!-- 1. Google AI Key -->
+      <details class="settings-accordion">
+        <summary class="settings-accordion-header">
+          <span class="settings-accordion-lead">${icon('key', 16)}<span>Google AI Key</span></span>
+          <span id="api-key-status-badge" class="badge ${apiKeyStatusClass}" style="font-size:10px;">${apiKeyStatusLabel}</span>
+          <span class="settings-accordion-chevron">${icon('chevronDown', 14)}</span>
+        </summary>
+        <div class="settings-accordion-body">
+          <div class="card" style="max-width:600px;">
+            <p class="text-sm text-muted mb-md">Tus claves se guardan <strong>encriptadas</strong> en la base de datos. Nunca se exponen en texto plano.</p>
+            <div class="form-group">
+              <label class="form-label">Google AI Studio Key</label>
+              <input type="password" class="form-input" id="google-key-input"
+                placeholder="${googlePlaceholder}"
+                value=""
+                autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" />
+              <p class="text-xs text-muted mt-xs">
+                ${keyStatus
+                  ? `${icon('check', 12)} Clave configurada — dejá el campo vacío para mantenerla, o ingresá una nueva para reemplazarla.`
+                  : `Obtenla en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-accent">Google AI Studio</a>`}
+              </p>
+            </div>
+            <div id="save-keys-feedback" style="display:none;" class="mb-md"></div>
+            <div class="flex gap-sm mt-md">
+              <button class="btn btn-primary btn-sm" id="btn-save-keys">${icon('save', 14)} Guardar Keys</button>
+              <button class="btn btn-secondary btn-sm" id="btn-test-keys">${icon('refresh', 14)} Testear Conexión</button>
+            </div>
+            <div class="text-xs text-muted mt-md" style="padding:var(--space-sm);background:var(--bg-tertiary);border-radius:var(--radius-sm);border:1px solid var(--border);">
+              ${icon('lock', 12)} <strong>Seguridad:</strong> Las claves se encriptan con AES-256. Nunca se transmiten ni se muestran en texto plano.
+            </div>
           </div>
         </div>
-        <p class="text-sm text-muted mb-md">Tus claves se guardan <strong>encriptadas</strong> en la base de datos. Nunca se exponen en texto plano.</p>
-        
-        <div class="form-group">
-          <label class="form-label">Google AI Studio Key</label>
-          <input type="password" class="form-input" id="google-key-input" 
-            placeholder="${googlePlaceholder}" 
-            value=""
-            autocomplete="off"
-            spellcheck="false"
-            data-lpignore="true"
-            data-1p-ignore="true" />
-          <p class="text-xs text-muted mt-xs">
-            ${keyStatus
-      ? `${icon('check', 12)} Clave configurada — dejá el campo vacío para mantenerla, o ingresá una nueva para reemplazarla.`
-      : `Obtenla en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-accent">Google AI Studio</a>`}
-          </p>
-        </div>
-        
-        </div>
-        
-        <div id="save-keys-feedback" style="display:none;" class="mb-md"></div>
-        <div class="flex gap-sm mt-md">
-          <button class="btn btn-primary btn-sm" id="btn-save-keys">
-            ${icon('save', 14)} Guardar Keys
-          </button>
-          <button class="btn btn-secondary btn-sm" id="btn-test-keys">
-            ${icon('refresh', 14)} Testear Conexión
-          </button>
-        </div>
-        
-        <div class="text-xs text-muted mt-md" style="padding:var(--space-sm);background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
-          ${icon('lock', 12)} <strong>Seguridad:</strong> Las claves se encriptan con AES-256 antes de almacenarse. 
-          Nunca se transmiten ni se muestran en texto plano después de guardarlas.
-        </div>
-      </div>
+      </details>
+
+      <!-- 2. ADN Estratégico -->
+      <details class="settings-accordion">
+        <summary class="settings-accordion-header">
+          <span class="settings-accordion-lead">${icon('brain', 16)}<span>ADN Estratégico</span></span>
+          <span class="settings-accordion-desc">De qué trata el canal</span>
+          <span class="settings-accordion-chevron">${icon('chevronDown', 14)}</span>
+        </summary>
+        <div class="settings-accordion-body" id="section-adn"></div>
+      </details>
+
+      <!-- 3. Face Vault -->
+      <details class="settings-accordion">
+        <summary class="settings-accordion-header">
+          <span class="settings-accordion-lead">${icon('camera', 16)}<span>Face Vault</span></span>
+          <span class="settings-accordion-desc">Expresiones del creador</span>
+          <span class="settings-accordion-chevron">${icon('chevronDown', 14)}</span>
+        </summary>
+        <div class="settings-accordion-body" id="section-face-vault"></div>
+      </details>
+
+      <!-- 4. Galería de Éxitos -->
+      <details class="settings-accordion">
+        <summary class="settings-accordion-header">
+          <span class="settings-accordion-lead">${icon('star', 16)}<span>Galería de Éxitos</span></span>
+          <span class="settings-accordion-desc">Miniaturas exitosas del canal</span>
+          <span class="settings-accordion-chevron">${icon('chevronDown', 14)}</span>
+        </summary>
+        <div class="settings-accordion-body" id="section-galeria"></div>
+      </details>
+
     </div>
 
     ${isAdmin ? `
@@ -317,6 +341,28 @@ function renderSettingsUI(container, maskedKeys) {
         btn.disabled = false;
       }
     });
+  }
+
+  // Keep API key badge in sync — handles race between render and checkApiKey resolution
+  const syncApiBadge = () => {
+    const el = container.querySelector('#api-key-status-badge');
+    if (!el) return;
+    const s = getState().apiKeyStatus;
+    el.className = `badge ${s === 'connected' ? 'badge-success' : s === 'disconnected' ? 'badge-warning' : 'badge-danger'}`;
+    el.textContent = s === 'connected' ? 'Conectada' : s === 'disconnected' ? 'Desconectada' : 'No Vinculada';
+  };
+  syncApiBadge();
+  checkApiKey().then(syncApiBadge);
+
+  // Initialize brand kit accordion sections
+  const { activeChannelId } = getState();
+  if (activeChannelId) {
+    const adnSection = container.querySelector('#section-adn');
+    const faceSection = container.querySelector('#section-face-vault');
+    const galeriaSection = container.querySelector('#section-galeria');
+    if (adnSection) renderADNSection(adnSection, activeChannelId);
+    if (faceSection) renderFaceVaultSection(faceSection, activeChannelId);
+    if (galeriaSection) renderGaleriaSection(galeriaSection, activeChannelId);
   }
 }
 

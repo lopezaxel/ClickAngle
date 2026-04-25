@@ -946,6 +946,11 @@ body {
   outline: none;
 }
 
+.form-select option {
+  background: #0d0d0d;
+  color: var(--text-primary);
+}
+
 .form-input:focus,
 .form-textarea:focus,
 .form-select:focus {
@@ -2641,4 +2646,83 @@ body {
 
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .section-header { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
+}
+
+/* ── Settings Accordions ───────────────────────────────────────────────── */
+.settings-accordions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-width: 900px;
+}
+
+.settings-accordion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.settings-accordion summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-accordion summary::-webkit-details-marker { display: none; }
+
+.settings-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: linear-gradient(90deg, rgba(220,38,38,0.18) 0%, rgba(220,38,38,0.06) 60%, transparent 100%);
+  border-bottom: 1px solid transparent;
+  border-left: 3px solid var(--accent);
+  transition: background var(--transition-fast);
+}
+
+.settings-accordion[open] > .settings-accordion-header {
+  border-bottom-color: var(--border-accent);
+}
+
+.settings-accordion-header:hover {
+  background: linear-gradient(90deg, rgba(220,38,38,0.28) 0%, rgba(220,38,38,0.10) 60%, transparent 100%);
+}
+
+.settings-accordion-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.settings-accordion-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex: 1;
+}
+
+.settings-accordion-chevron {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  transition: transform var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.settings-accordion[open] .settings-accordion-chevron {
+  transform: rotate(180deg);
+}
+
+.settings-accordion-body {
+  padding: var(--space-lg);
+}
+
+.settings-accordion-body .card {
+  margin-bottom: 0;
 }
