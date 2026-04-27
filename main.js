@@ -16,6 +16,7 @@ import { renderChannelSelector } from './src/panels/channel-selector.js';
 import { renderAdmin } from './src/panels/admin.js';
 import { initAuth } from './src/lib/auth.js';
 import { getState, subscribe } from './src/lib/state.js';
+import { loadChannelProjects } from './src/lib/projects.js';
 import { icon } from './src/icons.js';
 import { checkApiKey } from './src/lib/intelligence.js';
 import { showLoader, hideLoader } from './src/lib/loader.js';
@@ -162,6 +163,9 @@ function initApp() {
       || (isLoadingChannels !== lastLoadingChannels)
       || (channelCount !== lastChannelCount);
 
+    // Capture whether the channel changed before updating lastChannelId
+    const channelChanged = activeChannelId && activeChannelId !== lastChannelId;
+
     if (!routerInitialized) {
       hideLoader(false);
       initRouter(workspace);
@@ -175,12 +179,18 @@ function initApp() {
       updateWorkflow(workflowBar);
     }
 
-    // Update last seen state
+    // Update last seen state BEFORE triggering any async setState calls,
+    // to prevent loadChannelProjects→setState→renderApp→loadChannelProjects loops
     lastUserId = userId;
     lastChannelId = activeChannelId;
     lastSessionId = sessionId;
     lastLoadingChannels = isLoadingChannels;
     lastChannelCount = channelCount;
+
+    // Load projects after lastChannelId is updated so re-triggered renderApp won't loop
+    if (channelChanged) {
+      loadChannelProjects(activeChannelId);
+    }
   }
 
   // Subscribe to state changes

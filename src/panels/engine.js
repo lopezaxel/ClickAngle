@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js';
 import { getState, subscribe } from '../lib/state.js';
+import { setActiveProject } from '../lib/projects.js';
 import { icon } from '../icons.js';
 import { callAI, generateImage } from '../lib/intelligence.js';
 import { toast, confirmDialog, inputDialog } from '../lib/toast.js';
@@ -145,8 +146,11 @@ export async function renderEngine(container) {
     return;
   }
 
-  // UI State
-  let selectedProjectId = projects[0]?.id || null;
+  // UI State — prefer the globally active project if it exists in our loaded list
+  const globalActiveId = getState().activeProjectId;
+  let selectedProjectId = (globalActiveId && projects.find(p => p.id === globalActiveId))
+    ? globalActiveId
+    : (projects[0]?.id || null);
   let workflowStep = selectedProjectId ? 2 : 1;
   let selectedFormats = [];
   let selectedStyleId = null;
@@ -650,6 +654,8 @@ export async function renderEngine(container) {
       const projectChanged = selectedProjectId !== modalSelectedId;
       if (projectChanged) {
         selectedProjectId = modalSelectedId;
+        // Sync with global state so workflow bar and other panels stay in sync
+        setActiveProject(modalSelectedId);
         selectedFormats = [];
         selectedStyleId = null;
         batchAngleSelection = null;

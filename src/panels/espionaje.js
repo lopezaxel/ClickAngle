@@ -1,14 +1,16 @@
 import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
+import { getActiveProject } from '../lib/projects.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
 import { showLoader, hideLoader } from '../lib/loader.js';
 import { toast } from '../lib/toast.js';
 
 // --- Storage upload (one file) ---
-async function uploadToStorage(file, channelId, userId) {
+async function uploadToStorage(file, channelId, projectId, userId) {
   const ext = file.name.split('.').pop();
-  const fileName = `${userId}/${channelId}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+  const folder = projectId ? `${userId}/${channelId}/${projectId}` : `${userId}/${channelId}`;
+  const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
   const { error } = await supabase.storage.from('references').upload(fileName, file, {
     cacheControl: '3600',
     upsert: false,
@@ -170,8 +172,18 @@ function openUploadModal(onConfirm, initialFiles = []) {
 // ===================== MAIN RENDER =====================
 
 export async function renderEspionaje(container) {
-  const { activeChannelId, session } = getState();
+  const { activeChannelId, activeProjectId, session } = getState();
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
+
+  // Require an active project to scope references
+  if (!activeProjectId) {
+    container.innerHTML = `<div class="animate-in" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px;text-align:center;padding:40px;">
+      <div style="opacity:0.4;">${icon('eye', 48)}</div>
+      <h3 style="font-size:18px;font-weight:700;">Seleccioná un video primero</h3>
+      <p style="color:var(--text-tertiary);max-width:360px;font-size:13px;">Las miniaturas de competencia se guardan por video. Elegí o creá un video desde el botón <strong>VIDEO</strong> en la barra superior.</p>
+    </div>`;
+    return;
+  }
 
   showLoader(container, { title: 'Cargando referencias visuales...', subtitle: 'Recuperando miniaturas de la competencia', detail: 'CONSULTANDO BD' });
 
@@ -179,6 +191,7 @@ export async function renderEspionaje(container) {
     .from('visual_references')
     .select('*')
     .eq('channel_id', activeChannelId)
+    .eq('project_id', activeProjectId)
     .order('created_at', { ascending: false });
 
   const savedReferences = refs || [];
@@ -264,9 +277,10 @@ export async function renderEspionaje(container) {
       for (const entry of entries) {
         progressText.textContent = `Subiendo ${uploaded + 1}/${entries.length}: ${entry.name}`;
 
-        const url = await uploadToStorage(entry.file, activeChannelId, userId);
+        const url = await uploadToStorage(entry.file, activeChannelId, activeProjectId, userId);
         await supabase.from('visual_references').insert({
           channel_id: activeChannelId,
+          project_id: activeProjectId,
           title: entry.name || 'Sin título',
           image_url: url,
           style_notes: 'Pendiente de análisis...',

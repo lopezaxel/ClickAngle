@@ -4,19 +4,41 @@ import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
 import { toast } from '../lib/toast.js';
 import { showLoader, updateLoader, hideLoader } from '../lib/loader.js';
+import { getActiveProject, createProject, updateProjectFull, updateProjectLogicDna } from '../lib/projects.js';
 
 export async function renderCerebro(container) {
   const { activeChannelId } = getState();
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
 
-  let scriptText = '';
+  // Pre-load from active project if one exists
+  const activeProject = getActiveProject();
+  const projectDna = activeProject?.logic_dna || null;
+
+  let scriptText = activeProject?.script_text || '';
   let inputType = 'script'; // 'script' or 'context'
   let contextText = '';
-  let analysisResult = null;     // Step 1 result: hook, tension, promise, visual_briefing
-  let generatedAngles = [];      // 5 AI-generated angles for this specific video
-  let selectedAngleIndices = []; // indices (0-4) of selected angles
+  let analysisResult = (projectDna?.hook) ? {
+    hook: projectDna.hook,
+    tension: projectDna.tension,
+    promise: projectDna.promise,
+    text_suggestions: projectDna.text_suggestions || [],
+    visual_briefing: projectDna.visual_briefing || null,
+  } : null;
+  // Restore previously generated angles from DB (stored as generated_angles_raw)
+  let generatedAngles = projectDna?.generated_angles_raw || [];
   let isGeneratingAngles = false;
-  let step = 1;                  // 1 = script input, 2 = angles A/B/C test
+
+  // Restore selected indices by matching saved selected_angles names against generatedAngles
+  let selectedAngleIndices = [];
+  if (generatedAngles.length > 0 && projectDna?.selected_angles?.length > 0) {
+    projectDna.selected_angles.forEach(saved => {
+      const idx = generatedAngles.findIndex(a => a.name === saved.name);
+      if (idx !== -1 && !selectedAngleIndices.includes(idx)) selectedAngleIndices.push(idx);
+    });
+  }
+
+  // Start at step 2 if we have both analysis and generated angles
+  let step = (analysisResult && generatedAngles.length > 0) ? 2 : 1;
 
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
@@ -486,6 +508,11 @@ export async function renderCerebro(container) {
         analysisResult = await callAI(promptModel, textToProcess, adn);
         hideLoader();
         render();
+        // Persist script text to the active project immediately after analysis
+        const { activeProjectId } = getState();
+        if (activeProjectId) {
+          updateProjectFull(activeProjectId, { script_text: scriptText || contextText }).catch(() => {});
+        }
       } catch (err) {
         console.error('Data Processing Error:', err);
         hideLoader();
@@ -553,25 +580,37 @@ export async function renderCerebro(container) {
           text_suggestions: analysisResult.text_suggestions || [],
           visual_briefing: analysisResult.visual_briefing || null,
           selected_angles: selectedAngles,
+          generated_angles_raw: generatedAngles,
         };
 
-        const { data: savedProject, error } = await supabase.from('projects').insert({
-          channel_id: activeChannelId,
-          title: (scriptText || contextText).split('\n')[0].slice(0, 50) || 'Nuevo Video',
-          script_text: scriptText || contextText,
-          logic_dna,
-          status: 'draft'
-        }).select('id').single();
+        const { activeProjectId } = getState();
 
-        if (error) throw error;
+        if (activeProjectId) {
+          // Update existing project
+          await updateProjectFull(activeProjectId, {
+            script_text: scriptText || contextText,
+            logic_dna,
+          });
+          setState({
+            activeVisualBriefing: logic_dna.visual_briefing,
+            activeEmotionLabel: logic_dna.visual_briefing?.emotion_label || null,
+          });
+        } else {
+          // No project selected — create one (fallback for direct navigation)
+          const title = (scriptText || contextText).split('\n')[0].slice(0, 60) || 'Nuevo Video';
+          const newProject = await createProject(activeChannelId, title);
+          await updateProjectFull(newProject.id, {
+            script_text: scriptText || contextText,
+            logic_dna,
+          });
+          setState({
+            activeProjectId: newProject.id,
+            activeVisualBriefing: logic_dna.visual_briefing,
+            activeEmotionLabel: logic_dna.visual_briefing?.emotion_label || null,
+          });
+        }
 
-        setState({
-          activeProjectId: savedProject?.id || null,
-          activeVisualBriefing: logic_dna.visual_briefing,
-          activeEmotionLabel: logic_dna.visual_briefing?.emotion_label || null,
-        });
-
-        toast(`${selectedAngles.length} ángulo${selectedAngles.length !== 1 ? 's' : ''} pasado${selectedAngles.length !== 1 ? 's' : ''} a la Fábrica — listo para el batch`, 'success');
+        toast(`${selectedAngles.length} ángulo${selectedAngles.length !== 1 ? 's' : ''} guardado${selectedAngles.length !== 1 ? 's' : ''} — listo para la Fábrica`, 'success');
       } catch (err) {
         console.error('Save angles error:', err);
         toast('Error al guardar: ' + err.message, 'error');
@@ -600,6 +639,14 @@ export async function renderCerebro(container) {
       };
       const result = await callAI('ANGLES_GENERATION', textContent, context);
       generatedAngles = result?.angles || [];
+      // Persist generated angles so they survive panel navigation
+      const { activeProjectId } = getState();
+      if (activeProjectId && generatedAngles.length > 0) {
+        const existingDna = getActiveProject()?.logic_dna || {};
+        updateProjectFull(activeProjectId, {
+          logic_dna: { ...existingDna, generated_angles_raw: generatedAngles },
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('Angles generation error:', err);
       generatedAngles = [];

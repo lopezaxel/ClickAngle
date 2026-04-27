@@ -75,16 +75,14 @@ export function renderSidebar(container) {
       </button>
     </div>
 
-    <div class="sidebar-channel-display" id="sidebar-go-hub" title="${activeChannel?.name || 'Hub'}">
-      <div class="channel-avatar">
-        ${activeChannel?.image_url
-          ? `<img src="${activeChannel.image_url}" alt="${activeChannel.name}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
-          : (activeChannel ? (activeChannel.name || 'C').charAt(0).toUpperCase() : '?')
-        }
+    <div class="sidebar-channel-display" id="sidebar-go-hub" title="Cambiar canal">
+      <div class="channel-avatar channel-avatar--youtube">
+        ${icon('youtubePlay', 20)}
       </div>
+      <span class="channel-label-narrow">Canales</span>
       <div class="channel-info">
         <div class="channel-name">${activeChannel ? activeChannel.name : 'Sin canal'}</div>
-        <div class="channel-niche">${activeChannel ? activeChannel.niche : 'Ir al Hub'}</div>
+        <div class="channel-niche">${activeChannel ? activeChannel.niche : 'Elegir canal'}</div>
       </div>
       <span class="sidebar-hub-icon">${icon('grid', 14)}</span>
     </div>

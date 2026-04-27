@@ -8,6 +8,10 @@ const state = {
     apiKeyStatus: 'not_connected', // 'connected', 'not_connected', 'disconnected'
     isAuthInitializing: true, // true while Supabase recovers session
     isLoadingChannels: true,  // true while channels haven't been fetched yet
+    // Video projects
+    activeProjectId: null,  // currently selected project UUID
+    projects: [],           // projects for the active channel
+    isLoadingProjects: false,
 };
 
 const listeners = new Set();
