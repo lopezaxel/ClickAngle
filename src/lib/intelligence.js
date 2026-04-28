@@ -293,11 +293,11 @@ const MODEL_MAPPING = {
     CHANNEL_ADN: 'gemini-3-flash-preview',
     ADN_INTERVIEW: 'gemini-3-flash-preview',
     ADN_SYNTHESIS: 'gemini-3-flash-preview',
-    ANGLES_GENERATION: 'gemini-3.1-pro-preview',
+    ANGLES_GENERATION: 'gemini-3-flash-preview',
     BRANDING_ANALYSIS: 'gemini-3-flash-preview',
     STYLE_ANALYSIS: 'gemini-3-flash-preview',
-    SCRIPT_ANALYSIS: 'gemini-3.1-pro-preview',
-    CONTEXT_ANALYSIS: 'gemini-3.1-pro-preview',
+    SCRIPT_ANALYSIS: 'gemini-3-flash-preview',
+    CONTEXT_ANALYSIS: 'gemini-3-flash-preview',
     ESPIONAGE_ANALYSIS: 'gemini-3-flash-preview',
     FACE_ANALYSIS: 'gemini-3-flash-preview',
     IMAGE_GEN: 'gemini-3-flash-preview', // text-based prompt builder
@@ -383,7 +383,15 @@ export async function callAI(promptType, userContent, context = {}) {
 
         const systemPrompt = SYSTEM_PROMPTS[promptType];
         const model = MODEL_MAPPING[promptType] || 'gemini-3-flash-preview';
-        const fullPrompt = `${systemPrompt}\n\nCONTEXTO: ${JSON.stringify(context)}\n\nCONTENIDO A ANALIZAR:\n${userContent}`;
+
+        // Truncate very long scripts to avoid token limits and timeouts.
+        // ~20k chars ≈ 5k tokens — enough for the full narrative DNA extraction.
+        const MAX_CONTENT_CHARS = 20000;
+        const safeContent = userContent.length > MAX_CONTENT_CHARS
+            ? userContent.slice(0, MAX_CONTENT_CHARS) + '\n\n[--- GUIÓN TRUNCADO: muy extenso, se analizaron los primeros 20,000 caracteres ---]'
+            : userContent;
+
+        const fullPrompt = `${systemPrompt}\n\nCONTEXTO: ${JSON.stringify(context)}\n\nCONTENIDO A ANALIZAR:\n${safeContent}`;
 
         const payload = {
             contents: [{
@@ -407,14 +415,26 @@ export async function callAI(promptType, userContent, context = {}) {
 
         let response;
         const maxRetries = 3;
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            response = await fetch(url, fetchOpts);
-            if (response.status !== 503) break;
-            if (attempt < maxRetries) {
-                const delay = (attempt + 1) * 8000; // 8s, 16s, 24s
-                await new Promise(res => setTimeout(res, delay));
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s hard timeout
+
+        try {
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                response = await fetch(url, { ...fetchOpts, signal: controller.signal });
+                if (response.status !== 503) break;
+                if (attempt < maxRetries) {
+                    const delay = (attempt + 1) * 8000; // 8s, 16s, 24s
+                    await new Promise(res => setTimeout(res, delay));
+                }
             }
+        } catch (fetchErr) {
+            clearTimeout(timeoutId);
+            if (fetchErr.name === 'AbortError') {
+                throw new Error("El análisis tardó demasiado (>90s). El guión puede ser muy largo — intentá acortarlo o volvé a intentarlo.");
+            }
+            throw fetchErr;
         }
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
@@ -422,10 +442,13 @@ export async function callAI(promptType, userContent, context = {}) {
                 setState({ apiKeyStatus: 'disconnected' });
                 throw new Error("API Key inválida.");
             }
+            if (response.status === 429) {
+                throw new Error("Límite de peticiones alcanzado. Esperá unos segundos y volvé a intentarlo.");
+            }
             if (response.status === 503) {
                 throw new Error("El modelo de IA está sobrecargado. Esperá unos segundos y volvé a intentarlo.");
             }
-            throw new Error(errData.error?.message || "Error en la API de Google");
+            throw new Error(errData.error?.message || `Error en la API de Google (${response.status})`);
         }
 
         const data = await response.json();
@@ -466,55 +489,52 @@ export async function callAI(promptType, userContent, context = {}) {
  *   When provided, the image is fetched and sent as inline data so the model uses
  *   the REAL face instead of generating a fictional one from a text description.
  */
-export async function generateImage(prompt, faceImageUrl = null) {
+export async function generateImage(prompt, faceImageUrl = null, safetyFallbackPrompt = null) {
     const { data: apiKeyData, error: keyError } = await supabase.rpc('get_decrypted_api_key', {
         key_name: 'google_ai_key'
     });
     if (keyError || !apiKeyData) throw new Error("API Key de Google no configurada. Verificá en Settings.");
 
-    // Build parts: face reference image first (if provided), then the text prompt.
-    // Gemini Image Preview is multimodal — giving it the real photo anchors
-    // facial identity instead of hallucinating a face from a text description.
-    const parts = [];
-    if (faceImageUrl) {
-        try {
-            const imgResponse = await fetch(faceImageUrl);
-            if (imgResponse.ok) {
-                const blob = await imgResponse.blob();
-                const arrayBuffer = await blob.arrayBuffer();
-                const uint8 = new Uint8Array(arrayBuffer);
-                let binary = '';
-                for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
-                const base64 = btoa(binary);
-                const mimeType = blob.type || 'image/jpeg';
-                parts.push({ inlineData: { mimeType, data: base64 } });
-            }
-        } catch (e) {
-            console.warn('[Face] No se pudo cargar la foto de referencia, generando sin ella:', e.message);
-        }
-    }
-    parts.push({ text: prompt });
-
-    const payload = {
-        contents: [{ parts }],
-        generationConfig: {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: {
-                aspectRatio: '16:9',
-                imageSize: '2K'
-            }
-        }
-    };
 
     const imgUrl = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent?key=${apiKeyData.trim()}`;
-    const imgOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
 
-    let response;
-    for (let attempt = 0; attempt <= 3; attempt++) {
-        response = await fetch(imgUrl, imgOpts);
-        if (response.status !== 503) break;
-        if (attempt < 3) await new Promise(res => setTimeout(res, (attempt + 1) * 8000));
+    async function attemptGeneration(promptText, faceUrl) {
+        const p = [];
+        if (faceUrl) {
+            try {
+                const ir = await fetch(faceUrl);
+                if (ir.ok) {
+                    const bl = await ir.blob();
+                    const ab = await bl.arrayBuffer();
+                    const u8 = new Uint8Array(ab);
+                    let bin = ''; for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+                    p.push({ inlineData: { mimeType: bl.type || 'image/jpeg', data: btoa(bin) } });
+                }
+            } catch (e) { console.warn('[Face] Could not load reference photo:', e.message); }
+        }
+        p.push({ text: promptText });
+
+        const pl = {
+            contents: [{ parts: p }],
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: '2K' } },
+            safetySettings: [
+                { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+            ]
+        };
+        const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pl) };
+        let res;
+        for (let i = 0; i <= 3; i++) {
+            res = await fetch(imgUrl, opts);
+            if (res.status !== 503) break;
+            if (i < 3) await new Promise(r => setTimeout(r, (i + 1) * 8000));
+        }
+        return res;
     }
+
+    let response = await attemptGeneration(prompt, faceImageUrl);
 
     if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -522,9 +542,32 @@ export async function generateImage(prompt, faceImageUrl = null) {
         throw new Error(errData.error?.message || `Image generation failed (${response.status})`);
     }
 
-    const data = await response.json();
-    const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (!imagePart) throw new Error("El modelo no devolvió imagen. Intentá con un prompt diferente.");
+    let data = await response.json();
+    let candidate = data.candidates?.[0];
+    let imagePart = candidate?.content?.parts?.find(p => p.inlineData);
+
+    // IMAGE_SAFETY retry: use the caller-supplied safety fallback (thematically relevant, no heavy language)
+    // or fall back to slicing the first 1200 chars as emergency measure
+    if (!imagePart && (candidate?.finishReason === 'IMAGE_SAFETY' || candidate?.finishReason === 'SAFETY')) {
+        console.warn('[generateImage] IMAGE_SAFETY on first attempt — retrying with safety fallback prompt.');
+        const fallbackPrompt = safetyFallbackPrompt || prompt.slice(0, 1200) + '\n\nGenerate a visually compelling YouTube thumbnail in 16:9 format. High-impact composition, professional lighting, vibrant colors. No text or letters in the image.';
+        response = await attemptGeneration(fallbackPrompt, null); // no face on retry
+        if (response.ok) {
+            data = await response.json();
+            candidate = data.candidates?.[0];
+            imagePart = candidate?.content?.parts?.find(p => p.inlineData);
+        }
+    }
+
+    if (!imagePart) {
+        const finishReason = candidate?.finishReason || 'unknown';
+        const textPart = candidate?.content?.parts?.find(p => p.text)?.text?.slice(0, 300) || '';
+        const blockReason = data.promptFeedback?.blockReason || '';
+        console.error('[generateImage] No image returned.', { finishReason, blockReason, textPart, candidateCount: data.candidates?.length });
+        if (blockReason) throw new Error(`Imagen bloqueada por política de contenido: ${blockReason}`);
+        if (finishReason === 'IMAGE_SAFETY' || finishReason === 'SAFETY') throw new Error(`Este ángulo contiene elementos visuales que el modelo de imagen no puede generar. Probá regenerar — cada intento usa una variación diferente.`);
+        throw new Error(`El modelo no devolvió imagen (${finishReason}). ${textPart ? 'Modelo dice: ' + textPart : 'Intentá con un prompt diferente.'}`);
+    }
 
     const { mimeType, data: b64 } = imagePart.inlineData;
     return `data:${mimeType};base64,${b64}`;

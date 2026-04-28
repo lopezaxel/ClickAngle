@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase.js';
+﻿import { supabase } from '../lib/supabase.js';
 import { getState, subscribe } from '../lib/state.js';
 import { setActiveProject } from '../lib/projects.js';
 import { icon } from '../icons.js';
@@ -14,32 +14,76 @@ const FORMATS = [
     label: 'Duelo de Titanes',
     subtitle: 'Versus / Split Screen',
     emoji: '⚔️',
-    desc: 'Contraste visual extremo. Composición simétrica con una línea de luz divisoria vibrante.',
-    composition: 'PHYSICAL LAYOUT: Hard vertical split-screen composition — left half vs right half divided by a glowing neon electric line. Both halves must occupy exactly 50% of the frame. Elements face each other in direct confrontation. Wide angle, symmetrical tension.',
+    desc: 'Contraste visual extremo. Composición de confrontación inventada por un diseñador gráfico experto.',
+    composition: `FORMAT: DUELO DE TITANES (Confrontation / Versus / Before-After). You are a world-class YouTube thumbnail graphic designer. DO NOT use a generic line down the middle — that is amateur and boring. Instead, choose the single most visually explosive execution for this specific content from the creative approaches below, and push it to its maximum potential:
+
+OPTION A — TORN WORLD SPLIT: The canvas is dramatically split diagonally with a jagged torn edge, as if reality divided in two. Each world (left vs right) is a completely different environment, atmosphere, and color temperature. Objects or debris scatter along the tear edge in 3D perspective.
+
+OPTION B — COLLISION EPICENTER: Both elements meet at dead center, generating a shockwave burst, energy impact, or shatter point that organically divides the composition. No line — pure kinetic energy. Particles fly outward from the collision point.
+
+OPTION C — BEFORE / AFTER TEMPORAL CONTRAST: Left side = the "before" world — muted, desaturated, dim, beaten-down. Right side = the dramatic "after" — saturated, lit, transformed, powerful. A sharp but organic edge (light spill, smoke wall, broken frame) separates the two states. The subject may appear on both sides showing transformation.
+
+OPTION D — WORLD VS WORLD ENVIRONMENTAL CLASH: Each half contains a completely different environment that embodies the contrast — wealth vs poverty, fire vs ice, chaos vs order, city vs nature, past vs future. The subject inhabits their respective world. The contrast between environments IS the composition — no explicit divider needed beyond the natural environmental boundary.
+
+OPTION E — DIAGONAL POWER SPLIT: A bold diagonal slash divides the frame from upper-left to lower-right at 45°. Each triangle-half has its own lighting, color world, and subject positioning. The dividing angle creates aggressive dynamic tension. Elements lean INTO the diagonal.
+
+OPTION F — FACE DUALITY EXTREME CLOSE-UP: Two dramatically different expressions or states of the same subject fill each half of the frame in extreme close-up — joy vs rage, before vs after, weak vs powerful, trapped vs free. The split happens at the nose bridge or center of the face. Maximum facial expression contrast.
+
+CHOSEN EXECUTION: Select ONE option above that best matches the Layer 3 content themes. Execute it at 100% creative intensity — no holding back. Both compositional halves must create irresistible visual tension. CRITICAL: All colors MUST derive from the content thematic palette in Layer 2.5 — never use neon/tech tones unless the content is explicitly tech-related.`,
   },
   {
     id: 'authority',
     label: 'Autoridad Tech',
     subtitle: 'Hero Object / Objeto de Deseo',
     emoji: '🖥️',
-    desc: 'Foco en el objeto con profundidad de campo extrema. El creador proyecta liderazgo.',
-    composition: 'PHYSICAL LAYOUT: Hero object fills 60% of foreground in extreme close-up, sharp and detailed. Creator or secondary element placed in soft-focus background at 1/3 rule position. Anamorphic bokeh behind. Portrait-dominant framing with object centered.',
+    desc: 'Foco en el objeto con profundidad de campo extrema. El creador proyecta liderazgo total.',
+    composition: `FORMAT: AUTORIDAD — HERO OBJECT DOMINANCE. You are a world-class YouTube thumbnail graphic designer. Design the composition so the hero object commands absolute visual authority. Choose the most impactful execution for this specific content:
+
+OPTION A — FLOATING OBJECT IN DRAMATIC VOID: The hero object floats in an impossibly dramatic environment — suspended in space, emerging from a dark abyss, levitating above chaos. The background is rich with atmospheric depth (volumetric light rays, fog, particles) that makes the object feel mythic and unreachable.
+
+OPTION B — OVERSIZED OBJECT / HUMAN DWARFED: The object is rendered at absurd scale — a phone the size of a building, a stack of money towering over a city, a product that fills the entire frame. The human subject (if present) stands at its base, dwarfed, pointing upward in awe or greed. Scale contrast creates instant visual shock.
+
+OPTION C — HAND REVEAL DRAMATIC LIGHTING: A hand emerges from darkness in extreme close-up, holding or presenting the hero object under a single dramatic spotlight. Everything outside the spotlight is consumed by deep shadow. The object glows as if radioactive with internal light. Hyper-sharp product photography meets cinematic noir.
+
+OPTION D — CREATOR COMMAND POSE: Subject positioned in extreme authority pose (leaning forward, arms spread, or standing over the frame) with the hero object integrated into their posture as a weapon, shield, or prize. Environmental context reinforces the power dynamic — throne room, wreckage, command center, vault. Background color temperature from Layer 2.5.
+
+CHOSEN EXECUTION: Select ONE option above that creates the maximum sense of desire, authority, and "I need to know more." Hero object must be unmistakably sharp and dominant. Bokeh, atmosphere, and accent colors all derive from Layer 2.5.`,
   },
   {
     id: 'shock',
     label: 'Shock / Caja Negra',
     subtitle: 'Misterio / Curiosity Gap',
     emoji: '🖤',
-    desc: 'Psicología de la curiosidad. Elementos censurados y atmósfera de suspense cinematográfica.',
-    composition: 'PHYSICAL LAYOUT: Key element intentionally hidden or obscured by solid black bars or heavy shadow. Face (if present) in extreme close-up showing maximum shock or disbelief — mouth open, eyes wide. Dark vignette edges. Mysterious fog filling empty space. Cinematic 2.35:1 crop feel.',
+    desc: 'Psicología de la curiosidad. Diseñado para crear una brecha de intriga irresistible.',
+    composition: `FORMAT: SHOCK — CURIOSITY GAP / PSYCHOLOGICAL MYSTERY. You are a world-class YouTube thumbnail graphic designer who understands the psychology of the curiosity gap. The viewer must feel physically compelled to click to resolve the tension. Choose the most psychologically effective execution:
+
+OPTION A — THE CENSORED SECRET: A key element — a face, an object, an amount, a location — is deliberately hidden behind a solid bold geometric bar, heavy pixelation, or strategic shadow that feels intentional and provocative. The surrounding context makes the hidden element's identity obvious enough to be tantalizing but impossible to confirm without clicking.
+
+OPTION B — THE HALF-REVEALED MYSTERY: Something enormous or surprising is cut off by the frame edge — only a portion visible (oversized hand, huge number, dramatic structure edge, shadow of something unseen). The composition forces the viewer's brain to imagine what's outside the frame. Maximum negative space tension.
+
+OPTION C — THE EXTREME REACTION CLOSE-UP: Face in absolute extreme close-up — only eyes and forehead visible, or mouth agape in pure shock. The viewer reads the emotion viscerally before processing the context. The subject's gaze direction points to something off-camera that we cannot see. Dark vignette crushes the edges. A single harsh light source carves the face with deep shadows.
+
+OPTION D — THE BROKEN FOURTH WALL: Subject stares DIRECTLY into camera with an expression of "you won't believe what I found" — intimate conspiratorial eye contact. One hand points or gestures toward a dark, fogged area of the frame where the secret object/scene is barely visible. Feels like forbidden knowledge being shared.
+
+CHOSEN EXECUTION: Select ONE option that creates maximum psychological tension for this content. The image must feel incomplete without clicking. Ambient light and accent glow color from Layer 2.5. Cinematic crop feel, heavy vignette edges.`,
   },
   {
     id: 'breaking',
     label: 'Alerta / Breaking News',
     subtitle: 'Urgencia Total',
     emoji: '🚨',
-    desc: 'Estética de noticia de última hora. Colores de alerta y saturación máxima.',
-    composition: 'PHYSICAL LAYOUT: Broadcast news aesthetic — solid bold color horizontal band at bottom third (NO TEXT inside — pure colored bar only, graphic shape). Strong red/yellow color accents frame the edges like a news ticker border. Subject centered with high-energy forward lean pose. Graphic alert/warning icon badge in corner (icon only, absolutely zero text or letters). Flat even broadcast lighting on face.',
+    desc: 'Urgencia visual máxima. Diseñado para detener el scroll con sensación de evento inmediato.',
+    composition: `FORMAT: ALERTA — MAXIMUM URGENCY / BREAKING EVENT. You are a world-class YouTube thumbnail graphic designer who specializes in high-urgency visual communication. Design for one purpose: make the viewer feel something important is happening RIGHT NOW and they must watch. Choose the most effective urgency execution:
+
+OPTION A — THE BROADCAST CRISIS FRAME: Broadcast news visual language — bold solid color band graphic at bottom third (pure color/shape, ZERO text or letters). Subject in urgent forward-lean pose centered in frame as if delivering an emergency announcement. Hard rim lighting separates subject from dramatic background. Graphic icon badge (symbol only, no letters) in upper corner signals alert category. Color palette from Layer 2.5.
+
+OPTION B — DRAMATIC EVENT BACKDROP: Subject positioned in confident foreground stance while a massive high-energy event unfolds behind them — transformation, energy surge, crowd movement, dramatic shift. The juxtaposition of composed subject against intense background creates extreme visual tension. Subject appears aware of what is unfolding behind them.
+
+OPTION C — THE COUNTDOWN / URGENCY GRAPHIC OVERLAY: Abstract countdown or urgency graphic element — a cracked frame around the image, warning stripe borders (graphic pattern only, no text), concentric circle shock waves, or a flashing alert icon rendered as a pure geometric shape. The entire image feels like a system alert. Colors scream danger from Layer 2.5 thematic palette.
+
+OPTION D — THE EVIDENCE REVEAL: Document, photograph, screenshot, or physical evidence presented dramatically — held up toward camera, scattered on a surface with dramatic overhead lighting, or partially torn to reveal something underneath. The subject's hand or face frames the reveal. Feels like proof of something shocking being shown to the viewer.
+
+CHOSEN EXECUTION: Select ONE option that creates the most urgent "this just happened" feeling for this specific content. ALL text/letters/numbers in the image = ZERO. Pure visual language only. Alert colors from Layer 2.5.`,
   },
 ];
 
@@ -49,40 +93,40 @@ const STYLES = [
     label: 'Master Studio (UHD)',
     subtitle: '8K Realismo',
     emoji: '📸',
-    keywords: 'Ultra-photorealistic, 8k resolution, raw photography style, intricate skin textures, volumetric studio lighting, professional color grading, extreme sharpness, masterwork.',
-    lighting: 'LIGHTING & TEXTURE: Three-point professional studio lighting — sharp key light from 45°, soft fill, tight rim light. 8K ultra-sharp textures with visible pores and material grain. Neutral color-science grading. Zero noise. Zero artifacting.',
+    keywords: 'Ultra-photorealistic, 8k resolution, raw photography masterwork, intricate skin textures with visible pores, volumetric studio lighting, professional color grading, extreme sharpness, zero artifacting, zero AI-look.',
+    lighting: 'VISUAL STYLE — MASTER STUDIO HYPERREALISM: Execute this as a professional commercial photographer with a $50,000 studio setup. Three-point lighting: sharp key light from 45° carving dramatic facial geometry, soft fill eliminating dead shadows, tight separation rim light that pops the subject off the background. 8K ultra-sharp rendering — skin pores, fabric threads, material grain all visible. Color science: neutral-to-warm grade with precise skin tone accuracy. Every surface must look physically real and tangible — this image could be mistaken for a photograph. Zero cartoon artifacts, zero plastic skin, zero AI glow. Maximum photographic credibility.',
   },
   {
     id: 'mrbeast',
     label: 'Estilo Explosivo',
     subtitle: 'High CTR',
     emoji: '🔥',
-    keywords: 'MrBeast aesthetic, extremely saturated vibrant colors, high micro-contrast, glowing rim lights, intense facial highlights, sharp cartoonish realism, super-punchy visual impact.',
-    lighting: 'LIGHTING & TEXTURE: Hyper-saturated color grading with crushed blacks and blown highlights. Neon rim lights wrapping subjects in vivid magenta or electric blue. Skin retouched to look almost cartoonish but still real. Micro-contrast cranked to maximum. Flat sharp textures on objects.',
+    keywords: 'Hyper-punchy MrBeast-level CTR aesthetic, extreme color saturation, crushed blacks, micro-contrast maximum, cartoonish-realism skin, vivid glowing rim lights, super-charged visual impact that stops the scroll instantly.',
+    lighting: 'VISUAL STYLE — EXPLOSIVE HIGH-CTR: Execute this like a viral thumbnail designer who has studied 10,000 top-performing YouTube videos. Hyper-saturated color grading — blacks crushed to pure black, highlights almost blown out, every color pushed 40% beyond natural saturation. Intense rim lights wrapping subjects from behind — color derived from content thematic palette (Layer 2.5): action/drama/intensity → blazing orange-red rims; tech/digital → electric blue-white; money/power → blinding golden-white; mystery/tension → deep crimson-purple. Skin treatment: retouched to cartoonish sharpness while remaining humanly recognizable — zero pores visible, every feature slightly exaggerated. Background elements: flat with punchy graphic quality. The image must feel like it has an internal light source radiating energy outward. Micro-contrast cranked to absolute maximum on every edge.',
   },
   {
     id: 'cyberpunk',
     label: 'Neon Future',
     subtitle: 'Sci-Fi',
     emoji: '🌆',
-    keywords: 'Cyberpunk cinematic lighting, neon cyan and magenta accents, deep blue shadows, futuristic tech textures, holographic glow, synthwave color palette, moody atmosphere.',
-    lighting: 'LIGHTING & TEXTURE: Dual neon lighting — cyan from left, magenta from right — creating colored shadow splits. Deep midnight blue ambient fill. Holographic lens reflections and volumetric fog wisps. Metallic and wet surfaces that reflect neon. Rain-slicked or chrome material textures.',
+    keywords: 'Cyberpunk cinematic masterwork, dual neon color splits, deep midnight blue shadows, futuristic chrome and glass textures, holographic volumetric glow, synthwave atmosphere, rain-slicked surfaces, moody neon-noir.',
+    lighting: 'VISUAL STYLE — NEON FUTURE SCI-FI: Execute this as a concept artist for a AAA sci-fi film production. Dual neon color split lighting: cyan from camera-left, magenta from camera-right, creating dramatic colored shadow geometry on every surface. Deep midnight blue fills all ambient areas. Holographic glow emanates from surfaces as if screens or energy sources are nearby — volumetric light beams cut through atmospheric haze. All surfaces: metallic, wet, rain-slicked, or chrome that catches and reflects the neon sources. Raindrops or fog particles caught in the light beams. APPLY THIS STYLE ONLY when the content involves technology, AI, digital products, sci-fi, or futuristic themes — it must be coherent with Layer 2.5 content palette.',
   },
   {
     id: 'minimal',
     label: 'Meta Ads Bold',
     subtitle: 'Impacto Limpio',
     emoji: '◼️',
-    keywords: 'Clean commercial photography, bold minimalist design, solid vibrant background, sharp drop shadows, focused subjects, Swiss design influence, negative space authority.',
-    lighting: 'LIGHTING & TEXTURE: Flat even product-photography lighting with no dramatic shadows. Solid bold single-color background (bright red, electric blue or vivid yellow). Hard geometric drop shadows. Zero texture noise. Swiss graphic design flat aesthetic. High negative space.',
+    keywords: 'Swiss graphic design mastery, bold commercial photography, single-color bold background, geometric negative space, precision drop shadows, clinical sharpness, zero decorative noise, advertising campaign quality.',
+    lighting: 'VISUAL STYLE — META ADS BOLD MINIMALISM: Execute this as a senior art director at a top-tier advertising agency. The power is in radical simplicity and negative space. Flat even product-photography lighting — no dramatic shadows, no atmospheric effects, no distractions. Single bold solid-color background: derive the most impactful and content-appropriate color from Layer 2.5 (NOT a generic default — choose based on the video theme). Subjects are ultra-sharp with clean hard-edged drop shadows creating graphic separation. Zero noise, zero texture, zero decorative elements. The composition breathes — generous negative space around the subject makes it feel confident and premium. Every element must have a reason to exist. If in doubt: remove it. The result should feel like a $100,000 advertising campaign.',
   },
   {
     id: 'cinematic',
     label: 'Epic Movie',
     subtitle: 'Hollywood',
     emoji: '🎬',
-    keywords: 'Cinematic film quality, Hollywood movie poster composition, anamorphic lens flares, dramatic shadows, highly saturated epic colors, 35mm film grain, golden ratio.',
-    lighting: 'LIGHTING & TEXTURE: Golden hour or dramatic overcast Hollywood movie lighting. Anamorphic horizontal lens flares in warm gold/orange. Teal-and-orange cinematic color grade. 35mm film grain overlay at 15% opacity. Rich deep shadows with lift to dark teal. Epic sky backdrop.',
+    keywords: 'Hollywood A-list movie poster craft, anamorphic lens flares, dramatic cinematic shadows, rich film color grade matched to emotional content, 35mm film grain texture, golden ratio composition, epic atmospheric depth.',
+    lighting: 'VISUAL STYLE — EPIC HOLLYWOOD CINEMATIC: Execute this as a cinematographer and poster designer for a $200M Hollywood production. Every lighting and color decision must serve the emotional content from Layer 2.5 and Layer 3. Lighting matched to content emotional temperature: action/drama/intensity → extreme high-contrast side or under-lighting with deep actor shadows; historical/power → warm golden-hour side light casting long dramatic shadows; mystery/revelation → single harsh overhead or side spotlight, everything else swallowed by near-black. Anamorphic horizontal lens flares in the thematic accent color — subtle, elegant, not cartoonish. Color grade: derive from content mood — tension/triumph → teal shadows with warm-orange highlights; mystery/revelation → desaturated cold teal; wealth/power → rich warm golden tones with lifted shadows. 35mm film grain overlay at 15% — it feels shot on film, not rendered by AI. Epic atmospheric backdrop with atmospheric perspective depth. The result should look like a real movie poster.',
   },
 ];
 
@@ -154,15 +198,15 @@ export async function renderEngine(container) {
   let workflowStep = selectedProjectId ? 2 : 1;
   let selectedFormats = [];
   let selectedStyleId = null;
-  let isGenerating = false;
-  let expandingVariantId = null;
+  let isGenerating = false;           // true only during batch "Generate All" / "Sintetizar"
+  let generatingAnglesSet = new Set(); // per-angle index: allows concurrent individual generation
+  let expandingVariantsSet = new Set(); // per-variant id: allows concurrent expansion
   let batchAngleSelection = null; // null = all selected; array of indices = specific selection
   let faceEnabled = null;         // null = follow DNA match default; true/false = explicit user choice
   let selectedExpressionId = null; // persists face select across renders
-  let overlayText = '';            // persists overlay text across renders
+  let textMode = 'none';           // 'none' | 'ai' — persists text mode across renders
   let anglesPage = 0;              // pagination for step 5 angle cards
   let variantsPage = 0;            // pagination for history section
-  let generatingAngleIndex = null; // which angle card is currently generating
 
   // Auto-matched face from DNA (set during render based on emotion_label)
   let autoMatchedFaceId = null;
@@ -661,7 +705,7 @@ export async function renderEngine(container) {
         batchAngleSelection = null;
         faceEnabled = null;
         selectedExpressionId = null;
-        overlayText = '';
+        textMode = 'none';
         anglesPage = 0;
         variantsPage = 0;
         workflowStep = 2;
@@ -913,19 +957,17 @@ export async function renderEngine(container) {
     const useFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
     const expressionId = selectedExpressionId || autoMatchedFaceId;
     const selectedFace = faceList.find(f => f.id === expressionId);
-    overlayText = document.getElementById('custom-overlay-text')?.value ?? overlayText;
-    const customText = overlayText || project.title;
-    return { project, style, formats, useFace, selectedFace, customText };
+    return { project, style, formats, useFace, selectedFace, textMode };
   }
 
   async function generateSingleAngle(angleIndex) {
     const ctx = getGenContext();
     if (!ctx) return;
-    const { project, style, formats, useFace, selectedFace, customText } = ctx;
+    const { project, style, formats, useFace, selectedFace, textMode: tMode } = ctx;
     const angle = (project.logic_dna?.selected_angles || [])[angleIndex];
     if (!angle) return;
-    const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit });
-    await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase(), faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
+    const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode: tMode });
+    await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
   }
 
   // ─── STEP 5: Ángulos + Generar ────────────────────────────────────────────
@@ -950,11 +992,11 @@ export async function renderEngine(container) {
         .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       const latest = angleMasters[0] || null;
       const angleChildren = latest ? children.filter(c => c.ai_metadata?.parent_id === latest.id) : [];
-      const isGen = latest?.ai_metadata?.generating || generatingAngleIndex === globalIdx;
+      const isGen = latest?.ai_metadata?.generating || generatingAnglesSet.has(globalIdx);
       const hasImg = !!latest?.image_url;
       const hasError = !!latest?.ai_metadata?.error;
       const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
-      const isExpanding = expandingVariantId === latest?.id;
+      const isExpanding = expandingVariantsSet.has(latest?.id);
 
       return `
       <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;animation:fadeIn 0.3s ease both;">
@@ -982,18 +1024,18 @@ export async function renderEngine(container) {
                 ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando...</span>`
                 : hasImg
                   ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${letters[globalIdx]}.png">${icon('download', 11)} Descargar</button>
-                     <button class="btn btn-secondary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating ? 'disabled' : ''} style="font-size:10px;">${icon('rocket', 10)} Regenerar</button>
+                     <button class="btn btn-secondary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${generatingAnglesSet.has(globalIdx) ? 'disabled' : ''} style="font-size:10px;">${icon('rocket', 10)} Regenerar</button>
                      ${!isExpanding ? `
                      <div style="display:flex;align-items:center;gap:4px;margin-left:auto;">
                        <select class="form-select" id="expand-count-${latest.id}" style="font-size:10px;padding:2px 4px;height:26px;width:60px;">
                          ${[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}"${n===1?' selected':''}>${n}x</option>`).join('')}
                        </select>
-                       <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${latest.id}" ${isGenerating||expandingVariantId?'disabled':''} style="white-space:nowrap;">${icon('plus',10)} Variación</button>
+                       <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${latest.id}" ${expandingVariantsSet.has(latest.id)?'disabled':''} style="white-space:nowrap;">${icon('plus',10)} Variación</button>
                      </div>` : `<span class="text-xs text-accent animate-pulse" style="margin-left:auto;">${icon('clock',10)} Variando...</span>`}`
                   : hasError
                     ? `<span class="text-xs" style="color:var(--danger);">${icon('alertTriangle', 11)} Error</span>
-                       <button class="btn btn-primary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating ? 'disabled' : ''}>Reintentar</button>`
-                    : `<button class="btn btn-primary btn-sm btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating ? 'disabled' : ''} style="font-weight:700;">${icon('rocket', 13)} Generar miniatura</button>`
+                       <button class="btn btn-primary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${generatingAnglesSet.has(globalIdx) ? 'disabled' : ''}>Reintentar</button>`
+                    : `<button class="btn btn-primary btn-sm btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating || generatingAnglesSet.has(globalIdx) ? 'disabled' : ''} style="font-weight:700;">${icon('rocket', 13)} Generar miniatura</button>`
               }
             </div>
             ${angleChildren.length > 0 ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">${icon('image',10)} ${angleChildren.length} variación${angleChildren.length!==1?'es':''}</div>` : ''}
@@ -1026,8 +1068,17 @@ export async function renderEngine(container) {
           <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
             ${angleChildren.map((c, ci) => `
             <div style="flex-shrink:0;width:140px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);">
-              ${c.image_url ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />` : thumbLoaderHTML('', '')}
-              <button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;font-size:10px;">${icon('trash',9)}</button>
+              ${c.image_url
+                ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
+                : c.ai_metadata?.generating
+                  ? `${thumbLoaderHTML('', '')}
+                     <button class="btn-cancel-variant" data-variant-id="${c.id}" title="Cancelar" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(220,38,38,0.9);border:none;border-radius:3px;padding:2px 8px;cursor:pointer;color:white;font-size:9px;font-weight:700;z-index:20;white-space:nowrap;display:flex;align-items:center;gap:3px;">${icon('x',8)} Cancelar</button>`
+                  : `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:4px;padding:8px;text-align:center;">
+                       <div style="color:var(--danger);font-size:9px;opacity:0.7;">${icon('alertTriangle',12)}</div>
+                       <div style="color:var(--text-tertiary);font-size:8px;">Error</div>
+                     </div>`
+              }
+              ${!c.ai_metadata?.generating ? `<button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;font-size:10px;">${icon('trash',9)}</button>` : ''}
               ${c.image_url ? `<button class="btn-download" data-src="${c.image_url}" data-name="var-${letters[globalIdx]}-${ci+1}.png" style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:var(--radius-sm);padding:2px 6px;cursor:pointer;color:white;font-size:9px;display:flex;align-items:center;gap:3px;">${icon('download',9)}</button>` : ''}
             </div>`).join('')}
           </div>
@@ -1037,18 +1088,31 @@ export async function renderEngine(container) {
 
     return `
     <div>
-      <!-- Header: overlay text + Generar Todas -->
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:var(--space-lg);padding:14px 16px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:var(--radius-md);">
-        <div style="flex:1;">
-          <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:5px;">Texto de overlay (opcional)</div>
-          <input type="text" class="form-input" id="custom-overlay-text" value="${overlayText}" placeholder="1-3 palabras en mayúsculas..." style="font-size:12px;font-weight:800;letter-spacing:1px;" />
+      <!-- Header: text mode toggle + Generar Todas -->
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:var(--space-lg);">
+        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:12px;">✍️ ¿Tu miniatura lleva texto?</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div id="text-opt-none" style="cursor:pointer;padding:14px 12px;border-radius:var(--radius-md);border:2px solid ${textMode === 'none' ? 'var(--accent)' : 'var(--border)'};background:${textMode === 'none' ? 'rgba(220,38,38,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
+            <div style="font-size:22px;margin-bottom:6px;">🚫</div>
+            <div class="font-bold" style="font-size:12px;margin-bottom:3px;color:${textMode === 'none' ? 'var(--text-primary)' : 'var(--text-secondary)'};">SIN TEXTO</div>
+            <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">Solo imagen, sin palabras</div>
+            ${textMode === 'none' ? `<div style="margin-top:8px;font-size:9px;padding:2px 10px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+          </div>
+          <div id="text-opt-ai" style="cursor:pointer;padding:14px 12px;border-radius:var(--radius-md);border:2px solid ${textMode === 'ai' ? 'rgba(99,102,241,0.6)' : 'var(--border)'};background:${textMode === 'ai' ? 'rgba(99,102,241,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
+            <div style="font-size:22px;margin-bottom:6px;">✍️</div>
+            <div class="font-bold" style="font-size:12px;margin-bottom:3px;color:${textMode === 'ai' ? '#818cf8' : 'var(--text-secondary)'};">CON TEXTO</div>
+            <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">La IA elige la fuente,<br/>la ubicación, el estilo y el color</div>
+            ${textMode === 'ai' ? `<div style="margin-top:8px;font-size:9px;padding:2px 10px;border-radius:20px;background:rgba(99,102,241,0.7);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+          </div>
         </div>
-        <button id="btn-generate-all" class="btn btn-primary" ${isGenerating ? 'disabled' : ''}
-          style="background:linear-gradient(135deg,var(--accent),#9333ea);font-weight:800;white-space:nowrap;flex-shrink:0;">
-          ${isGenerating
-            ? `<span class="animate-pulse">${icon('clock',14)}</span> Generando...`
-            : `${icon('rocket',14)} Generar Todas`}
-        </button>
+        <div style="display:flex;justify-content:flex-end;">
+          <button id="btn-generate-all" class="btn btn-primary" ${isGenerating ? 'disabled' : ''}
+            style="background:linear-gradient(135deg,var(--accent),#9333ea);font-weight:800;white-space:nowrap;">
+            ${isGenerating
+              ? `<span class="animate-pulse">${icon('clock',14)}</span> Generando...`
+              : `${icon('rocket',14)} Generar Todas`}
+          </button>
+        </div>
       </div>
 
       <!-- Angle cards (paginated) -->
@@ -1073,7 +1137,7 @@ export async function renderEngine(container) {
     const isGen = !!latest.ai_metadata?.generating;
     const hasImg = !!latest.image_url;
     const hasError = !!latest.ai_metadata?.error;
-    const isExpanding = expandingVariantId === latest.id;
+    const isExpanding = expandingVariantsSet.has(latest.id);
     const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
     const angleName = latest.ai_metadata?.angle_name || '—';
     const allSubItems = [...variantChildren, ...olderVersions]; // shown in bottom strip
@@ -1108,7 +1172,7 @@ export async function renderEngine(container) {
                      <select class="form-select" id="expand-count-${latest.id}" style="font-size:10px;padding:2px 4px;height:26px;width:60px;">
                        ${[1,2,3,4,5,6,7,8].map(n=>`<option value="${n}"${n===1?' selected':''}>${n}x</option>`).join('')}
                      </select>
-                     <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${latest.id}" ${isGenerating||expandingVariantId?'disabled':''} style="white-space:nowrap;">${icon('plus',10)} Variación</button>
+                     <button class="btn btn-primary btn-xs btn-expand-variant" data-variant-id="${latest.id}" ${expandingVariantsSet.has(latest.id)?'disabled':''} style="white-space:nowrap;">${icon('plus',10)} Variación</button>
                    </div>` : `<span class="text-xs text-accent animate-pulse">${icon('clock',10)} Variando...</span>`}
                    <button class="btn-delete-variant btn btn-secondary btn-xs" data-variant-id="${latest.id}" style="margin-left:auto;color:var(--danger);">${icon('trash',11)}</button>`
                 : hasError
@@ -1146,11 +1210,21 @@ export async function renderEngine(container) {
         <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
           ${allSubItems.map((c, ci) => {
             const isOld = olderVersions.includes(c);
+            const isStuck = c.ai_metadata?.generating && !c.image_url;
             return `
             <div style="flex-shrink:0;width:140px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);${isOld?'opacity:0.7;':''}">
-              ${c.image_url ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />` : thumbLoaderHTML('','')}
+              ${c.image_url
+                ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
+                : isStuck
+                  ? `${thumbLoaderHTML('', '')}
+                     <button class="btn-cancel-variant" data-variant-id="${c.id}" title="Cancelar generación" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(220,38,38,0.9);border:none;border-radius:3px;padding:2px 8px;cursor:pointer;color:white;font-size:9px;font-weight:700;z-index:20;white-space:nowrap;display:flex;align-items:center;gap:3px;">${icon('x',8)} Cancelar</button>`
+                  : `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:4px;padding:8px;text-align:center;">
+                       <div style="color:var(--danger);opacity:0.7;">${icon('alertTriangle',12)}</div>
+                       <div style="color:var(--text-tertiary);font-size:8px;">Error</div>
+                     </div>`
+              }
               ${isOld ? `<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.7);border-radius:3px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,0.7);">anterior</div>` : ''}
-              <button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;">${icon('trash',9)}</button>
+              ${!isStuck ? `<button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;">${icon('trash',9)}</button>` : ''}
               ${c.image_url ? `<button class="btn-download" data-src="${c.image_url}" data-name="var-${cardIdx+1}-${ci+1}.png" style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:var(--radius-sm);padding:2px 5px;cursor:pointer;color:white;font-size:9px;display:flex;align-items:center;gap:3px;">${icon('download',9)}</button>` : ''}
             </div>`;
           }).join('')}
@@ -1258,6 +1332,14 @@ export async function renderEngine(container) {
       });
     });
 
+    // ── History section: cancel stuck variant ──
+    document.querySelectorAll('#variants-history-section .btn-cancel-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await cancelStuckVariant(btn.dataset.variantId);
+      });
+    });
+
     // ── History section: lightbox + download ──
     document.querySelectorAll('#variants-history-section .thumb-preview-trigger').forEach(img => {
       img.addEventListener('click', (e) => {
@@ -1285,21 +1367,18 @@ export async function renderEngine(container) {
     document.querySelectorAll('#variants-history-section .btn-expand-variant').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (expandingVariantId) return;
         const variantId = btn.dataset.variantId;
+        if (expandingVariantsSet.has(variantId)) return;
         const countSelect = document.getElementById(`expand-count-${variantId}`);
         const count = Math.min(parseInt(countSelect?.value || '1'), 8);
         const project = getProject();
         if (!project) return;
         const baseVariant = (project.thumbnail_variants || []).find(v => v.id === variantId);
         if (!baseVariant) return;
-        expandingVariantId = variantId;
-        isGenerating = true;
+        expandingVariantsSet.add(variantId);
         render();
-        showLoader(container, { title: 'Generando Variaciones', subtitle: `${count} variación${count!==1?'es':''}`, detail: `VARIACIÓN 1 DE ${count}` });
         try {
           for (let i = 0; i < count; i++) {
-            updateLoader({ detail: `VARIACIÓN ${i+1} DE ${count} — IMAGE GENERATION` });
             const variationPrompt = buildVariationPrompt(baseVariant, project, i, count);
             const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
             const { data: inserted, error: insertErr } = await supabase
@@ -1323,6 +1402,8 @@ export async function renderEngine(container) {
               .select()
               .single();
             if (insertErr) throw insertErr;
+            await reloadProjects();
+            render(); // muestra spinner inline en la card recién insertada
 
             try {
               const variationFaceUrl = baseVariant.ai_metadata?.face_image_url || null;
@@ -1348,12 +1429,10 @@ export async function renderEngine(container) {
             }
           }
         } catch (err) {
-          hideLoader();
           console.error('Expand error:', err);
           toast('Error al generar variaciones: ' + err.message, 'error');
         } finally {
-          hideLoader();
-          expandingVariantId = null;
+          expandingVariantsSet.delete(variantId);
           await reloadProjects();
           render();
         }
@@ -1546,6 +1625,14 @@ export async function renderEngine(container) {
       });
     });
 
+    // ── Cancel stuck variant (spinner cards) ──
+    container.querySelectorAll('.btn-cancel-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await cancelStuckVariant(btn.dataset.variantId);
+      });
+    });
+
     container.querySelectorAll('.thumb-preview-trigger').forEach(img => {
       img.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1554,15 +1641,6 @@ export async function renderEngine(container) {
         if (!lb || !lbImg) return;
         lbImg.src = img.dataset.preview;
         lb.classList.add('active');
-      });
-    });
-
-    container.querySelectorAll('.btn-suggestion-text').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const input = document.getElementById('custom-overlay-text');
-        if (input) input.value = btn.dataset.text.toUpperCase();
-        container.querySelectorAll('.btn-suggestion-text').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
       });
     });
 
@@ -1620,9 +1698,6 @@ export async function renderEngine(container) {
       const useFace = faceEnabled !== null ? faceEnabled : !!matchedFaceAtGen;
       const expressionId = selectedExpressionId || autoMatchedFaceId;
       const selectedFace = faceList.find(f => f.id === expressionId);
-      overlayText = document.getElementById('custom-overlay-text')?.value ?? overlayText;
-      const customText = overlayText || project.title;
-
       isGenerating = true;
       render();
 
@@ -1641,8 +1716,8 @@ export async function renderEngine(container) {
             subtitle: `"${angle.name}" — aplicando Visual Twist único + ADN de Marca`,
             detail: `VARIANTE ${i + 1} DE ${anglesToGenerate.length} — IMAGE GENERATION`,
           });
-          const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit });
-          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText: customText.toUpperCase(), faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
+          const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode });
+          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
         }
         hideLoader();
         toast(`✅ Batch completado — ${anglesToGenerate.length} miniatura${anglesToGenerate.length !== 1 ? 's' : ''} generada${anglesToGenerate.length !== 1 ? 's' : ''}`, 'success', 4000);
@@ -1661,9 +1736,9 @@ export async function renderEngine(container) {
     container.querySelectorAll('.btn-expand-variant').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (expandingVariantId) return;
-
         const variantId = btn.dataset.variantId;
+        if (expandingVariantsSet.has(variantId)) return;
+
         const countSelect = document.getElementById(`expand-count-${variantId}`);
         const count = Math.min(parseInt(countSelect?.value || '1'), 5);
         const project = getProject();
@@ -1673,20 +1748,11 @@ export async function renderEngine(container) {
         const baseVariant = allVariants.find(v => v.id === variantId);
         if (!baseVariant) return;
 
-        expandingVariantId = variantId;
-        render();
-
-        showLoader(container, {
-          title: 'Generando Variaciones',
-          subtitle: `Creando ${count} interpretación${count !== 1 ? 'es' : ''} alternativa${count !== 1 ? 's' : ''} del mismo ángulo psicológico`,
-          detail: `VARIACIÓN 1 DE ${count} — IMAGE GENERATION`,
-        });
+        expandingVariantsSet.add(variantId);
+        rerenderStep();
 
         try {
           for (let i = 0; i < count; i++) {
-            updateLoader({
-              detail: `VARIACIÓN ${i + 1} DE ${count} — IMAGE GENERATION`,
-            });
             const variationPrompt = buildVariationPrompt(baseVariant, project, i, count);
 
             const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
@@ -1711,6 +1777,8 @@ export async function renderEngine(container) {
               .select()
               .single();
             if (insertErr) throw insertErr;
+            await reloadProjects();
+            rerenderStep(); // muestra spinner inline en la card recién insertada
 
             try {
               const variationFaceUrl = baseVariant.ai_metadata?.face_image_url || null;
@@ -1737,12 +1805,10 @@ export async function renderEngine(container) {
             }
           }
         } catch (err) {
-          hideLoader();
           console.error('Expand error:', err);
           toast('Error al generar variaciones: ' + err.message, 'error');
         } finally {
-          hideLoader();
-          expandingVariantId = null;
+          expandingVariantsSet.delete(variantId);
           await reloadProjects();
           render();
         }
@@ -1791,6 +1857,16 @@ export async function renderEngine(container) {
       rerenderStep();
     });
 
+    // ── Text mode toggle (step 5) ──
+    document.getElementById('text-opt-none')?.addEventListener('click', () => {
+      textMode = 'none';
+      rerenderStep();
+    });
+    document.getElementById('text-opt-ai')?.addEventListener('click', () => {
+      textMode = 'ai';
+      rerenderStep();
+    });
+
     // ── Face expression card selection (step 4) ──
     container.querySelectorAll('.face-opt-card').forEach(card => {
       card.addEventListener('click', () => {
@@ -1799,10 +1875,6 @@ export async function renderEngine(container) {
       });
     });
 
-    // ── Overlay text persist (step 5) ──
-    document.getElementById('custom-overlay-text')?.addEventListener('input', (e) => {
-      overlayText = e.target.value;
-    });
 
     // ── Angle pagination (step 5) ──
     container.querySelectorAll('.angles-page-btn').forEach(btn => {
@@ -1812,21 +1884,20 @@ export async function renderEngine(container) {
       });
     });
 
-    // ── Per-card generate (step 5) ──
+    // ── Per-card generate (step 5) — concurrent per angle ──
     container.querySelectorAll('.btn-generate-angle').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (isGenerating) return;
+        if (isGenerating) return; // batch en progreso: esperar
         const angleIdx = parseInt(btn.dataset.angleIndex);
-        generatingAngleIndex = angleIdx;
-        isGenerating = true;
-        rerenderStep();
+        if (generatingAnglesSet.has(angleIdx)) return; // este ángulo ya genera
+        generatingAnglesSet.add(angleIdx);
+        rerenderStep(); // muestra spinner inline en la card
         try {
           await generateSingleAngle(angleIdx);
         } catch (err) {
           toast('Error al generar: ' + err.message, 'error');
         } finally {
-          generatingAngleIndex = null;
-          isGenerating = false;
+          generatingAnglesSet.delete(angleIdx);
           await reloadProjects();
           render();
         }
@@ -1866,10 +1937,10 @@ export async function renderEngine(container) {
             subtitle: `"${angle.name}"`,
             detail: `MINIATURA ${qi+1} DE ${pending.length}`,
           });
-          generatingAngleIndex = angleIdx;
+          generatingAnglesSet.add(angleIdx);
           await generateSingleAngle(angleIdx);
           await reloadProjects();
-          generatingAngleIndex = null;
+          generatingAnglesSet.delete(angleIdx);
         }
         hideLoader();
         toast(`✅ ${pending.length} miniatura${pending.length!==1?'s':''} generada${pending.length!==1?'s':''}`, 'success', 4000);
@@ -1877,7 +1948,7 @@ export async function renderEngine(container) {
         hideLoader();
         toast('Error al generar: ' + err.message, 'error');
       } finally {
-        generatingAngleIndex = null;
+        generatingAnglesSet.clear();
         isGenerating = false;
         await reloadProjects();
         render();
@@ -1888,21 +1959,18 @@ export async function renderEngine(container) {
     container.querySelectorAll('#step-content .btn-expand-variant').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (expandingVariantId) return;
         const variantId = btn.dataset.variantId;
+        if (expandingVariantsSet.has(variantId)) return;
         const countSelect = document.getElementById(`expand-count-${variantId}`);
         const count = Math.min(parseInt(countSelect?.value || '1'), 8);
         const project = getProject();
         if (!project) return;
         const baseVariant = (project.thumbnail_variants || []).find(v => v.id === variantId);
         if (!baseVariant) return;
-        expandingVariantId = variantId;
-        isGenerating = true;
+        expandingVariantsSet.add(variantId);
         rerenderStep();
-        showLoader(container, { title: 'Generando Variaciones', subtitle: `${count} variación${count!==1?'es':''}`, detail: `VARIACIÓN 1 DE ${count}` });
         try {
           for (let i = 0; i < count; i++) {
-            updateLoader({ detail: `VARIACIÓN ${i+1} DE ${count} — IMAGE GENERATION` });
             const variationPrompt = buildVariationPrompt(baseVariant, project, i, count);
             const isRealAngleId = baseVariant.angle_id && !String(baseVariant.angle_id).startsWith('ai-');
             const { data: inserted, error: insertErr } = await supabase.from('thumbnail_variants').insert({
@@ -1914,8 +1982,8 @@ export async function renderEngine(container) {
               ai_metadata: { prompt: variationPrompt, angle_name: baseVariant.ai_metadata?.angle_name||'', format: baseVariant.ai_metadata?.format||'', style: baseVariant.style_preset, generating: true, parent_id: variantId, face_image_url: baseVariant.ai_metadata?.face_image_url||null }
             }).select().single();
             if (insertErr) throw insertErr;
-            if (!project.thumbnail_variants) project.thumbnail_variants = [];
-            project.thumbnail_variants.push(inserted);
+            await reloadProjects();
+            rerenderStep(); // muestra spinner inline en la card recién insertada
             try {
               const dataUrl = await generateImage(variationPrompt, baseVariant.ai_metadata?.face_image_url || null);
               const { data: sessionData } = await supabase.auth.getSession();
@@ -1927,20 +1995,15 @@ export async function renderEngine(container) {
               await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: mimeType });
               const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(fileName);
               await supabase.from('thumbnail_variants').update({ image_url: urlData.publicUrl, ai_metadata: { ...inserted.ai_metadata, generating: false } }).eq('id', inserted.id);
-              const lv = project.thumbnail_variants.find(v => v.id === inserted.id);
-              if (lv) { lv.image_url = urlData.publicUrl; lv.ai_metadata = { ...inserted.ai_metadata, generating: false }; }
             } catch (imgErr) {
               await supabase.from('thumbnail_variants').update({ ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message } }).eq('id', inserted.id);
             }
           }
-          hideLoader();
           toast(`✅ ${count} variación${count!==1?'es':''} generada${count!==1?'s':''}`, 'success', 3000);
         } catch (err) {
-          hideLoader();
           toast('Error al variar: ' + err.message, 'error');
         } finally {
-          expandingVariantId = null;
-          isGenerating = false;
+          expandingVariantsSet.delete(variantId);
           await reloadProjects();
           render();
         }
@@ -1964,6 +2027,12 @@ export async function renderEngine(container) {
         render();
       });
     });
+    container.querySelectorAll('#step-content .btn-cancel-variant').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await cancelStuckVariant(btn.dataset.variantId);
+      });
+    });
     container.querySelectorAll('#step-content .btn-download, #step-content .thumb-preview-trigger').forEach(el => {
       el.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -1985,9 +2054,36 @@ export async function renderEngine(container) {
     });
   }
 
+  // ── Helper: build a clean IMAGE_SAFETY fallback prompt ────────────────────
+  // Preserves thematic relevance (hero, hook, angle) without the heavy FORMAT
+  // language that triggers the safety filter. Called before generateImage so
+  // the retried generation is still coherent with the video.
+  function buildSafetyFallbackPrompt(angle, project, style) {
+    const vb = project?.logic_dna?.visual_briefing || {};
+    const heroObject = vb.hero_object || '';
+    const centralConflict = vb.central_conflict || '';
+    const hook = project.logic_dna?.hook || '';
+    const tension = project.logic_dna?.tension || '';
+    const promise = project.logic_dna?.promise || '';
+    const psychAngle = angle.psychology || angle.psychology_text || '';
+
+    const lines = [
+      `Create a visually striking YouTube thumbnail in 16:9 format.`,
+      style?.lighting ? `Visual rendering style: ${style.lighting}` : '',
+      heroObject ? `Central element (must dominate the composition): ${heroObject}` : '',
+      centralConflict ? `Visual drama to portray: ${centralConflict}` : '',
+      hook ? `Hook concept: ${hook}` : '',
+      tension ? `Core tension: ${tension}` : '',
+      promise ? `Promise: ${promise}` : '',
+      `Psychological angle: "${angle.name}"${psychAngle ? ` — ${psychAngle.slice(0, 120)}` : ''}.`,
+      `Requirements: High-impact composition. Professional cinematic lighting. Vibrant colors. Ultra-sharp. No text, letters, or words anywhere in the image.`,
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
+
   // ── Helper: build master prompt (DNA Chain — Fusión de Capas) ──────────────
   // Slot order: [ESTILO_VISUAL] + [FORMATO_CREATIVO] + [OBJETO_HEROE] + [VISUAL_TWIST] + [ADN_MARCA]
-  function buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit }) {
+  function buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode = 'none' }) {
     // === LAYER 1: VISUAL STYLE (lighting, textures, rendering quality) ===
     const styleLayer = [
       style.lighting,
@@ -2035,6 +2131,24 @@ export async function renderEngine(container) {
       crowdPattern ? `Do NOT replicate this crowd pattern: "${crowdPattern}"` : '',
     ].filter(Boolean).join('\n');
 
+    // === LAYER 2.5: THEMATIC COLOR PALETTE (content-adaptive, competition-aware) ===
+    const colorPaletteLayer = [
+      'Derive the dominant color palette EXCLUSIVELY from the video\'s content themes described in Layer 3 — NOT from format or style aesthetic defaults. Apply the matching color family:',
+      '• ACTION / VIOLENCE / EXPLOSIONS / WAR / CRIME / NARCO / DRUGS → burning reds, deep charcoal-black, molten oranges, hellfire yellows — raw danger palette',
+      '• TECHNOLOGY / AI / DIGITAL / SOFTWARE / APPS / CHATGPT / ROBOTS / INTERNET → electric blue, cyan, cool white-grey, vibrant purple — precision tech palette',
+      '• MYSTERY / SECRETS / CONSPIRACY / HIDDEN TRUTH / INVESTIGATION → deep purples, near-black, blood red accents, harsh single spotlight white',
+      '• MONEY / POWER / LUXURY / WEALTH / BUSINESS / FINANCE → golds, deep navy, champagne tones, emerald green — prestige palette',
+      '• SPORT / COMPETITION / PHYSICAL ENERGY / TRAINING → electric yellow, vivid green, intense royal blue — kinetic saturated palette',
+      '• SURVIVAL / NATURE / ADVENTURE / OUTDOOR → military green, raw earth clay, storm grey, burnt copper',
+      '• HISTORY / RELIGION / PHILOSOPHY / POLITICS → deep crimson, aged gold, midnight blue, parchment white',
+      'RULE: For VERSUS/SPLIT format — the dividing energy line MUST use the thematic accent color above, never default to neon cyan/purple.',
+      'RULE: NEVER apply neon/cyberpunk/electric-blue tones unless the video content is explicitly about technology, AI, or digital products.',
+      palette ? `Brand palette anchors (use as secondary accents): ${palette}` : '',
+      avoidColors ? `COMPETITOR DIFFERENTIATION — AVOID these as dominant tones (already saturating the market in this niche): ${avoidColors}` : '',
+      crowdPattern ? `Do NOT replicate this saturated competitor visual pattern: "${crowdPattern}"` : '',
+      'OBJECTIVE: Stand out in the YouTube feed. Be visually distinct from competitors while staying 100% true to the video\'s theme and emotions.',
+    ].filter(Boolean).join('\n');
+
     // === SLOT 6: FACE INTEGRATION ===
     // When a face image is attached to the request, instruct the model to USE that real person.
     // Never describe facial traits as text — the model must anchor to the actual photo.
@@ -2042,13 +2156,19 @@ export async function renderEngine(container) {
       ? `CREATOR FACE (mandatory): The reference photo of the real creator is attached to this request as an image. You MUST use that exact real person's face — do NOT generate a fictional or AI-invented face. Preserve 100% of their real identity: bone structure, eyes, nose, mouth, hair, skin tone, piercing or any distinctive features. Required expression: ${requiredEmotion || selectedFace.expression_type} — make it hyper-expressive and over-the-top cinematic, but the face must unmistakably be the same real person from the reference photo.`
       : 'NO people or faces. Focus entirely on objects, environments, and graphic elements.';
 
-    return `High-impact YouTube thumbnail — 16:9 aspect ratio — maximum CTR optimized.
+    return `━━━ ROLE & MISSION ━━━
+You are the world's best YouTube thumbnail graphic designer — a creative director with 15+ years of experience studying viral content across every niche: crime, tech, finance, sports, entertainment, history, lifestyle. You have analyzed over 50,000 high-performing thumbnails and understand exactly what makes a human stop mid-scroll and click. You think in terms of visual hierarchy, emotional triggers, color psychology, negative space, and compositional tension. Your thumbnails consistently achieve CTR above 15%. You NEVER produce generic or predictable compositions. You invent unexpected, surprising, and visually stunning executions while staying completely true to the video's content and emotional DNA.
+
+Your task: generate the single most visually impactful, click-worthy YouTube thumbnail possible for this specific video — 16:9 aspect ratio, maximum CTR optimized. Surprise the viewer. Make it impossible to ignore.
 
 ━━━ LAYER 1: VISUAL STYLE & RENDERING ━━━
 ${styleLayer}
 
 ━━━ LAYER 2: COMPOSITION FORMAT (physical layout) ━━━
 ${formatLayer}
+
+━━━ LAYER 2.5: THEMATIC COLOR PALETTE — CONTENT-ADAPTIVE ━━━
+${colorPaletteLayer}
 
 ━━━ LAYER 3: HERO OBJECT & SCRIPT DNA ━━━
 ${heroLayer}
@@ -2062,13 +2182,34 @@ ${adnLayer}
 ━━━ LAYER 6: CREATOR FACE ━━━
 ${faceLayer}
 
-FINAL REQUIREMENTS: Ultra-sharp. Maximum visual punch. Vibrant. High contrast against competition.
+FINAL REQUIREMENTS: Ultra-sharp. Maximum visual punch. Vibrant. Palette faithful to the video's content. Visually distinct from competitors.
 
-━━━ REGLA ABSOLUTA — CERO TEXTO EN LA IMAGEN ━━━
-PROHIBIDO renderizar texto, palabras, letras, números o tipografía en cualquier parte de la imagen — ni en pantallas, señales, banners, barras, badges, carteles, ni en ningún otro lugar. Cualquier elemento de diseño que normalmente contendría texto (barras de chyron, tarjetas de título, etiquetas, marcas de agua, pantallas con código o mensajes) debe mostrar ÚNICAMENTE color sólido, formas geométricas, patrones visuales abstractos o íconos gráficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-producción como overlay. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.
+${textMode === 'ai' ? `━━━ LAYER 7: TIPOGRAFIA Y TEXTO INCRUSTADO — LA IA DISEÑA TODO ━━━
+You are now acting as a world-class typographic designer and title card specialist with 15+ years creating viral text elements for YouTube thumbnails, movie posters, and advertising campaigns. Typography is your superpower — you know that the right 1-3 words, in the right style, double the CTR.
 
-━━━ UNIVERSO VISUAL CERRADO — ANTI-ALUCINACIÓN ━━━
-Renderizá ÚNICAMENTE los elementos visuales explícitamente descritos en las capas anteriores. PROHIBIDO agregar elementos por asociación cultural o de género: no inventar logotipos, marcas, insignias, íconos no especificados, efectos de franquicia, pantallas con contenido, fondos de escenografía no mencionados, ni ningún elemento decorativo que no esté descripto literalmente arriba. Si el estilo evoca un género (noticiero, cine de acción, documental), renderizá SOLO la estética visual del género (iluminación, color, composición) — NO sus elementos de UI, marcos de programa, gráficos de producción ni branding inventado. Cada píxel debe justificarse en alguna de las 6 capas anteriores.`;
+TASK: Design and physically render 1 to 3 short text elements directly embedded into this thumbnail image. Every decision is yours: the words, the font treatment, the color, the size, the position, and the rendering technique.
+
+WORD SELECTION PROTOCOL:
+Select 1 to 4 words from the video hook, tension, promise, and the psychological angle from Layers 3 and 4. Choose the most emotionally charged, curiosity-triggering, or shock-inducing fragment. Short is always more powerful: 1 strong word beats 5 weak words. The selected words MUST be thematically coherent with the psychological angle for this specific variant. Use the video's original language — match the language of the hook/title/tension above.
+ABSOLUTE ANTI-HALLUCINATION RULE: Before rendering, decide your exact words and mentally spell each letter one by one. Render ONLY those exact characters — zero additions, zero substitutions, zero invented characters. Spell each word PERFECTLY. If uncertain, choose simpler and shorter text. Legibility is non-negotiable — a misspelled or unreadable word is a failure.
+
+TYPOGRAPHIC TREATMENT — MATCH THE CONTENT THEME FROM LAYER 2.5:
+Select the font style and rendering technique that is 100% coherent with the content theme, visual style (Layer 1), format (Layer 2), and color palette (Layer 2.5):
+CRIMEN/PELIGRO/ACCION/DRAMA: Ultra-bold slab serif distressed, cracked concrete or grunge ink texture, charcoal-black or deep red, aggressive forward italic. Environmental: painted on a wall, stamped on metal, scraped into concrete, worn stencil.
+TECNOLOGIA/IA/DIGITAL/SOFTWARE: Clean geometric sans-serif, holographic shimmer outline, electric glow edges, cyan or white on dark. Environmental: projected hologram, illuminated LED screen, neon sign, digital scan lines.
+DINERO/PODER/LUJO/NEGOCIOS: Gold or chrome 3D metallic extrusion, wide-tracking all-caps, diamond reflections on letterforms, deep drop shadows. Environmental: engraved in marble, stamped in gold foil, embossed on leather.
+MISTERIO/SECRETOS/CONSPIRACION: Worn red stamp stencil, hand-scratched chalk on blackboard, torn paper reveal, classified document typewriter font. Environmental: stamped on a document, scratched on glass, burned edges.
+DEPORTE/ENERGIA/COMPETICION: Ultra-compressed italic slab, explosive 3D chrome with motion blur trailing edges, lightning bolt integrated into letterforms. Environmental: blazing through the air, forged in fire, carved in kinetic energy.
+HISTORIA/POLITICA/RELIGION: Aged serif with gold emboss or stone carving effect, dramatic engraved look with patina. Environmental: carved in stone, illuminated manuscript style, ancient inscription.
+SUPERVIVENCIA/AVENTURA/NATURALEZA: Military stencil, bark-textured letters, raw brushstroke paint, earth tones. Environmental: painted on rock, stamped on leather, burned into wood.
+
+COMPOSITION AND PLACEMENT RULES:
+Place text in the natural negative space — NEVER obscure the hero element or face. Main text element must be large enough to read at 120x68px (mobile thumbnail size). Maximum 2 lines; single line preferred for the primary element. Use stroke outline, drop shadow, or ambient glow to guarantee readability against any background. If using 2-3 text elements: establish clear visual hierarchy (one dominant large, one secondary smaller). Text placement must create visual tension or balance with the compositional format from Layer 2.
+
+RENDERING TECHNIQUE:
+Text MUST appear physically embedded in the scene — options: 3D extrusion, environmental projection, wall carving, neon sign glow, painted surface, spray paint, stamped ink, hologram overlay, etched glass. NOT a flat digital sticker floating over the image — it must feel like part of the world. Letterforms must respect the thumbnail's lighting (cast shadows, receive light from key light source) and color palette. Perfect kerning, no merged characters, no overlapping glyphs, no bleed between letters.` : `REGLA ABSOLUTA — CERO TEXTO EN LA IMAGEN: PROHIBIDO renderizar texto, palabras, letras, numeros o tipografia en cualquier parte de la imagen — ni en pantallas, senales, banners, barras, badges, carteles, ni en ningun otro lugar. Cualquier elemento de diseno que normalmente contendria texto debe mostrar UNICAMENTE color solido, formas geometricas, patrones visuales abstractos o iconos graficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-produccion. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.`}
+
+UNIVERSO VISUAL CERRADO — ANTI-ALUCINACION: Renderiza UNICAMENTE los elementos visuales explicitamente descritos en las capas anteriores. PROHIBIDO agregar elementos por asociacion cultural o de genero: no inventar logotipos, marcas, insignias, iconos no especificados, efectos de franquicia, pantallas con contenido, fondos de escenografia no mencionados, ni ningun elemento decorativo que no este descripto literalmente arriba. Si el estilo evoca un genero (noticiero, cine de accion, documental), renderiza SOLO la estetica visual del genero (iluminacion, color, composicion) — NO sus elementos de UI, marcos de programa, graficos de produccion ni branding inventado. Cada pixel debe justificarse en alguna de las capas anteriores.`;
   }
 
   // ── Helper: build a full variation prompt from project data ──────────────
@@ -2088,8 +2229,9 @@ Renderizá ÚNICAMENTE los elementos visuales explícitamente descritos en las c
     const faceImageUrl = baseVariant.ai_metadata?.face_image_url || null;
     const useFace = !!faceImageUrl;
     const selectedFace = faceList.find(f => f.image_url === faceImageUrl) || null;
+    const variantTextMode = baseVariant.ai_metadata?.text_mode || 'none';
 
-    const masterPrompt = buildMasterPrompt({ project, angle, style, formats: safeFormats, selectedFace, useFace, brandKit });
+    const masterPrompt = buildMasterPrompt({ project, angle, style, formats: safeFormats, selectedFace, useFace, brandKit, textMode: variantTextMode });
 
     const dimensionOptions = [
       'Shift the dominant color temperature significantly (if warm palette → go cool; if cool → go warm). Keep all other elements intact.',
@@ -2111,14 +2253,14 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
 
   // ── Helper: generate one image and save to DB ─────────────────────────────
   // Inserts placeholder, immediately updates UI, then generates image in background
-  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, overlayText, faceImageUrl = null, parentId = null }) {
+  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode = 'none', faceImageUrl = null, parentId = null }) {
     const isRealAngleId = angle.id && !String(angle.id).startsWith('ai-');
     const { data: inserted, error: insertErr } = await supabase
       .from('thumbnail_variants')
       .insert({
         project_id: project.id,
         angle_id: isRealAngleId ? angle.id : null,
-        overlay_text: overlayText,
+        overlay_text: null,
         style_preset: style.label,
         impact_score: Math.floor(Math.random() * 20) + 80,
         ai_metadata: {
@@ -2129,6 +2271,7 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
           generating: true,
           parent_id: parentId,
           face_image_url: faceImageUrl || null,
+          text_mode: tMode,
         }
       })
       .select()
@@ -2141,7 +2284,8 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
     render();
 
     try {
-      const dataUrl = await generateImage(imagePrompt, faceImageUrl);
+      const safetyFallback = buildSafetyFallbackPrompt(angle, project, style);
+      const dataUrl = await generateImage(imagePrompt, faceImageUrl, safetyFallback);
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id;
       const blob = await fetch(dataUrl).then(r => r.blob());
@@ -2186,6 +2330,32 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
       .eq('channel_id', activeChannelId).order('created_at', { ascending: false });
     projects.length = 0;
     (updated || []).forEach(p => projects.push(p));
+
+    // Auto-cleanup: mark stuck variants (generating=true, sin imagen, >5min) como error
+    const STUCK_MS = 5 * 60 * 1000;
+    const now = Date.now();
+    const stuckIds = [];
+    for (const project of projects) {
+      for (const v of (project.thumbnail_variants || [])) {
+        if (v.ai_metadata?.generating && !v.image_url &&
+            (now - new Date(v.created_at).getTime()) > STUCK_MS) {
+          stuckIds.push(v.id);
+          v.ai_metadata = { ...v.ai_metadata, generating: false, error: 'Generación interrumpida — reintentá' };
+        }
+      }
+    }
+    if (stuckIds.length > 0) {
+      for (const id of stuckIds) {
+        const v = projects.flatMap(p => p.thumbnail_variants || []).find(x => x.id === id);
+        await supabase.from('thumbnail_variants').update({ ai_metadata: v.ai_metadata }).eq('id', id);
+      }
+    }
+  }
+
+  async function cancelStuckVariant(variantId) {
+    await supabase.from('thumbnail_variants').delete().eq('id', variantId);
+    await reloadProjects();
+    render();
   }
 
   render();

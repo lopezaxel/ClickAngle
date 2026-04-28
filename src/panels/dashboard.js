@@ -124,30 +124,6 @@ export async function renderDashboard(container) {
         </div>
       </div>
 
-      <div class="section-header">
-        <div class="card-title">Proyectos Recientes</div>
-      </div>
-      ${recentProjects.length > 0 ? `
-      <div class="grid-4">
-        ${recentProjects.map(p => `
-          <div class="thumbnail-card">
-            <div class="thumb-img" style="background: linear-gradient(135deg, #1a1a2e, #16213e);">
-              ${icon('image', 32)}
-            </div>
-            <div class="thumb-info">
-              <div style="font-size:13px;font-weight:600;margin-bottom:4px;" class="truncate">${p.title}</div>
-              <div class="flex items-center justify-between">
-                <span class="badge badge-${p.status === 'published' ? 'success' : 'neutral'}">${p.status}</span>
-                <span class="text-xs text-muted">${new Date(p.created_at).toLocaleDateString('es')}</span>
-              </div>
-            </div>
-          </div>
-        `).join('')}
-      </div>` : `
-      <div class="card" style="text-align:center;padding:var(--space-xl);color:var(--text-tertiary);">
-        ${icon('image', 32)}
-        <p class="text-sm text-muted mt-md">Sin proyectos aún. Creá tu primer proyecto en la Fábrica Creativa.</p>
-      </div>`}
     </div>`;
 
     hideLoader(false);
