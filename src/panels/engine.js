@@ -960,10 +960,46 @@ export async function renderEngine(container) {
     return { project, style, formats, useFace, selectedFace, textMode };
   }
 
-  async function generateSingleAngle(angleIndex) {
-    const ctx = getGenContext();
-    if (!ctx) return;
-    const { project, style, formats, useFace, selectedFace, textMode: tMode } = ctx;
+  async function generateSingleAngle(angleIndex, overrideTextMode = null) {
+    const effectiveTextMode = overrideTextMode !== null ? overrideTextMode : textMode;
+    let ctx = getGenContext();
+
+    // Fallback for Regenerar: if no UI context (user hasn't gone through the workflow
+    // this session), reconstruct style/format from the existing variant's saved metadata.
+    // textMode always comes from the current UI toggle — that's the whole point of Regenerar.
+    if (!ctx) {
+      const project = getProject();
+      if (!project) return;
+      const angle = (project.logic_dna?.selected_angles || [])[angleIndex];
+      if (!angle) return;
+
+      const existing = (project.thumbnail_variants || [])
+        .filter(v => v.ai_metadata?.angle_name === angle.name && !v.ai_metadata?.parent_id)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+      if (!existing?.ai_metadata) {
+        toast('Seleccioná estilo y formato antes de generar.', 'error');
+        return;
+      }
+
+      const savedStyle = STYLES.find(s => s.label === existing.ai_metadata.style);
+      const formatLabels = (existing.ai_metadata.format || '').split(' + ').map(s => s.trim()).filter(Boolean);
+      const savedFormats = formatLabels.map(lbl => FORMATS.find(f => f.label === lbl)).filter(Boolean);
+
+      if (!savedStyle || savedFormats.length === 0) {
+        toast('Seleccioná estilo y formato antes de generar.', 'error');
+        return;
+      }
+
+      const faceImageUrl = existing.ai_metadata.face_image_url || null;
+      const useFace = !!faceImageUrl;
+      const selectedFace = faceList.find(f => f.image_url === faceImageUrl) || null;
+
+      ctx = { project, style: savedStyle, formats: savedFormats, useFace, selectedFace, textMode: effectiveTextMode };
+    }
+
+    const { project, style, formats, useFace, selectedFace } = ctx;
+    const tMode = effectiveTextMode; // always use the explicitly captured mode
     const angle = (project.logic_dna?.selected_angles || [])[angleIndex];
     if (!angle) return;
     const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode: tMode });
@@ -1890,10 +1926,12 @@ export async function renderEngine(container) {
         if (isGenerating) return; // batch en progreso: esperar
         const angleIdx = parseInt(btn.dataset.angleIndex);
         if (generatingAnglesSet.has(angleIdx)) return; // este ángulo ya genera
+        // Capture textMode NOW — before rerenderStep() touches the DOM
+        const capturedTextMode = textMode;
         generatingAnglesSet.add(angleIdx);
         rerenderStep(); // muestra spinner inline en la card
         try {
-          await generateSingleAngle(angleIdx);
+          await generateSingleAngle(angleIdx, capturedTextMode);
         } catch (err) {
           toast('Error al generar: ' + err.message, 'error');
         } finally {
@@ -2184,30 +2222,59 @@ ${faceLayer}
 
 FINAL REQUIREMENTS: Ultra-sharp. Maximum visual punch. Vibrant. Palette faithful to the video's content. Visually distinct from competitors.
 
-${textMode === 'ai' ? `━━━ LAYER 7: TIPOGRAFIA Y TEXTO INCRUSTADO — LA IA DISEÑA TODO ━━━
-You are now acting as a world-class typographic designer and title card specialist with 15+ years creating viral text elements for YouTube thumbnails, movie posters, and advertising campaigns. Typography is your superpower — you know that the right 1-3 words, in the right style, double the CTR.
+${textMode === 'ai' ? `━━━ LAYER 7: TIPOGRAFIA Y TEXTO — OVERLAY TECHNIQUE ━━━
+⚠️ MANDATORY TEXT REQUIREMENT — NON-NEGOTIABLE: This thumbnail MUST contain physically rendered, clearly readable text. Text generation is OBLIGATORY. An image without visible text is a failed generation. You MUST render at least 1 word. There are NO exceptions. Even if the composition seems full, text MUST be present somewhere in the frame.
 
-TASK: Design and physically render 1 to 3 short text elements directly embedded into this thumbnail image. Every decision is yours: the words, the font treatment, the color, the size, the position, and the rendering technique.
+You are a senior YouTube thumbnail creative director with 15+ years of experience studying viral content psychology. You have analyzed over 50,000 high-performing thumbnails and understand exactly which words stop a human mid-scroll. Typography is a surgical tool — one perfectly chosen word doubles CTR; five mediocre words destroy the image.
 
-WORD SELECTION PROTOCOL:
-Select 1 to 4 words from the video hook, tension, promise, and the psychological angle from Layers 3 and 4. Choose the most emotionally charged, curiosity-triggering, or shock-inducing fragment. Short is always more powerful: 1 strong word beats 5 weak words. The selected words MUST be thematically coherent with the psychological angle for this specific variant. Use the video's original language — match the language of the hook/title/tension above.
-ABSOLUTE ANTI-HALLUCINATION RULE: Before rendering, decide your exact words and mentally spell each letter one by one. Render ONLY those exact characters — zero additions, zero substitutions, zero invented characters. Spell each word PERFECTLY. If uncertain, choose simpler and shorter text. Legibility is non-negotiable — a misspelled or unreadable word is a failure.
+TECHNIQUE: OVERLAY — text is rendered in the highest visual plane, ON TOP of all scene elements. The text sits above the hero object, above backgrounds, above all graphic elements. It is the last layer rendered.
 
-TYPOGRAPHIC TREATMENT — MATCH THE CONTENT THEME FROM LAYER 2.5:
-Select the font style and rendering technique that is 100% coherent with the content theme, visual style (Layer 1), format (Layer 2), and color palette (Layer 2.5):
-CRIMEN/PELIGRO/ACCION/DRAMA: Ultra-bold slab serif distressed, cracked concrete or grunge ink texture, charcoal-black or deep red, aggressive forward italic. Environmental: painted on a wall, stamped on metal, scraped into concrete, worn stencil.
-TECNOLOGIA/IA/DIGITAL/SOFTWARE: Clean geometric sans-serif, holographic shimmer outline, electric glow edges, cyan or white on dark. Environmental: projected hologram, illuminated LED screen, neon sign, digital scan lines.
-DINERO/PODER/LUJO/NEGOCIOS: Gold or chrome 3D metallic extrusion, wide-tracking all-caps, diamond reflections on letterforms, deep drop shadows. Environmental: engraved in marble, stamped in gold foil, embossed on leather.
-MISTERIO/SECRETOS/CONSPIRACION: Worn red stamp stencil, hand-scratched chalk on blackboard, torn paper reveal, classified document typewriter font. Environmental: stamped on a document, scratched on glass, burned edges.
-DEPORTE/ENERGIA/COMPETICION: Ultra-compressed italic slab, explosive 3D chrome with motion blur trailing edges, lightning bolt integrated into letterforms. Environmental: blazing through the air, forged in fire, carved in kinetic energy.
-HISTORIA/POLITICA/RELIGION: Aged serif with gold emboss or stone carving effect, dramatic engraved look with patina. Environmental: carved in stone, illuminated manuscript style, ancient inscription.
-SUPERVIVENCIA/AVENTURA/NATURALEZA: Military stencil, bark-textured letters, raw brushstroke paint, earth tones. Environmental: painted on rock, stamped on leather, burned into wood.
+━━ ANTI-HALLUCINATION PROTOCOL — NON-NEGOTIABLE ━━
+BEFORE designing anything: commit to your exact words. Spell each word letter by letter internally. COUNT the letters. Only then render.
+PROHIBITED text structures — these ALWAYS cause hallucination, NEVER use them:
+✗ Numbered lists (1. 2. 3.)
+✗ Bullet point lists
+✗ Sentences or phrases longer than 3 words
+✗ Document panels, evidence boards, info boxes, label systems
+✗ Any element requiring more than one line of body text
+✗ Arrows pointing to labeled elements
+✗ Multi-line structured text of any kind
+RULE: If a composition format (from Layer 2) naturally implies a document or list with text content, that document/list must be rendered as a GRAPHIC ELEMENT with no readable characters — solid color bands, abstract shapes, redaction bars — NEVER actual words inside it.
+SIMPLICITY IS ACCURACY: a 4-letter common word rendered perfectly beats a 10-letter invented word. When uncertain between two options, always choose the shorter, simpler, more common word. A single word rendered with absolute precision is a stronger creative decision than two words with any rendering doubt.
 
-COMPOSITION AND PLACEMENT RULES:
-Place text in the natural negative space — NEVER obscure the hero element or face. Main text element must be large enough to read at 120x68px (mobile thumbnail size). Maximum 2 lines; single line preferred for the primary element. Use stroke outline, drop shadow, or ambient glow to guarantee readability against any background. If using 2-3 text elements: establish clear visual hierarchy (one dominant large, one secondary smaller). Text placement must create visual tension or balance with the compositional format from Layer 2.
+━━ WORD SELECTION — SENIOR CREATIVE JUDGMENT ━━
+Select 1 primary word (mandatory) and optionally 1 secondary word (only if it adds unique emotional information the primary does not cover). Maximum 2 words total across ALL text elements.
+Source material: the video's hook, tension, promise, and the psychological angle from Layers 3 and 4.
+Apply the correct psychological trigger for this specific content:
+• SHOCK / DISSONANCE: A word that creates instant cognitive conflict — something unexpected, impossible, or contradictory to what the viewer assumed. (ex: "NUNCA", "IMPOSIBLE", "TODO")
+• CURIOSITY GAP: A word that implies there is hidden information the viewer does not yet have — they must click to complete the picture. (ex: "SECRETO", "FILTRADO", "REAL", "OCULTO")
+• URGENCY / DANGER: A word that signals something critical is happening right now, creating FOMO or threat response. (ex: "ALERTA", "AHORA", "ULTIMO")
+• IDENTITY CHALLENGE: A word that speaks directly to the viewer's self-concept, making them feel personally called out. (ex: "VOS", "TODOS", "NADIE", "YO")
+• VALIDATION / REVELATION: A word that confirms something the viewer suspected but never saw confirmed. (ex: "CONFIRMADO", "EXPUESTO", "VERDAD")
+The word MUST be thematically coherent with the psychological angle of this specific variant (Layer 4). Use the video's original language — match the language of the hook/title/tension.
 
-RENDERING TECHNIQUE:
-Text MUST appear physically embedded in the scene — options: 3D extrusion, environmental projection, wall carving, neon sign glow, painted surface, spray paint, stamped ink, hologram overlay, etched glass. NOT a flat digital sticker floating over the image — it must feel like part of the world. Letterforms must respect the thumbnail's lighting (cast shadows, receive light from key light source) and color palette. Perfect kerning, no merged characters, no overlapping glyphs, no bleed between letters.` : `REGLA ABSOLUTA — CERO TEXTO EN LA IMAGEN: PROHIBIDO renderizar texto, palabras, letras, numeros o tipografia en cualquier parte de la imagen — ni en pantallas, senales, banners, barras, badges, carteles, ni en ningun otro lugar. Cualquier elemento de diseno que normalmente contendria texto debe mostrar UNICAMENTE color solido, formas geometricas, patrones visuales abstractos o iconos graficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-produccion. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.`}
+━━ PLACEMENT — OVERLAY RULES ━━
+Text goes ON TOP of the scene. These rules are absolute:
+1. FACE PROTECTION: If the composition contains a human face, text must NEVER cover the eyes or mouth. Eyes and mouth are the #1 CTR emotional triggers — covering them kills the click. Place text above the face, below the chin, or in lateral space.
+2. HERO PROTECTION: Primary text must not completely obscure the hero object or face — it can overlap edges but the subject must remain clearly readable as a visual.
+3. NATURAL NEGATIVE SPACE: Identify the area of the composition with the least visual information (often upper corners, lower band, or lateral margins) and anchor the primary text there.
+4. SIZE: Primary text must be large enough to read at 120x68px (mobile thumbnail size). It must be the largest typographic element.
+5. HIERARCHY: If using a secondary word — it must be visually subordinate (smaller size, lower contrast, or different weight) to the primary.
+
+━━ TYPOGRAPHIC TREATMENT — MATCH CONTENT THEME ━━
+Select font style and rendering coherent with the content theme from Layer 2.5:
+CRIMEN/PELIGRO/ACCION/DRAMA: Ultra-bold slab serif, distressed grunge texture, charcoal-black or blood red, aggressive forward italic. Feel: stamped on metal, scraped into concrete, worn stencil.
+TECNOLOGIA/IA/DIGITAL/SOFTWARE: Clean geometric sans-serif, holographic shimmer or electric glow edges, cyan or white on dark. Feel: projected hologram, LED screen, neon sign.
+DINERO/PODER/LUJO/NEGOCIOS: Gold or chrome 3D metallic extrusion, wide-tracking all-caps, deep drop shadows. Feel: engraved in marble, stamped in gold foil, embossed leather.
+MISTERIO/SECRETOS/CONSPIRACION: Worn red stamp stencil, classified document typewriter font, burned or torn edges. Feel: stamped on a classified file — single word only, maximum impact.
+DEPORTE/ENERGIA/COMPETICION: Ultra-compressed italic slab, explosive 3D chrome, motion blur trailing edges. Feel: blazing through the air, forged in fire.
+HISTORIA/POLITICA/RELIGION: Aged serif, gold emboss or stone carving effect, dramatic patina. Feel: carved in stone, ancient inscription.
+SUPERVIVENCIA/AVENTURA/NATURALEZA: Military stencil, raw brushstroke paint, earth tones. Feel: painted on rock, burned into wood.
+
+━━ RENDERING TECHNIQUE ━━
+Text must appear physically embedded in the visual world — 3D extrusion, neon glow, painted surface, spray paint, stamped ink, hologram overlay, etched material. NOT a flat digital sticker. Letterforms must respect the thumbnail's lighting (cast shadows, receive light from the key light source) and color palette (Layer 2.5). Perfect kerning. Zero merged characters. Zero overlapping glyphs. Zero letter bleed. Every character must be individually distinct and perfectly legible.
+
+⚠️ FINAL MANDATORY CHECK: Before finalizing the image, confirm that at least 1 clearly readable word is visible in the frame. If no text is present — you MUST add it now. Text is REQUIRED, not optional.` : `REGLA ABSOLUTA — CERO TEXTO EN LA IMAGEN: PROHIBIDO renderizar texto, palabras, letras, numeros o tipografia en cualquier parte de la imagen — ni en pantallas, senales, banners, barras, badges, carteles, ni en ningun otro lugar. Cualquier elemento de diseno que normalmente contendria texto debe mostrar UNICAMENTE color solido, formas geometricas, patrones visuales abstractos o iconos graficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-produccion. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.`}
 
 UNIVERSO VISUAL CERRADO — ANTI-ALUCINACION: Renderiza UNICAMENTE los elementos visuales explicitamente descritos en las capas anteriores. PROHIBIDO agregar elementos por asociacion cultural o de genero: no inventar logotipos, marcas, insignias, iconos no especificados, efectos de franquicia, pantallas con contenido, fondos de escenografia no mencionados, ni ningun elemento decorativo que no este descripto literalmente arriba. Si el estilo evoca un genero (noticiero, cine de accion, documental), renderiza SOLO la estetica visual del genero (iluminacion, color, composicion) — NO sus elementos de UI, marcos de programa, graficos de produccion ni branding inventado. Cada pixel debe justificarse en alguna de las capas anteriores.`;
   }
