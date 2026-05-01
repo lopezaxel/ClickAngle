@@ -395,9 +395,7 @@ export function renderLogin(container) {
       <div class="login-card animate-in">
         <div class="login-header">
           <div class="login-logo">
-            <div class="logo-icon" style="color:white;width:48px;height:48px;border-radius:var(--radius-lg);background:linear-gradient(135deg,var(--accent),var(--accent-dark));display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px var(--accent-glow);">
-              ${icon('crosshair', 24)}
-            </div>
+            <img src="/logo.png" style="width:56px;height:56px;border-radius:var(--radius-lg);object-fit:cover;" alt="ClickAngles" />
             <div>
               <h1 style="font-size:24px;font-weight:800;margin:0;">ClickAngles</h1>
               <span class="version-badge" style="font-size:10px;">v1.0</span>

@@ -46,6 +46,7 @@ function initApp() {
   let lastSessionId = null;
   let lastLoadingChannels = true;
   let lastChannelCount = -1;
+  let hasNavigatedToHub = false;
 
   function renderApp() {
     const { session, currentUser, activeChannelId, isAuthInitializing, isLoadingChannels, channels, subscription } = getState();
@@ -82,6 +83,7 @@ function initApp() {
       lastUserId = null;
       lastChannelId = null;
       lastSessionId = null;
+      hasNavigatedToHub = false;
       return;
     }
 
@@ -118,13 +120,22 @@ function initApp() {
     topbar.style.display = '';
     workflowBar.style.display = '';
 
-    // 4. Check if we need the Hub (no active channel)
-    const currentHash = window.location.hash.slice(1);
-    const isOnHub = currentHash === 'channel-selector';
+    // Render shared components immediately — sidebar must never be missing when session exists.
+    // This runs before any early-return guards so the layout is always complete.
+    if (!sidebar.innerHTML) renderSidebar(sidebar);
+    if (!topbar.innerHTML) {
+      renderSearchbar(topbar);
+      checkApiKey().catch(err => console.error('Initial API check failed:', err));
+    } else {
+      import('./src/components/searchbar.js').then(m => m.updateApiStatusBadge());
+    }
+    if (!workflowBar.innerHTML) renderWorkflow(workflowBar);
 
-    // Guard: if channels are still being loaded by auth.js, show a spinner
-    // and wait for the next state update. This prevents a race condition where
-    // the router triggers renderChannelSelector while auth is still fetching.
+    // Determine current route (let — may be updated below by replaceState)
+    let currentHash = window.location.hash.slice(1);
+    let isOnHub = currentHash === 'channel-selector';
+
+    // While channels load, show a workspace spinner (sidebar is already visible above)
     if (isLoadingChannels && !isOnHub) {
       if (workspace && !document.getElementById('ca-global-loader')) {
         showLoader(workspace, { title: 'Cargando tus proyectos...', subtitle: 'Sincronizando canales con el servidor', detail: 'SINCRONIZANDO' });
@@ -132,27 +143,23 @@ function initApp() {
       return;
     }
 
-    if (!activeChannelId && !isOnHub) {
-      // No channel selected → redirect to Hub
-      window.location.hash = '#channel-selector';
-      return; // The hashchange will trigger renderApp again
+    // Navigate to hub once per session after channels load.
+    // Uses replaceState (no hashchange event) so we can continue rendering in the same pass.
+    if (!hasNavigatedToHub && !isLoadingChannels) {
+      hasNavigatedToHub = true;
+      if (!isOnHub) {
+        history.replaceState(null, '', '#channel-selector');
+        currentHash = 'channel-selector';
+        isOnHub = true;
+      }
     }
 
-    // Render Shared Components (once)
-    if (!sidebar.innerHTML) renderSidebar(sidebar);
-    if (!topbar.innerHTML) {
-      renderSearchbar(topbar);
-      // Run initial key check once on startup
-      checkApiKey().catch(err => console.error('Initial API check failed:', err));
-    } else {
-        // ALWAYS update the API status badge in the topbar on any state change
-        import('./src/components/searchbar.js').then(m => m.updateApiStatusBadge());
+    if (!activeChannelId && !isOnHub) {
+      window.location.hash = '#channel-selector';
+      return;
     }
-    
-    if (!workflowBar.innerHTML) renderWorkflow(workflowBar);
 
     // 5. Selective Re-rendering
-    // Trigger a full re-render on: user change, channel change, session change, or channels loading state change
     const userId = currentUser?.id;
     const sessionId = session?.access_token;
     const channelCount = channels?.length ?? 0;
@@ -163,11 +170,11 @@ function initApp() {
       || (isLoadingChannels !== lastLoadingChannels)
       || (channelCount !== lastChannelCount);
 
-    // Capture whether the channel changed before updating lastChannelId
     const channelChanged = activeChannelId && activeChannelId !== lastChannelId;
 
     if (!routerInitialized) {
       hideLoader(false);
+      if (significantChange) renderSidebar(sidebar); // refresh sidebar with real data
       initRouter(workspace);
       routerInitialized = true;
     } else if (significantChange) {
@@ -179,15 +186,12 @@ function initApp() {
       updateWorkflow(workflowBar);
     }
 
-    // Update last seen state BEFORE triggering any async setState calls,
-    // to prevent loadChannelProjects→setState→renderApp→loadChannelProjects loops
     lastUserId = userId;
     lastChannelId = activeChannelId;
     lastSessionId = sessionId;
     lastLoadingChannels = isLoadingChannels;
     lastChannelCount = channelCount;
 
-    // Load projects after lastChannelId is updated so re-triggered renderApp won't loop
     if (channelChanged) {
       loadChannelProjects(activeChannelId);
     }
@@ -217,18 +221,15 @@ function initApp() {
 
   // Initialize auth
   initAuth(() => {
-    const { session, activeChannelId } = getState();
-    if (session) {
-      if (!window.location.hash || window.location.hash === '#login') {
-        // After login: go to Hub if no channel, else dashboard
-        window.location.hash = activeChannelId ? '#dashboard' : '#channel-selector';
-      }
-    } else {
-      // Clear hash if at root and not logged in (to avoid showing #dashboard)
-      if (window.location.hash === '#dashboard') {
+    const { session } = getState();
+    if (!session) {
+      // Sin sesión: limpiar cualquier hash de panel protegido
+      const hash = window.location.hash;
+      if (hash && hash !== '#login') {
         window.location.hash = '';
       }
     }
+    // Authenticated redirect to hub is handled in renderApp after channels load
   });
 }
 

@@ -65,7 +65,7 @@ export function renderSidebar(container) {
 
   container.innerHTML = `
     <div class="sidebar-header">
-      <div class="sidebar-logo-icon">${icon('crosshair', 18)}</div>
+      <img src="/logo.png" class="sidebar-logo-img" alt="ClickAngles" />
       <div class="sidebar-logo-text">
         <span class="sidebar-logo-name">ClickAngles</span>
         <span class="version-badge">v1.0</span>
