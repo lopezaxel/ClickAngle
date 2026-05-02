@@ -158,9 +158,20 @@ export async function renderCerebro(container) {
             </div>
           </div>
 
+          ${generatedAngles.length > 0 ? `
+          <div class="flex gap-sm">
+            <button class="btn btn-primary" style="flex:1;" id="btn-go-step2-view">
+              ${icon('crosshair', 16)} Ver Ángulos Generados
+            </button>
+            <button class="btn btn-secondary" id="btn-go-step2-new">
+              ${icon('refreshCw', 14)} Generar Nuevos
+            </button>
+          </div>
+          ` : `
           <button class="btn btn-primary w-full" id="btn-go-step2">
             ${icon('crosshair', 16)} Generar Ángulos de Click
           </button>
+          `}
           ` : `
           <div style="text-align:center;padding:var(--space-xl);color:var(--text-tertiary); opacity:0.5;">
             ${icon('brain', 48)}
@@ -315,35 +326,6 @@ export async function renderCerebro(container) {
         <button class="btn btn-primary btn-sm" id="btn-save-angles" ${count === 0 ? 'disabled' : ''}>
           ${icon('rocket', 14)} Pasar a la Fábrica${count > 0 ? ` (${count})` : ''}
         </button>
-      </div>
-    </div>
-
-    <!-- YouTube A/B test hint -->
-    <div class="card mb-md" style="background:rgba(245,158,11,0.06); border-color:rgba(245,158,11,0.3); padding:var(--space-sm) var(--space-md);">
-      <div class="flex items-center gap-sm">
-        <span style="font-size:18px;">🧪</span>
-        <div>
-          <div class="text-xs font-bold" style="color:var(--warning);">Estrategia de A/B Test para YouTube</div>
-          <div class="text-xs text-muted">YouTube permite testear hasta 3 miniaturas simultáneamente. <strong style="color:var(--text-primary);">Te recomendamos elegir tus 3 ángulos favoritos</strong> para maximizar los datos de CTR sin dispersar el tráfico.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ADN summary bar -->
-    <div class="card mb-lg" style="background:var(--bg-tertiary); border:none;">
-      <div class="flex gap-md" style="flex-wrap:wrap;">
-        <div style="flex:1; min-width:180px;">
-          <div style="font-size:10px; font-weight:800; color:var(--accent-light); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">HOOK</div>
-          <div class="text-xs text-muted" style="line-height:1.4;">${analysisResult?.hook || '—'}</div>
-        </div>
-        <div style="flex:1; min-width:180px;">
-          <div style="font-size:10px; font-weight:800; color:var(--warning); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">CONFLICTO</div>
-          <div class="text-xs text-muted" style="line-height:1.4;">${analysisResult?.tension || '—'}</div>
-        </div>
-        <div style="flex:1; min-width:180px;">
-          <div style="font-size:10px; font-weight:800; color:var(--success); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">PROMESA</div>
-          <div class="text-xs text-muted" style="line-height:1.4;">${analysisResult?.promise || '—'}</div>
-        </div>
       </div>
     </div>
 
@@ -523,6 +505,20 @@ export async function renderCerebro(container) {
     });
 
     document.getElementById('btn-go-step2')?.addEventListener('click', async () => {
+      step = 2;
+      generatedAngles = [];
+      selectedAngleIndices = [];
+      isGeneratingAngles = true;
+      render();
+      await generateAnglesForVideo();
+    });
+
+    document.getElementById('btn-go-step2-view')?.addEventListener('click', () => {
+      step = 2;
+      render();
+    });
+
+    document.getElementById('btn-go-step2-new')?.addEventListener('click', async () => {
       step = 2;
       generatedAngles = [];
       selectedAngleIndices = [];

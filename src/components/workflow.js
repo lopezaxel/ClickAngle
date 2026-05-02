@@ -35,14 +35,16 @@ function buildWorkflowHTML() {
 
     const videoCtxHTML = `
       <div class="workflow-video-ctx">
-        <button class="workflow-video-btn ${hasVideo ? 'workflow-video-btn--active' : 'workflow-video-btn--empty'}" id="btn-video-switcher" title="Cambiar video de trabajo">
-          ${icon('film', 14)}
-          <div class="workflow-video-text">
-            <span class="workflow-video-label">VIDEO</span>
-            <span class="workflow-video-name">${videoName}</span>
-          </div>
-          ${icon('chevronDown', 12)}
-        </button>
+        <div class="workflow-video-wrap ${hasVideo ? 'workflow-video-wrap--glowing' : ''}">
+          <button class="workflow-video-btn ${hasVideo ? 'workflow-video-btn--active' : 'workflow-video-btn--empty'}" id="btn-video-switcher" title="Cambiar video de trabajo">
+            ${icon('film', 16)}
+            <div class="workflow-video-text">
+              <span class="workflow-video-label">VIDEO ACTIVO</span>
+              <span class="workflow-video-name">${videoName}</span>
+            </div>
+            ${icon('chevronDown', 13)}
+          </button>
+        </div>
       </div>`;
 
     return `<div class="workflow-bar">

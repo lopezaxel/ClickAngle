@@ -3,19 +3,15 @@ import { getState, setState } from '../lib/state.js';
 import { createProject, setActiveProject } from '../lib/projects.js';
 import { inputDialog, toast } from '../lib/toast.js';
 
-const STEP_META = [
-  { key: 'cerebro',  label: 'Cerebro',  doneCheck: (dna) => !!(dna?.hook) },
-  { key: 'espionaje', label: 'Espionaje', doneCheck: (dna) => !!(dna?.espionaje_done) },
-  { key: 'engine',   label: 'Fábrica',  doneCheck: (dna) => !!(dna?.engine_done) },
-  { key: 'editor',   label: 'Editor',   doneCheck: (dna) => !!(dna?.editor_done) },
-];
-
 export function openVideoSwitcher() {
   document.getElementById('video-switcher-overlay')?.remove();
 
   const overlay = document.createElement('div');
   overlay.id = 'video-switcher-overlay';
   overlay.className = 'video-switcher-overlay';
+
+  let selectedProjectId = null;
+  let viewMode = 'grid';
 
   function buildProjectsHTML() {
     const { projects, activeProjectId } = getState();
@@ -28,31 +24,25 @@ export function openVideoSwitcher() {
       </div>`;
     }
 
-    return `<div class="vs-grid">
+    const containerClass = viewMode === 'list' ? 'vs-list' : 'vs-grid';
+
+    return `<div class="${containerClass}">
       ${projects.map(p => {
         const isActive = p.id === activeProjectId;
-        const dna = p.logic_dna;
+        const isSelected = p.id === selectedProjectId && !isActive;
         const date = new Date(p.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' });
 
-        const stepsHTML = STEP_META.map(s => {
-          const done = s.doneCheck(dna);
-          return `<div class="vs-step ${done ? 'vs-step--done' : ''}">
-            ${done ? icon('check', 9) : ''}
-            <span>${s.label}</span>
-          </div>`;
-        }).join('');
+        let cardClass = 'vs-card';
+        if (isActive) cardClass += ' vs-card--active';
+        if (isSelected) cardClass += ' vs-card--selected';
 
-        return `<div class="vs-card ${isActive ? 'vs-card--active' : ''}" data-project-id="${p.id}">
+        return `<div class="${cardClass}" data-project-id="${p.id}">
           <div class="vs-card-header">
             <div class="vs-card-icon">${icon('film', 13)}</div>
             <div class="vs-card-title" title="${p.title}">${p.title}</div>
-            ${isActive ? `<span class="vs-badge-active">Activo</span>` : ''}
+            ${isActive ? `<span class="vs-badge-active">En uso</span>` : ''}
           </div>
-          <div class="vs-steps">${stepsHTML}</div>
           <div class="vs-card-date">${date}</div>
-          ${!isActive
-            ? `<button class="vs-btn-select" data-project-id="${p.id}">Trabajar en este →</button>`
-            : `<div class="vs-btn-current">${icon('check', 11)} En uso</div>`}
         </div>`;
       }).join('')}
     </div>`;
@@ -65,7 +55,13 @@ export function openVideoSwitcher() {
           <h3 class="vs-title">${icon('film', 18)} Mis Videos</h3>
           <p class="vs-subtitle">Cada video guarda su propio flujo de trabajo</p>
         </div>
-        <button class="btn btn-ghost btn-sm" id="vs-close">${icon('x', 16)}</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="vs-view-toggle">
+            <button class="vs-view-btn vs-view-btn--active" id="vs-view-grid" title="Vista cuadrícula">${icon('grid', 15)}</button>
+            <button class="vs-view-btn" id="vs-view-list" title="Vista lista">${icon('list', 15)}</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="vs-close">${icon('x', 16)}</button>
+        </div>
       </div>
 
       <div class="vs-actions">
@@ -74,31 +70,100 @@ export function openVideoSwitcher() {
         </button>
       </div>
 
-      <div id="vs-projects-container">
+      <div id="vs-projects-container" class="vs-projects-scroll">
         ${buildProjectsHTML()}
+      </div>
+
+      <div class="vs-footer">
+        <p class="vs-footer-hint">Clic para seleccionar · Doble clic para abrir directamente</p>
+        <button class="vs-btn-work" id="vs-btn-work" disabled>
+          Trabajar en este
+        </button>
       </div>
     </div>
   `;
 
   document.body.appendChild(overlay);
 
-  function bindProjectClicks() {
-    overlay.querySelectorAll('.vs-btn-select').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.projectId;
-        setActiveProject(id);
-        overlay.remove();
-        // Re-render the current panel with the new project loaded
-        const workspace = document.getElementById('workspace');
-        if (workspace) {
-          const { reRenderCurrentRoute } = await import('../router.js');
-          reRenderCurrentRoute(workspace);
-        }
-      });
+  function updateWorkButton() {
+    const btn = overlay.querySelector('#vs-btn-work');
+    if (!btn) return;
+    if (selectedProjectId) {
+      btn.disabled = false;
+      btn.classList.add('vs-btn-work--ready');
+    } else {
+      btn.disabled = true;
+      btn.classList.remove('vs-btn-work--ready');
+    }
+  }
+
+  async function workOnProject(id) {
+    setActiveProject(id);
+    overlay.remove();
+    const workspace = document.getElementById('workspace');
+    if (workspace) {
+      const { reRenderCurrentRoute } = await import('../router.js');
+      reRenderCurrentRoute(workspace);
+    }
+  }
+
+  function refreshProjects() {
+    overlay.querySelector('#vs-projects-container').innerHTML = buildProjectsHTML();
+    bindContainerEvents();
+  }
+
+  function bindContainerEvents() {
+    const container = overlay.querySelector('#vs-projects-container');
+
+    container.addEventListener('click', (e) => {
+      const card = e.target.closest('.vs-card');
+      if (!card) return;
+      const id = card.dataset.projectId;
+      const { activeProjectId } = getState();
+      if (id === activeProjectId) return;
+
+      container.querySelectorAll('.vs-card--selected').forEach(c => c.classList.remove('vs-card--selected'));
+      card.classList.add('vs-card--selected');
+      selectedProjectId = id;
+      updateWorkButton();
+    });
+
+    container.addEventListener('dblclick', async (e) => {
+      const card = e.target.closest('.vs-card');
+      if (!card) return;
+      const id = card.dataset.projectId;
+      const { activeProjectId } = getState();
+      if (id === activeProjectId) return;
+      await workOnProject(id);
     });
   }
 
-  bindProjectClicks();
+  bindContainerEvents();
+
+  overlay.querySelector('#vs-btn-work').addEventListener('click', async () => {
+    if (!selectedProjectId) return;
+    await workOnProject(selectedProjectId);
+  });
+
+  overlay.querySelector('#vs-view-grid').addEventListener('click', () => {
+    if (viewMode === 'grid') return;
+    viewMode = 'grid';
+    selectedProjectId = null;
+    overlay.querySelector('#vs-view-grid').classList.add('vs-view-btn--active');
+    overlay.querySelector('#vs-view-list').classList.remove('vs-view-btn--active');
+    updateWorkButton();
+    refreshProjects();
+  });
+
+  overlay.querySelector('#vs-view-list').addEventListener('click', () => {
+    if (viewMode === 'list') return;
+    viewMode = 'list';
+    selectedProjectId = null;
+    overlay.querySelector('#vs-view-list').classList.add('vs-view-btn--active');
+    overlay.querySelector('#vs-view-grid').classList.remove('vs-view-btn--active');
+    updateWorkButton();
+    refreshProjects();
+  });
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) overlay.remove();
@@ -119,8 +184,7 @@ export function openVideoSwitcher() {
 
     try {
       await createProject(activeChannelId, title.trim());
-      overlay.querySelector('#vs-projects-container').innerHTML = buildProjectsHTML();
-      bindProjectClicks();
+      refreshProjects();
       toast('Video creado — ahora podés empezar el flujo', 'success');
     } catch (err) {
       toast('Error al crear el video: ' + err.message, 'error');

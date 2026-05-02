@@ -52,9 +52,5 @@ export function updateApiStatusBadge() {
         <span style="font-size:10px; font-weight:700; color:${status.color}; text-transform:uppercase;">${status.text}</span>
       </div>
       <button class="btn-icon tooltip" data-tooltip="Notificaciones" id="btn-notifications">${icon('bell', 16)}</button>
-      <button class="btn-icon tooltip" data-tooltip="Generación rápida" id="btn-quick-gen">${icon('bolt', 16)}</button>
-      <button class="btn btn-primary btn-sm" id="btn-new-project">
-        ${icon('plus', 14)} Nuevo Proyecto
-      </button>
   `;
 }

@@ -344,7 +344,9 @@ export async function initAuth(onReady) {
     supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_OUT') {
             loadingUserId = null;
-            authInitialized = false;
+            // authInitialized stays true — the startup race condition (SIGNED_IN before getSession()
+            // returns) can never recur after initial load, so resetting it here would cause the
+            // next real login's SIGNED_IN to be misidentified as a startup event and skip channel loading.
             setState({ session: null, currentUser: null, channels: [], activeChannelId: null, isAuthInitializing: false, isLoadingChannels: false });
             finish();
         } else if (event === 'TOKEN_REFRESHED') {
