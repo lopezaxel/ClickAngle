@@ -1,6 +1,17 @@
 import { supabase } from './supabase.js';
 import { setState } from './state.js';
 
+let _cachedApiKey = null;
+let _apiKeyCachedAt = 0;
+async function getApiKey() {
+    if (_cachedApiKey && (Date.now() - _apiKeyCachedAt) < 5 * 60 * 1000) return _cachedApiKey;
+    const { data, error } = await supabase.rpc('get_decrypted_api_key', { key_name: 'google_ai_key' });
+    if (error || !data) throw new Error("API Key de Google no configurada. Verificá en Settings.");
+    _cachedApiKey = data.trim();
+    _apiKeyCachedAt = Date.now();
+    return _cachedApiKey;
+}
+
 /**
  * Intelligence Layer for ClickAngle
  * Handles specialized prompts and AI calls for different creative phases.
@@ -64,6 +75,8 @@ Combina exactamente estos arquetipos psicológicos (uno por ángulo, sin repetir
 3. AUTORIDAD — El experto que tiene LA respuesta definitiva.
 4. CONTRASTE EXTREMO — Antes vs Después, Verdad vs Mentira, Ganador vs Perdedor.
 5. URGENCIA/FOMO — La oportunidad o advertencia que expira.
+
+IMPORTANTE SOBRE ÁNGULOS EXISTENTES: Si el CONTEXTO incluye un campo "existing_angles" con nombres de ángulos ya generados, debes generar 5 ángulos COMPLETAMENTE NUEVOS que no repitan ni parezcan variaciones de los existentes. Usa los mismos arquetipos pero con enfoques narrativos y visuales radicalmente distintos.
 
 Para cada ángulo devolvé:
 - name: nombre del ángulo en 2-4 palabras (ej: "Miedo al Fracaso")
@@ -372,14 +385,7 @@ export async function checkApiKey() {
 
 export async function callAI(promptType, userContent, context = {}) {
     try {
-        const { data: apiKeyData, error: keyError } = await supabase.rpc('get_decrypted_api_key', {
-            key_name: 'google_ai_key'
-        });
-
-        if (keyError || !apiKeyData) {
-            setState({ apiKeyStatus: 'not_connected' });
-            throw new Error("API Key de Google no configurada. Verificá en Settings.");
-        }
+        const apiKeyData = await getApiKey();
 
         const systemPrompt = SYSTEM_PROMPTS[promptType];
         const model = MODEL_MAPPING[promptType] || 'gemini-3-flash-preview';
@@ -489,11 +495,8 @@ export async function callAI(promptType, userContent, context = {}) {
  *   When provided, the image is fetched and sent as inline data so the model uses
  *   the REAL face instead of generating a fictional one from a text description.
  */
-export async function generateImage(prompt, faceImageUrl = null, safetyFallbackPrompt = null) {
-    const { data: apiKeyData, error: keyError } = await supabase.rpc('get_decrypted_api_key', {
-        key_name: 'google_ai_key'
-    });
-    if (keyError || !apiKeyData) throw new Error("API Key de Google no configurada. Verificá en Settings.");
+export async function generateImage(prompt, faceImageUrl = null, safetyFallbackPrompt = null, signal = null) {
+    const apiKeyData = await getApiKey();
 
 
     const imgUrl = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent?key=${apiKeyData.trim()}`;
@@ -502,12 +505,14 @@ export async function generateImage(prompt, faceImageUrl = null, safetyFallbackP
         const p = [];
         if (faceUrl) {
             try {
-                const ir = await fetch(faceUrl);
+                const ir = await fetch(faceUrl, signal ? { signal } : undefined);
                 if (ir.ok) {
                     const bl = await ir.blob();
                     const ab = await bl.arrayBuffer();
                     const u8 = new Uint8Array(ab);
-                    let bin = ''; for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+                    let bin = '';
+                    const chunk = 8192;
+                    for (let i = 0; i < u8.length; i += chunk) bin += String.fromCharCode(...u8.subarray(i, i + chunk));
                     p.push({ inlineData: { mimeType: bl.type || 'image/jpeg', data: btoa(bin) } });
                 }
             } catch (e) { console.warn('[Face] Could not load reference photo:', e.message); }
@@ -516,7 +521,7 @@ export async function generateImage(prompt, faceImageUrl = null, safetyFallbackP
 
         const pl = {
             contents: [{ parts: p }],
-            generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: '2K' } },
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9' } },
             safetySettings: [
                 { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
                 { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
@@ -524,12 +529,15 @@ export async function generateImage(prompt, faceImageUrl = null, safetyFallbackP
                 { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
             ]
         };
-        const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pl) };
+        const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pl), ...(signal ? { signal } : {}) };
         let res;
         for (let i = 0; i <= 3; i++) {
             res = await fetch(imgUrl, opts);
             if (res.status !== 503) break;
-            if (i < 3) await new Promise(r => setTimeout(r, (i + 1) * 8000));
+            if (i < 3) await new Promise((resolve, reject) => {
+                const t = setTimeout(resolve, (i + 1) * 8000);
+                signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+            });
         }
         return res;
     }

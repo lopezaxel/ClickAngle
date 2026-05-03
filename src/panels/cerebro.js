@@ -42,6 +42,49 @@ export async function renderCerebro(container) {
 
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
+  function syncFixedCTA() {
+    const count = selectedAngleIndices.length;
+    const show = step === 2 && generatedAngles.length > 0;
+    let footer = document.getElementById('cerebro-fixed-cta');
+    if (!footer) {
+      footer = document.createElement('div');
+      footer.id = 'cerebro-fixed-cta';
+      document.body.appendChild(footer);
+      const cleanup = () => {
+        document.getElementById('cerebro-fixed-cta')?.remove();
+        window.removeEventListener('hashchange', cleanup);
+      };
+      window.addEventListener('hashchange', cleanup);
+    }
+    const sidebarW = document.getElementById('sidebar')?.offsetWidth ?? 72;
+    footer.style.cssText = `
+      position: fixed; bottom: 0; left: ${sidebarW}px; right: 0;
+      padding: 32px 40px 20px;
+      background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, transparent 100%);
+      backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      display: ${show ? 'flex' : 'none'};
+      justify-content: center; z-index: 100;
+      pointer-events: ${show ? 'all' : 'none'};
+      transition: left 0.2s ease;
+    `;
+    footer.innerHTML = `
+      <button id="btn-save-angles" ${count === 0 ? 'disabled' : ''}
+        style="
+          padding: 15px 52px; font-size: 14px; font-weight: 900;
+          letter-spacing: 2px; text-transform: uppercase;
+          border-radius: var(--radius-md);
+          border: 2px solid ${count === 0 ? 'rgba(255,255,255,0.08)' : '#22c55e'};
+          background: ${count === 0 ? 'rgba(255,255,255,0.04)' : 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)'};
+          color: ${count === 0 ? 'rgba(255,255,255,0.2)' : 'white'};
+          cursor: ${count === 0 ? 'not-allowed' : 'pointer'};
+          box-shadow: ${count === 0 ? 'none' : '0 0 28px rgba(34,197,94,0.4)'};
+          display: flex; align-items: center; gap: 10px;
+        ">
+        ${icon('rocket', 18)}
+        ${count === 0 ? 'Seleccioná al menos un ángulo' : `PASAR ESTOS ÁNGULOS A LA FÁBRICA${count > 1 ? ` (${count})` : ''}`}
+      </button>`;
+  }
+
   function render() {
     container.innerHTML = `<div class="animate-in">
     <div class="section-header">
@@ -70,6 +113,7 @@ export async function renderCerebro(container) {
     ${step === 1 ? renderStep1() : renderStep2()}
     </div>`;
 
+    syncFixedCTA();
     bindEvents();
   }
 
@@ -302,30 +346,25 @@ export async function renderCerebro(container) {
 
   function renderStep2() {
     const count = selectedAngleIndices.length;
-    const LABEL_LETTERS = ['A', 'B', 'C', 'D', 'E'];
-    const PSYCH_COLORS = {
-      0: { bg: 'rgba(220,38,38,0.1)', border: 'rgba(220,38,38,0.35)', badge: '#ef4444', label: 'MIEDO' },
-      1: { bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.35)', badge: '#a855f7', label: 'CURIOSIDAD' },
-      2: { bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.35)', badge: '#3b82f6', label: 'AUTORIDAD' },
-      3: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.35)', badge: '#f59e0b', label: 'CONTRASTE' },
-      4: { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.35)', badge: '#10b981', label: 'URGENCIA' },
-    };
+    const LABEL_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T'];
+    const PSYCH_COLORS = [
+      { bg: 'rgba(220,38,38,0.1)',  border: 'rgba(220,38,38,0.35)',  badge: '#ef4444', label: 'MIEDO' },
+      { bg: 'rgba(168,85,247,0.1)', border: 'rgba(168,85,247,0.35)', badge: '#a855f7', label: 'CURIOSIDAD' },
+      { bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.35)', badge: '#3b82f6', label: 'AUTORIDAD' },
+      { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.35)', badge: '#f59e0b', label: 'CONTRASTE' },
+      { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.35)', badge: '#10b981', label: 'URGENCIA' },
+    ];
 
     return `
     <!-- Top bar -->
     <div class="mb-md flex items-center justify-between" style="flex-wrap:wrap; gap:var(--space-sm);">
       <button class="btn btn-secondary btn-sm" id="btn-back-step1">${icon('arrowLeft', 14)} Volver al Guión</button>
-      <div class="flex items-center gap-sm" style="flex-wrap:wrap;">
-        <!-- A/B/C counter -->
-        <div style="background:var(--bg-tertiary); border-radius:var(--radius-md); padding:6px 12px; border:1px solid var(--border);">
-          <span class="text-xs text-muted">Seleccionados para producir: </span>
-          <span class="font-bold" style="color:${count === 0 ? 'var(--text-muted)' : count <= 3 ? 'var(--success)' : 'var(--warning)'}; font-size:14px;">${count}</span>
-          <span class="text-xs text-muted"> / 5</span>
-          ${count > 0 ? `<span class="text-xs font-bold" style="margin-left:6px; color:var(--text-secondary);">[${selectedAngleIndices.map(i => LABEL_LETTERS[i]).join('/')}]</span>` : ''}
-        </div>
-        <button class="btn btn-primary btn-sm" id="btn-save-angles" ${count === 0 ? 'disabled' : ''}>
-          ${icon('rocket', 14)} Pasar a la Fábrica${count > 0 ? ` (${count})` : ''}
-        </button>
+      <!-- A/B/C counter -->
+      <div style="background:var(--bg-tertiary); border-radius:var(--radius-md); padding:6px 12px; border:1px solid var(--border);">
+        <span class="text-xs text-muted">Seleccionados para producir: </span>
+        <span class="font-bold" style="color:${count === 0 ? 'var(--text-muted)' : count <= 3 ? 'var(--success)' : 'var(--warning)'}; font-size:14px;">${count}</span>
+        <span class="text-xs text-muted"> / 5</span>
+        ${count > 0 ? `<span class="text-xs font-bold" style="margin-left:6px; color:var(--text-secondary);">[${selectedAngleIndices.map(i => LABEL_LETTERS[i]).join('/')}]</span>` : ''}
       </div>
     </div>
 
@@ -334,7 +373,7 @@ export async function renderCerebro(container) {
       <div class="text-xs font-bold text-muted" style="letter-spacing:1px; text-transform:uppercase;">${icon('crosshair', 12)} 5 Ángulos Generados por IA — Seleccioná los que vas a producir</div>
       ${isGeneratingAngles ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando ángulos...</span>` : `
         <button class="btn btn-secondary btn-xs" id="btn-regenerate-angles" style="font-size:10px; padding:4px 10px;">
-          ${icon('refreshCw', 10)} Regenerar
+          ${icon('refreshCw', 10)} Generar más ángulos
         </button>`}
     </div>
 
@@ -349,11 +388,11 @@ export async function renderCerebro(container) {
         <button class="btn btn-primary btn-sm mt-md" id="btn-regenerate-angles">Generar Ángulos</button>
       </div>
     ` : `
-    <div class="grid-3" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+    <div class="grid-3" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); padding-bottom: 100px;">
       ${generatedAngles.map((angle, i) => {
       const isSelected = selectedAngleIndices.includes(i);
-      const colors = PSYCH_COLORS[i] || PSYCH_COLORS[0];
-      const letter = LABEL_LETTERS[i];
+      const colors = PSYCH_COLORS[i % PSYCH_COLORS.length];
+      const letter = LABEL_LETTERS[i] || String(i + 1);
       const selectionOrder = selectedAngleIndices.indexOf(i);
       return `
         <div class="angle-card angle-selectable ${isSelected ? 'angle-selected' : ''}" data-angle-index="${i}"
@@ -520,8 +559,6 @@ export async function renderCerebro(container) {
 
     document.getElementById('btn-go-step2-new')?.addEventListener('click', async () => {
       step = 2;
-      generatedAngles = [];
-      selectedAngleIndices = [];
       isGeneratingAngles = true;
       render();
       await generateAnglesForVideo();
@@ -620,10 +657,11 @@ export async function renderCerebro(container) {
   async function generateAnglesForVideo() {
     isGeneratingAngles = true;
     render();
+    const nextLetter = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T'][generatedAngles.length] || String(generatedAngles.length + 1);
     showLoader(container, {
-      title: 'Generando Ángulos de Click',
-      subtitle: 'La IA está creando 5 ángulos psicológicamente opuestos: Miedo, Curiosidad, Autoridad, Contraste y Urgencia.',
-      detail: 'ANGLES GENERATION — A / B / C / D / E',
+      title: 'Generando más Ángulos de Click',
+      subtitle: `La IA está creando 5 ángulos psicológicamente opuestos (${nextLetter} en adelante).`,
+      detail: 'ANGLES GENERATION',
     });
     try {
       const textContent = scriptText || contextText;
@@ -632,9 +670,10 @@ export async function renderCerebro(container) {
         tension: analysisResult?.tension || '',
         promise: analysisResult?.promise || '',
         visual_briefing: analysisResult?.visual_briefing || null,
+        existing_angles: generatedAngles.map(a => a.name),
       };
       const result = await callAI('ANGLES_GENERATION', textContent, context);
-      generatedAngles = result?.angles || [];
+      generatedAngles = [...generatedAngles, ...(result?.angles || [])];
       // Persist generated angles so they survive panel navigation
       const { activeProjectId } = getState();
       if (activeProjectId && generatedAngles.length > 0) {

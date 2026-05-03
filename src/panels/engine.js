@@ -200,6 +200,7 @@ export async function renderEngine(container) {
   let selectedStyleId = null;
   let isGenerating = false;           // true only during batch "Generate All" / "Sintetizar"
   let generatingAnglesSet = new Set(); // per-angle index: allows concurrent individual generation
+  let generatingControllers = new Map(); // angleIndex -> AbortController
   let expandingVariantsSet = new Set(); // per-variant id: allows concurrent expansion
   let batchAngleSelection = null; // null = all selected; array of indices = specific selection
   let faceEnabled = null;         // null = follow DNA match default; true/false = explicit user choice
@@ -960,7 +961,7 @@ export async function renderEngine(container) {
     return { project, style, formats, useFace, selectedFace, textMode };
   }
 
-  async function generateSingleAngle(angleIndex, overrideTextMode = null) {
+  async function generateSingleAngle(angleIndex, overrideTextMode = null, signal = null) {
     const effectiveTextMode = overrideTextMode !== null ? overrideTextMode : textMode;
     let ctx = getGenContext();
 
@@ -1003,7 +1004,7 @@ export async function renderEngine(container) {
     const angle = (project.logic_dna?.selected_angles || [])[angleIndex];
     if (!angle) return;
     const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode: tMode });
-    await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
+    await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null, signal });
   }
 
   // ─── STEP 5: Ángulos + Generar ────────────────────────────────────────────
@@ -1013,7 +1014,7 @@ export async function renderEngine(container) {
     if (selectedAngles.length === 0) return `<div class="card" style="text-align:center;padding:var(--space-xl);opacity:0.6;">${icon('crosshair', 32)}<p class="text-sm text-muted mt-sm">Este proyecto no tiene ángulos.<br/>Volvé a El Cerebro y elegí ángulos.</p></div>`;
 
     const CARDS_PER_PAGE = 4;
-    const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const letters = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T'];
     const totalPages = Math.ceil(selectedAngles.length / CARDS_PER_PAGE);
     const safePage = Math.min(anglesPage, Math.max(0, totalPages - 1));
     const pageAngles = selectedAngles.slice(safePage * CARDS_PER_PAGE, (safePage + 1) * CARDS_PER_PAGE);
@@ -1057,7 +1058,8 @@ export async function renderEngine(container) {
             <!-- Actions -->
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);">
               ${isGen
-                ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando...</span>`
+                ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando...</span>
+                   <button class="btn btn-xs btn-cancel-angle" data-angle-index="${globalIdx}" style="margin-left:auto;font-size:10px;padding:3px 10px;border:1px solid rgba(220,38,38,0.4);background:rgba(220,38,38,0.08);color:#ef4444;border-radius:var(--radius-sm);cursor:pointer;">✕ Cancelar</button>`
                 : hasImg
                   ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${letters[globalIdx]}.png">${icon('download', 11)} Descargar</button>
                      <button class="btn btn-secondary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${generatingAnglesSet.has(globalIdx) ? 'disabled' : ''} style="font-size:10px;">${icon('rocket', 10)} Regenerar</button>
@@ -1444,8 +1446,7 @@ export async function renderEngine(container) {
             try {
               const variationFaceUrl = baseVariant.ai_metadata?.face_image_url || null;
               const dataUrl = await generateImage(variationPrompt, variationFaceUrl);
-              const { data: sessionData } = await supabase.auth.getSession();
-              const userId = sessionData?.session?.user?.id;
+              const userId = getState().session?.user?.id;
               const blob = await fetch(dataUrl).then(r => r.blob());
               const mimeType = blob.type || 'image/jpeg';
               const ext = mimeType.includes('png') ? 'png' : 'jpg';
@@ -1819,8 +1820,7 @@ export async function renderEngine(container) {
             try {
               const variationFaceUrl = baseVariant.ai_metadata?.face_image_url || null;
               const dataUrl = await generateImage(variationPrompt, variationFaceUrl);
-              const { data: sessionData } = await supabase.auth.getSession();
-              const userId = sessionData?.session?.user?.id;
+              const userId = getState().session?.user?.id;
               const blob = await fetch(dataUrl).then(r => r.blob());
               const mimeType = blob.type || 'image/jpeg';
               const ext = mimeType.includes('png') ? 'png' : 'jpg';
@@ -1926,19 +1926,30 @@ export async function renderEngine(container) {
         if (isGenerating) return; // batch en progreso: esperar
         const angleIdx = parseInt(btn.dataset.angleIndex);
         if (generatingAnglesSet.has(angleIdx)) return; // este ángulo ya genera
-        // Capture textMode NOW — before rerenderStep() touches the DOM
         const capturedTextMode = textMode;
+        const controller = new AbortController();
+        generatingControllers.set(angleIdx, controller);
         generatingAnglesSet.add(angleIdx);
-        rerenderStep(); // muestra spinner inline en la card
+        rerenderStep();
         try {
-          await generateSingleAngle(angleIdx, capturedTextMode);
+          await generateSingleAngle(angleIdx, capturedTextMode, controller.signal);
         } catch (err) {
-          toast('Error al generar: ' + err.message, 'error');
+          if (err.name !== 'AbortError') toast('Error al generar: ' + err.message, 'error');
         } finally {
           generatingAnglesSet.delete(angleIdx);
+          generatingControllers.delete(angleIdx);
           await reloadProjects();
           render();
         }
+      });
+    });
+
+    // ── Cancel in-progress generation ──
+    container.querySelectorAll('.btn-cancel-angle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const angleIdx = parseInt(btn.dataset.angleIndex);
+        generatingControllers.get(angleIdx)?.abort();
       });
     });
 
@@ -2024,8 +2035,7 @@ export async function renderEngine(container) {
             rerenderStep(); // muestra spinner inline en la card recién insertada
             try {
               const dataUrl = await generateImage(variationPrompt, baseVariant.ai_metadata?.face_image_url || null);
-              const { data: sessionData } = await supabase.auth.getSession();
-              const userId = sessionData?.session?.user?.id;
+              const userId = getState().session?.user?.id;
               const blob = await fetch(dataUrl).then(r => r.blob());
               const mimeType = blob.type || 'image/jpeg';
               const ext = mimeType.includes('png') ? 'png' : 'jpg';
@@ -2320,7 +2330,7 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
 
   // ── Helper: generate one image and save to DB ─────────────────────────────
   // Inserts placeholder, immediately updates UI, then generates image in background
-  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode = 'none', faceImageUrl = null, parentId = null }) {
+  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode = 'none', faceImageUrl = null, parentId = null, signal = null }) {
     const isRealAngleId = angle.id && !String(angle.id).startsWith('ai-');
     const { data: inserted, error: insertErr } = await supabase
       .from('thumbnail_variants')
@@ -2352,9 +2362,8 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
 
     try {
       const safetyFallback = buildSafetyFallbackPrompt(angle, project, style);
-      const dataUrl = await generateImage(imagePrompt, faceImageUrl, safetyFallback);
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
+      const dataUrl = await generateImage(imagePrompt, faceImageUrl, safetyFallback, signal);
+      const userId = getState().session?.user?.id;
       const blob = await fetch(dataUrl).then(r => r.blob());
       const mimeType = blob.type || 'image/jpeg';
       const ext = mimeType.includes('png') ? 'png' : 'jpg';
@@ -2377,6 +2386,13 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
       render();
 
     } catch (imgErr) {
+      if (imgErr.name === 'AbortError') {
+        // User cancelled — delete the placeholder cleanly
+        await supabase.from('thumbnail_variants').delete().eq('id', inserted.id).catch(() => {});
+        const localIdx = project.thumbnail_variants?.findIndex(v => v.id === inserted.id);
+        if (localIdx !== -1) project.thumbnail_variants.splice(localIdx, 1);
+        throw imgErr; // re-throw so the caller knows it was aborted
+      }
       console.error('Image gen failed:', imgErr);
       await supabase.from('thumbnail_variants').update({
         ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message }
