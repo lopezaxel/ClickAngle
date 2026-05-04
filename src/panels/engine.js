@@ -5,6 +5,7 @@ import { icon } from '../icons.js';
 import { callAI, generateImage } from '../lib/intelligence.js';
 import { toast, confirmDialog, inputDialog } from '../lib/toast.js';
 import { showLoader, updateLoader, hideLoader, ensureLoaderStyles } from '../lib/loader.js';
+import { openVideoSwitcher } from '../components/video-switcher.js';
 
 // ─── Creative Config ────────────────────────────────────────────────────────
 
@@ -339,7 +340,6 @@ export async function renderEngine(container) {
         `}
       </div>
 
-      ${project && variants.length > 0 ? renderVariantsHistory(project, variants) : ''}
     </div>`;
 
     bindEvents();
@@ -1028,7 +1028,9 @@ export async function renderEngine(container) {
         .filter(v => v.ai_metadata?.angle_name === angle.name)
         .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       const latest = angleMasters[0] || null;
-      const angleChildren = latest ? children.filter(c => c.ai_metadata?.parent_id === latest.id) : [];
+      const allAngleChildren = children.filter(c => angleMasters.some(m => c.ai_metadata?.parent_id === m.id));
+      const olderVersions = angleMasters.slice(1);
+      const allHistory = [...allAngleChildren, ...olderVersions];
       const isGen = latest?.ai_metadata?.generating || generatingAnglesSet.has(globalIdx);
       const hasImg = !!latest?.image_url;
       const hasError = !!latest?.ai_metadata?.error;
@@ -1036,8 +1038,8 @@ export async function renderEngine(container) {
       const isExpanding = expandingVariantsSet.has(latest?.id);
 
       return `
-      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;animation:fadeIn 0.3s ease both;">
-        <div style="display:flex;min-height:140px;">
+      <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px;animation:fadeIn 0.3s ease both;">
+        <div style="display:flex;min-height:210px;">
           <!-- Left: info + actions -->
           <div style="flex:1;padding:18px 20px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:8px;min-width:0;">
             <div style="display:flex;align-items:flex-start;gap:10px;">
@@ -1076,10 +1078,9 @@ export async function renderEngine(container) {
                     : `<button class="btn btn-primary btn-sm btn-generate-angle" data-angle-index="${globalIdx}" ${isGenerating || generatingAnglesSet.has(globalIdx) ? 'disabled' : ''} style="font-weight:700;">${icon('rocket', 13)} Generar miniatura</button>`
               }
             </div>
-            ${angleChildren.length > 0 ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">${icon('image',10)} ${angleChildren.length} variación${angleChildren.length!==1?'es':''}</div>` : ''}
           </div>
           <!-- Right: thumbnail -->
-          <div style="width:260px;flex-shrink:0;position:relative;background:var(--bg-tertiary);">
+          <div style="width:360px;flex-shrink:0;position:relative;background:var(--bg-tertiary);">
             ${isGen
               ? thumbLoaderHTML()
               : hasImg
@@ -1100,25 +1101,36 @@ export async function renderEngine(container) {
             }
           </div>
         </div>
-        ${angleChildren.length > 0 ? `
-        <div style="border-top:1px solid var(--border);padding:12px 20px;background:rgba(0,0,0,0.15);">
-          <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Variaciones (${angleChildren.length})</div>
+        ${allHistory.length > 0 ? `
+        <div style="border-top:1px solid var(--border);padding:12px 20px;background:rgba(0,0,0,0.12);">
+          <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">
+            ${allAngleChildren.length > 0 && olderVersions.length > 0
+              ? `Variaciones (${allAngleChildren.length}) · Versiones anteriores (${olderVersions.length})`
+              : allAngleChildren.length > 0
+                ? `Variaciones (${allAngleChildren.length})`
+                : `Versiones anteriores (${olderVersions.length})`}
+          </div>
           <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
-            ${angleChildren.map((c, ci) => `
-            <div style="flex-shrink:0;width:140px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);">
-              ${c.image_url
-                ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
-                : c.ai_metadata?.generating
-                  ? `${thumbLoaderHTML('', '')}
-                     <button class="btn-cancel-variant" data-variant-id="${c.id}" title="Cancelar" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(220,38,38,0.9);border:none;border-radius:3px;padding:2px 8px;cursor:pointer;color:white;font-size:9px;font-weight:700;z-index:20;white-space:nowrap;display:flex;align-items:center;gap:3px;">${icon('x',8)} Cancelar</button>`
-                  : `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:4px;padding:8px;text-align:center;">
-                       <div style="color:var(--danger);font-size:9px;opacity:0.7;">${icon('alertTriangle',12)}</div>
-                       <div style="color:var(--text-tertiary);font-size:8px;">Error</div>
-                     </div>`
-              }
-              ${!c.ai_metadata?.generating ? `<button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;font-size:10px;">${icon('trash',9)}</button>` : ''}
-              ${c.image_url ? `<button class="btn-download" data-src="${c.image_url}" data-name="var-${letters[globalIdx]}-${ci+1}.png" style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:var(--radius-sm);padding:2px 6px;cursor:pointer;color:white;font-size:9px;display:flex;align-items:center;gap:3px;">${icon('download',9)}</button>` : ''}
-            </div>`).join('')}
+            ${allHistory.map((c, ci) => {
+              const isOld = olderVersions.includes(c);
+              const isStuck = c.ai_metadata?.generating && !c.image_url;
+              return `
+              <div style="flex-shrink:0;width:180px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);${isOld ? 'opacity:0.75;' : ''}">
+                ${c.image_url
+                  ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
+                  : isStuck
+                    ? `${thumbLoaderHTML('', '')}
+                       <button class="btn-cancel-variant" data-variant-id="${c.id}" title="Cancelar" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(220,38,38,0.9);border:none;border-radius:3px;padding:2px 8px;cursor:pointer;color:white;font-size:9px;font-weight:700;z-index:20;white-space:nowrap;display:flex;align-items:center;gap:3px;">${icon('x',8)} Cancelar</button>`
+                    : `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:4px;padding:8px;text-align:center;">
+                         <div style="color:var(--danger);opacity:0.7;">${icon('alertTriangle',12)}</div>
+                         <div style="color:var(--text-tertiary);font-size:8px;">Error</div>
+                       </div>`
+                }
+                ${isOld ? `<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.7);border-radius:3px;padding:1px 5px;font-size:9px;color:rgba(255,255,255,0.7);">anterior</div>` : ''}
+                ${!isStuck ? `<button class="btn-delete-variant" data-variant-id="${c.id}" title="Eliminar" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;">${icon('trash',9)}</button>` : ''}
+                ${c.image_url ? `<button class="btn-download" data-src="${c.image_url}" data-name="var-${letters[globalIdx]}-${ci+1}.png" style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:var(--radius-sm);padding:2px 6px;cursor:pointer;color:white;font-size:9px;display:flex;align-items:center;gap:3px;">${icon('download',9)}</button>` : ''}
+              </div>`;
+            }).join('')}
           </div>
         </div>` : ''}
       </div>`;
@@ -1856,7 +1868,7 @@ export async function renderEngine(container) {
 
   function bindStepContentEvents() {
     // ── Project modal button ──
-    document.getElementById('btn-open-project-modal')?.addEventListener('click', openProjectModal);
+    document.getElementById('btn-open-project-modal')?.addEventListener('click', openVideoSwitcher);
 
     // ── Format card selection (step 2) ──
     container.querySelectorAll('.format-card').forEach(card => {
@@ -2160,9 +2172,10 @@ export async function renderEngine(container) {
       : `Psychological angle: "${angle.name}"${angle.psychology_text ? ` — ${angle.psychology_text}` : ''}`;
 
     // === LAYER 5: BRAND ADN (tone, identity, gallery style, market contrast) ===
-    const adn = brandKit?.detailed_adn?.synthesis || brandKit?.detailed_adn || {};
-    const brandTone = adn.tone || 'Professional and impactful';
-    const brandBranding = adn.branding || 'Modern visual identity';
+    const adnData = brandKit?.detailed_adn;
+    const adn = adnData?.synthesis || adnData || {};
+    const brandTone = adnData ? (adn.tone || '') : '';
+    const brandBranding = adnData ? (adn.branding || '') : '';
     const styleSummary = brandKit?.style_summary || {};
     const winningStyle = styleSummary.visual_style || styleSummary.winning_pattern || '';
     const palette = styleSummary.palette?.join(', ') || '';
@@ -2171,7 +2184,7 @@ export async function renderEngine(container) {
     const avoidColors = mc.avoid_colors?.join(', ') || '';
     const crowdPattern = mc.crowd_pattern || '';
     const adnLayer = [
-      `Brand tone: ${brandTone}. Identity: ${brandBranding}.`,
+      (brandTone || brandBranding) ? `Brand tone: ${brandTone}. Identity: ${brandBranding}.` : '',
       winningStyle ? `Creator's proven visual style: ${winningStyle}` : '',
       composition ? `Composition signature: ${composition}` : '',
       palette ? `Brand palette: ${palette}` : '',

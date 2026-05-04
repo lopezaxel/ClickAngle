@@ -316,8 +316,8 @@ const MODEL_MAPPING = {
     IMAGE_GEN: 'gemini-3-flash-preview', // text-based prompt builder
 };
 
-// Dedicated image generation model (Nano Banana)
-const IMAGE_GEN_MODEL = 'gemini-3.1-flash-image-preview'; // used in generateImage()
+// Dedicated image generation model
+const IMAGE_GEN_MODEL = 'gemini-2.5-flash-image'; // used in generateImage()
 
 export async function checkApiKey() {
     try {

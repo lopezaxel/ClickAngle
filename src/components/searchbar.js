@@ -5,31 +5,10 @@ let searchListenerAdded = false;
 
 export function renderSearchbar(container) {
   if (!container) return;
-  
-  // Basic structure
   container.innerHTML = `
-    <div class="search-container">
-      <span class="search-icon">${icon('search', 14)}</span>
-      <input type="text" class="search-input" id="global-search" placeholder="Buscar ángulos, proyectos, scripts..." />
-      <span class="search-shortcut">⌘K</span>
-    </div>
-    <div class="topbar-actions" id="topbar-actions">
-        <!-- Actions and status rendered here -->
-    </div>
+    <div class="topbar-actions" id="topbar-actions"></div>
   `;
-
-  // Initial update of actions
   updateApiStatusBadge();
-
-  if (!searchListenerAdded) {
-    document.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        document.getElementById('global-search')?.focus();
-      }
-    });
-    searchListenerAdded = true;
-  }
 }
 
 export function updateApiStatusBadge() {

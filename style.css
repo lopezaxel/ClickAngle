@@ -83,7 +83,7 @@
   /* Sidebar */
   --sidebar-width: 72px;
   --sidebar-width-expanded: 220px;
-  --topbar-height: clamp(52px, 4.5vw, 64px);
+  --topbar-height: 44px;
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -1594,6 +1594,7 @@ body {
 .workflow-steps {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0;
   overflow-x: auto;
   scrollbar-width: none;

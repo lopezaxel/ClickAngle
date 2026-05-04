@@ -3,6 +3,7 @@ import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
 import { showLoader, hideLoader } from '../lib/loader.js';
+import { confirmDialog, toast } from '../lib/toast.js';
 
 function triggerFileInput(accept, callback) {
   const input = document.createElement('input');
@@ -791,6 +792,7 @@ export async function renderADNSection(container, channelId) {
         <div class="card-title">${icon('brain', 16)} ADN Estratégico</div>
         <div class="flex gap-xs items-center">
           <span class="badge ${adn ? 'badge-accent' : 'badge-neutral'}">${adn ? 'Activo' : 'Pendiente'}</span>
+          ${adn ? `<button class="btn btn-secondary btn-sm" id="btn-delete-adn" style="font-size:11px;color:var(--danger);border-color:rgba(220,38,38,0.3);">${icon('trash', 12)} Eliminar contexto</button>` : ''}
           <button class="btn btn-primary btn-sm" id="btn-start-adn" style="font-size:11px;">
             ${icon('zap', 12)} ${adn ? 'Reiniciar' : 'Iniciar Análisis'}
           </button>
@@ -819,6 +821,18 @@ export async function renderADNSection(container, channelId) {
 
   container.querySelector('#btn-start-adn')?.addEventListener('click', () => {
     showADNInterview(channelId, () => renderADNSection(container, channelId));
+  });
+
+  container.querySelector('#btn-delete-adn')?.addEventListener('click', async () => {
+    const confirmed = await confirmDialog(
+      'Se eliminará el contexto estratégico del canal. Las miniaturas futuras no tendrán en cuenta el ADN. ¿Continuar?',
+      { title: 'Eliminar contexto ADN', confirmLabel: 'Eliminar', cancelLabel: 'Cancelar', danger: true }
+    );
+    if (!confirmed) return;
+    const { error } = await supabase.from('brand_kits').update({ detailed_adn: null }).eq('channel_id', channelId);
+    if (error) { toast('Error al eliminar el contexto', 'error'); return; }
+    toast('Contexto ADN eliminado', 'success');
+    renderADNSection(container, channelId);
   });
 
   container.querySelectorAll('.adn-answer-text').forEach(el => {

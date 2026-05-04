@@ -14,7 +14,9 @@
       "mcp__supabase__get_publishable_keys",
       "Bash(npm run *)",
       "Bash(xargs grep *)",
-      "mcp__supabase__apply_migration"
+      "mcp__supabase__apply_migration",
+      "WebFetch(domain:ai.google.dev)",
+      "PowerShell(Stop-Process -Id 9544 -Force)"
     ]
   }
 }
