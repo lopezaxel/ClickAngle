@@ -16,7 +16,8 @@
       "Bash(xargs grep *)",
       "mcp__supabase__apply_migration",
       "WebFetch(domain:ai.google.dev)",
-      "PowerShell(Stop-Process -Id 9544 -Force)"
+      "PowerShell(Stop-Process -Id 9544 -Force)",
+      "WebFetch(domain:docs.whop.com)"
     ]
   }
 }

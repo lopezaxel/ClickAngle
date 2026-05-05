@@ -428,7 +428,7 @@ export function renderLogin(container) {
         </form>
 
         <div class="text-xs text-muted" style="text-align:center;margin-top:var(--space-lg);">
-          ¿No tenés cuenta? Contactá al administrador para obtener acceso.
+          ¿No tenés acceso? <a href="https://whop.com/checkout/plan_3u0rsp8JZuLnG" target="_blank" rel="noopener" style="color:var(--accent-light);text-decoration:underline;">Conseguí acceso aquí</a>
         </div>
       </div>
     </div>`;

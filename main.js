@@ -14,6 +14,7 @@ import { renderLogin } from './src/panels/login.js';
 import { renderSettings } from './src/panels/settings.js';
 import { renderChannelSelector } from './src/panels/channel-selector.js';
 import { renderAdmin } from './src/panels/admin.js';
+import { renderSetup } from './src/panels/setup.js';
 import { initAuth } from './src/lib/auth.js';
 import { getState, subscribe } from './src/lib/state.js';
 import { loadChannelProjects } from './src/lib/projects.js';
@@ -114,7 +115,17 @@ function initApp() {
       }
     }
 
-    // 4. Setup Authenticated Layout
+    // 4. Onboarding: usuarios invitados que aún no completaron su perfil
+    if (currentUser && !currentUser.full_name && currentUser.role !== 'admin') {
+      app.classList.add('login-mode');
+      sidebar.innerHTML = ''; sidebar.style.display = 'none';
+      topbar.innerHTML = ''; topbar.style.display = 'none';
+      workflowBar.innerHTML = ''; workflowBar.style.display = 'none';
+      if (!workspace.querySelector('#setup-form')) renderSetup(workspace);
+      return;
+    }
+
+    // 5. Setup Authenticated Layout
     app.classList.remove('login-mode');
     sidebar.style.display = '';
     topbar.style.display = '';
