@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js';
 import { getState, setState, setActiveChannel, restoreActiveChannel } from './state.js';
+import { setSentryUser } from './sentry.js';
 
 export async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -18,6 +19,7 @@ export async function signUp(email, password, fullName) {
 }
 
 export function signOut() {
+    setSentryUser(null);
     localStorage.removeItem('clickangles_active_channel');
     Object.keys(localStorage).forEach(key => {
         if (key.startsWith('sb-') || key.includes('supabase.auth') || key.startsWith('ca_cache_v')) {
@@ -293,6 +295,7 @@ async function loadUserData(session) {
             if (saved) activeChannelId = saved;
         }
 
+        setSentryUser(profile);
         setState({
             currentUser: profile,
             session,

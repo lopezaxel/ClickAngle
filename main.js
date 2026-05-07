@@ -1,4 +1,6 @@
 import './style.css';
+import { initSentry } from './src/lib/sentry.js';
+initSentry();
 import { registerRoute, initRouter, reRenderCurrentRoute } from './src/router.js';
 import { renderSidebar } from './src/components/sidebar.js';
 import { renderSearchbar } from './src/components/searchbar.js';

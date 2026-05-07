@@ -1,5 +1,6 @@
 // Simple hash-based SPA router
 import { icon } from './icons.js';
+import { captureError } from './lib/sentry.js';
 const routes = {};
 let currentWorkspace = null;
 let currentHashChangeHandler = null;
@@ -83,6 +84,7 @@ async function performRender(workspace, showRouteLoader = true) {
         // Only show error if this is still the current render
         if (renderId === lastRenderId) {
             console.error(`Error rendering ${route}:`, err);
+            captureError(err, { route });
             workspace.innerHTML = `
                 <div style="padding:40px;text-align:center;background:rgba(220,38,38,0.05);border-radius:12px;margin:20px;border:1px solid var(--danger);">
                     <div style="font-size:32px;margin-bottom:12px;">${icon('alertTriangle', 32)}</div>
