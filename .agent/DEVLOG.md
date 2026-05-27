@@ -65,6 +65,123 @@ Actualizar este archivo al cierre de cada sesión de desarrollo o tras cada camb
 
 ## Historial de cambios
 
+### 2026-05-27 — Sesión de UX y navegación (Cerebro + Fábrica Creativa)
+
+#### Contexto
+Sesión de mejoras de flujo de usuario centradas en dos paneles: El Cerebro (agregado de selector de proyectos como Step 0) y la Fábrica Creativa (refactor de navegación y UI).
+
+---
+
+#### `src/lib/projects.js` — Nuevas funciones
+
+Agregadas dos funciones que faltaban para el CRUD completo de proyectos:
+
+```js
+export async function renameProject(projectId, newTitle)
+// Actualiza el título en Supabase y en el state global
+
+export async function deleteProject(projectId)
+// Elimina en Supabase, filtra del state global, reasigna activeProjectId si era el activo
+```
+
+---
+
+#### `src/panels/cerebro.js` — Step 0 (selector de proyectos)
+
+**Nuevo selector de proyectos como primer paso del flujo:**
+- `step` siempre inicia en `0` (era 1 o 2 dependiendo del proyecto activo).
+- `step 0` muestra todos los proyectos del canal como cards seleccionables antes de permitir pegar un guión.
+- Al seleccionar un proyecto existente con DNA guardado, `loadProjectData(project)` restaura el estado completo (script, análisis, ángulos, ángulos seleccionados) y salta a step 1 o 2.
+- Nuevas variables de estado: `viewMode` ('grid' | 'list'), `currentPage`, `PAGE_SIZE_GRID = 9`, `PAGE_SIZE_LIST = 10`.
+
+**`renderStep0()`:**
+- Vista grilla (3 columnas) y vista lista (1 columna), toggle con 2 botones.
+- Paginación para no sobrecargar la sección.
+- Cada card tiene botones de acción: **Renombrar** (via `inputDialog`) y **Eliminar** (via `confirmDialog` + `deleteProject`).
+- Botón "Nuevo Video" para crear un proyecto fresco.
+- Clase `cerebro-card-wrapper` en el contenedor externo para hover CSS.
+
+**Botón "← Tus Videos" en steps 1 y 2:**
+- Aparece como botón secundario encima del título en los pasos 1+ para volver al selector.
+- Estilos: `btn btn-secondary btn-sm` — visible y clickeable.
+
+---
+
+#### `src/components/workflow.js` — Navbar de flujo
+
+**Quitar números de los pasos:**
+- Los círculos de paso ahora muestran un ícono SVG (`brain`, `eye`, `cog`, `scissors`) en lugar del número `1/2/3/4`.
+- El campo `step` en `WORKFLOW_STEPS` queda pero ya no se renderiza.
+
+```js
+// Antes:
+<div class="workflow-step-number">${step.step}</div>
+// Después:
+<div class="workflow-step-number">${icon(step.icon, 13)}</div>
+```
+
+---
+
+#### `style.css` — Tres cambios visuales
+
+1. **Conectores del workflow:** verde → rojo (`.workflow-connector--done { background: var(--accent); }`).
+2. **Círculos de pasos completados:** verde → gradiente rojo (`.workflow-step--done .workflow-step-number`).
+3. **Hover de cards del Cerebro (bug fix):** Reemplazado JS `mouseenter`/`mouseleave` (que se quedaban pegados) por CSS puro:
+
+```css
+.cerebro-card-wrapper { transition: border-color 0.15s ease, transform 0.15s ease; }
+.cerebro-card-wrapper:hover { border-color: var(--accent) !important; transform: translateY(-1px); }
+```
+
+---
+
+#### `src/panels/engine.js` — Fábrica Creativa (5 cambios)
+
+**1. Quitar Paso 1 (selección de proyectos):**
+- `workflowStep` inicia siempre en `1` (antes era `selectedProjectId ? 2 : 1`).
+- `stepDefs` reducido de 5 a 4 ítems (eliminado `'Proyecto'`).
+- Condiciones `canGo` renumeradas: `canGoStep2` (formatos), `canGoStep3` (estilo), `canGoStep4` (rostro → ángulos).
+- Routing de contenido: paso 1 → Formato, 2 → Estilo, 3 → Rostro, 4 → Ángulos.
+- `renderProjectStep()` y `openProjectModal()` quedan como dead code (no eliminado para no romper referencias indirectas).
+
+**2. Barra de progreso más compacta:**
+- Círculos: `28px → 20px`.
+- Eliminada la línea `desc` debajo del label de cada paso.
+- Márgenes reducidos.
+
+**3. Cards de formato y estilo más legibles:**
+- Texto de caso de uso: `9px → 11px`.
+- Label de categoría: `8px → 9px`.
+
+**4. Eliminar pill del proyecto:**
+- Bloque HTML de `icon('folder')` + título del proyecto activo eliminado del área sobre la barra de progreso.
+
+**5. Cards del Face Vault más chicas:**
+- `padding: 24px 20px → 12px 14px`.
+- Emoji: `font-size 36px → 24px`.
+- `max-width: 480px` en el grid.
+
+**6. Navegación fija al fondo (principal cambio de esta sesión):**
+- **Eliminado** el bloque de nav estático `<!-- Bottom nav -->` del HTML de `render()`.
+- **Agregada** función `syncEngineNav()` que crea/actualiza un `div#engine-fixed-nav` en `document.body`.
+- Limpieza automática en `hashchange`.
+- Estilos: `position: fixed; bottom: 0; left: ${sidebarW}px; right: 0` — respeta el ancho del sidebar.
+- Fondo glassmorphism: `linear-gradient(to top, rgba(0,0,0,0.88) 0%, transparent 100%)` + `backdrop-filter: blur(4px)` — idéntico al CTA de ángulos en El Cerebro.
+- Layout: `[← Anterior]` izquierda · `[PASO X DE 4 / hint]` centro · `[Siguiente →]` o `[🚀 GENERAR N MINIATURAS]` derecha.
+- El botón generar (paso 4) dispara un `btn-generate-master` oculto que conserva la lógica existente de generación.
+- `syncEngineNav()` se llama desde `render()` y desde `rerenderStep()` para que el estado del nav se actualice al seleccionar formatos/estilos.
+- `padding-bottom: 90px` agregado a `#step-content` para que el contenido no quede tapado.
+
+---
+
+#### Bug corregido: hover persistente en cards
+
+**Problema:** Las cards de El Cerebro mostraban borde rojo permanente después del `mouseout`. El handler JS usaba `closest('[style*="border-radius:12px"]')` para actualizar el padre — selector frágil que fallaba al mover el mouse sobre los botones de acción hijos.
+
+**Solución:** Clase CSS `cerebro-card-wrapper` en el contenedor externo, hover manejado 100% por CSS. Todos los handlers JS `mouseenter`/`mouseleave` eliminados.
+
+---
+
 ### 2026-05-27 — Sesión de ajustes pre-lanzamiento (mercado 2026)
 
 #### Contexto

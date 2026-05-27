@@ -1666,7 +1666,7 @@ body {
 }
 
 .workflow-connector--done {
-  background: var(--success);
+  background: var(--accent);
 }
 
 /* Active step */
@@ -1689,11 +1689,12 @@ body {
   color: var(--text-tertiary);
 }
 
-/* Done step */
+/* Done step — rojo, igual que activo pero sin el glow del activo */
 .workflow-step--done .workflow-step-number {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--success);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.3);
 }
 
 .workflow-step--done .workflow-step-label {
@@ -1702,6 +1703,15 @@ body {
 
 .workflow-step--done .workflow-step-desc {
   color: var(--text-tertiary);
+}
+
+/* Cerebro — tarjetas de video */
+.cerebro-card-wrapper {
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.cerebro-card-wrapper:hover {
+  border-color: var(--accent) !important;
+  transform: translateY(-1px);
 }
 
 /* ============================================

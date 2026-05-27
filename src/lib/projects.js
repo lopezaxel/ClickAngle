@@ -83,3 +83,29 @@ export function getActiveProject() {
   const { projects, activeProjectId } = getState();
   return projects.find(p => p.id === activeProjectId) || null;
 }
+
+export async function renameProject(projectId, newTitle) {
+  const { error } = await supabase
+    .from('projects')
+    .update({ title: newTitle.trim() })
+    .eq('id', projectId);
+
+  if (error) throw error;
+
+  const { projects } = getState();
+  setState({ projects: projects.map(p => p.id === projectId ? { ...p, title: newTitle.trim() } : p) });
+}
+
+export async function deleteProject(projectId) {
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', projectId);
+
+  if (error) throw error;
+
+  const { projects, activeProjectId } = getState();
+  const newProjects = projects.filter(p => p.id !== projectId);
+  const newActiveId = activeProjectId === projectId ? (newProjects[0]?.id || null) : activeProjectId;
+  setState({ projects: newProjects, activeProjectId: newActiveId });
+}

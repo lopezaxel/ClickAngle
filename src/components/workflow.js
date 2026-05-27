@@ -22,7 +22,7 @@ function buildWorkflowHTML() {
         const stateClass = isActive ? 'workflow-step--active' : isPast ? 'workflow-step--done' : '';
 
         return `<a class="workflow-step ${stateClass}" href="#${step.route}" data-route="${step.route}">
-        <div class="workflow-step-number">${isPast ? icon('check', 12) : step.step}</div>
+        <div class="workflow-step-number">${icon(step.icon, 13)}</div>
         <div class="workflow-step-info">
           <div class="workflow-step-label">${step.label}</div>
           <div class="workflow-step-desc">${step.desc}</div>

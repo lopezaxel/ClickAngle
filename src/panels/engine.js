@@ -279,7 +279,7 @@ export async function renderEngine(container) {
   let selectedProjectId = (globalActiveId && projects.find(p => p.id === globalActiveId))
     ? globalActiveId
     : (projects[0]?.id || null);
-  let workflowStep = selectedProjectId ? 2 : 1;
+  let workflowStep = 1;
   let selectedFormats = [];
   let selectedStyleId = null;
   let isGenerating = false;           // true only during batch "Generate All" / "Sintetizar"
@@ -300,6 +300,108 @@ export async function renderEngine(container) {
 
   // Cleanup any previous subscription stored on the container
   if (container._cleanup) { container._cleanup(); container._cleanup = null; }
+
+  // ─── FIXED BOTTOM NAV ─────────────────────────────────────────────────────
+
+  function syncEngineNav() {
+    const project = getProject();
+    const selectedAngles = project?.logic_dna?.selected_angles || [];
+    const activeAngleIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
+    const canGoStep2 = selectedFormats.length > 0;
+    const canGoStep3 = canGoStep2 && !!selectedStyleId;
+    const canGoStep4 = canGoStep3;
+    const canGenerate = canGoStep4 && activeAngleIndices.length > 0 && !isGenerating;
+    const isLastStep = workflowStep === 4;
+
+    let footer = document.getElementById('engine-fixed-nav');
+    if (!footer) {
+      footer = document.createElement('div');
+      footer.id = 'engine-fixed-nav';
+      document.body.appendChild(footer);
+      const cleanup = () => {
+        document.getElementById('engine-fixed-nav')?.remove();
+        window.removeEventListener('hashchange', cleanup);
+      };
+      window.addEventListener('hashchange', cleanup);
+    }
+
+    const sidebarW = document.getElementById('sidebar')?.offsetWidth ?? 72;
+    footer.style.cssText = `
+      position: fixed; bottom: 0; left: ${sidebarW}px; right: 0;
+      padding: 28px 40px 18px;
+      background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, transparent 100%);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      display: flex; justify-content: space-between; align-items: center;
+      z-index: 100; pointer-events: all;
+      transition: left 0.2s ease;
+    `;
+
+    const nextDisabled = (workflowStep === 1 && !canGoStep2) || (workflowStep === 2 && !canGoStep3);
+    const nextHint = workflowStep === 1 && !canGoStep2
+      ? 'Elegí al menos un formato'
+      : workflowStep === 2 && !canGoStep3
+        ? 'Elegí un estilo visual'
+        : '';
+
+    footer.innerHTML = `
+      <!-- Anterior -->
+      <button id="engine-btn-prev"
+        style="display:flex;align-items:center;gap:8px;padding:10px 22px;border-radius:var(--radius-md);
+          font-size:13px;font-weight:700;cursor:${workflowStep === 1 ? 'default' : 'pointer'};
+          background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+          color:${workflowStep === 1 ? 'rgba(255,255,255,0.2)' : 'var(--text-secondary)'};
+          transition:all 0.15s;pointer-events:${workflowStep === 1 ? 'none' : 'all'};">
+        ${icon('arrowLeft', 14)} Anterior
+      </button>
+
+      <!-- Centro: hint o paso -->
+      <span style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:600;letter-spacing:0.5px;">
+        ${nextHint || `PASO ${workflowStep} DE 4`}
+      </span>
+
+      <!-- Siguiente o Generar -->
+      ${isLastStep
+        ? `<button id="engine-btn-generate" ${!canGenerate ? 'disabled' : ''}
+            style="display:flex;align-items:center;gap:10px;padding:13px 32px;
+              border-radius:var(--radius-md);font-size:14px;font-weight:900;
+              letter-spacing:1.5px;text-transform:uppercase;
+              border:2px solid ${canGenerate ? 'rgba(220,38,38,0.6)' : 'rgba(255,255,255,0.08)'};
+              background:${canGenerate ? 'linear-gradient(135deg, var(--accent), var(--accent-dark))' : 'rgba(255,255,255,0.04)'};
+              color:${canGenerate ? 'white' : 'rgba(255,255,255,0.18)'};
+              cursor:${canGenerate ? 'pointer' : 'not-allowed'};
+              box-shadow:${canGenerate ? '0 0 28px rgba(220,38,38,0.4)' : 'none'};">
+            ${isGenerating
+              ? `${icon('clock', 16)} Generando...`
+              : `${icon('rocket', 16)} GENERAR ${activeAngleIndices.length} MINIATURA${activeAngleIndices.length !== 1 ? 'S' : ''}`}
+          </button>`
+        : `<button id="engine-btn-next" ${nextDisabled ? 'disabled' : ''}
+            style="display:flex;align-items:center;gap:8px;padding:10px 22px;
+              border-radius:var(--radius-md);font-size:13px;font-weight:700;
+              border:1.5px solid ${nextDisabled ? 'rgba(255,255,255,0.08)' : 'rgba(220,38,38,0.5)'};
+              background:${nextDisabled ? 'rgba(255,255,255,0.04)' : 'linear-gradient(135deg, var(--accent), var(--accent-dark))'};
+              color:${nextDisabled ? 'rgba(255,255,255,0.18)' : 'white'};
+              cursor:${nextDisabled ? 'not-allowed' : 'pointer'};
+              box-shadow:${nextDisabled ? 'none' : '0 0 18px rgba(220,38,38,0.3)'};
+              transition:all 0.15s;">
+            Siguiente ${icon('arrowRight', 14)}
+          </button>`
+      }
+    `;
+
+    // Bind nav events
+    document.getElementById('engine-btn-prev')?.addEventListener('click', () => {
+      if (workflowStep > 1) { workflowStep--; render(); }
+    });
+    document.getElementById('engine-btn-next')?.addEventListener('click', () => {
+      if (!nextDisabled && workflowStep < 4) { workflowStep++; render(); }
+    });
+    document.getElementById('engine-btn-generate')?.addEventListener('click', () => {
+      if (canGenerate) {
+        const btnGenerate = document.getElementById('btn-generate-master');
+        btnGenerate?.click();
+      }
+    });
+  }
 
   // ─── RENDER ROOT ──────────────────────────────────────────────────────────
 
@@ -327,16 +429,14 @@ export async function renderEngine(container) {
       autoMatchedFaceId = faceList[0]?.id || null;
     }
 
-    const canGoStep2 = !!selectedProjectId;
-    const canGoStep3 = canGoStep2 && selectedFormats.length > 0;
-    const canGoStep4 = canGoStep3 && !!selectedStyleId;
-    const canGoStep5 = canGoStep4;
+    const canGoStep2 = selectedFormats.length > 0;
+    const canGoStep3 = canGoStep2 && !!selectedStyleId;
+    const canGoStep4 = canGoStep3;
     const activeAngleIndices = batchAngleSelection ?? selectedAngles.map((_, i) => i);
-    const canGenerate = canGoStep5 && activeAngleIndices.length > 0 && !isGenerating;
-    const stepDone = [canGoStep2, canGoStep3, canGoStep4, canGoStep5, false];
-    const canAccess = [true, canGoStep2, canGoStep3, canGoStep4, canGoStep5];
+    const canGenerate = canGoStep4 && activeAngleIndices.length > 0 && !isGenerating;
+    const stepDone = [canGoStep2, canGoStep3, canGoStep4, false];
+    const canAccess = [true, canGoStep2, canGoStep3, canGoStep4];
     const stepDefs = [
-      { label: 'Proyecto', desc: 'Guión analizado' },
       { label: 'Formato', desc: 'Composición visual' },
       { label: 'Estilo', desc: 'Look visual' },
       { label: 'Rostro', desc: 'Face Vault' },
@@ -351,8 +451,8 @@ export async function renderEngine(container) {
         </div>
       </div>
 
-      <!-- Progress bar -->
-      <div style="display:flex;align-items:center;margin-bottom:var(--space-xl);padding:0 2px;">
+      <!-- Progress bar — compacto -->
+      <div style="display:flex;align-items:center;margin-bottom:var(--space-md);padding:0 2px;gap:0;">
         ${stepDefs.map((s, i) => {
           const n = i + 1;
           const isActive = workflowStep === n;
@@ -360,72 +460,40 @@ export async function renderEngine(container) {
           const accessible = canAccess[i];
           return `
           <div class="step-tab" data-step="${n}" ${!accessible ? 'disabled' : ''}
-            style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;cursor:${accessible ? 'pointer' : 'default'};opacity:${!accessible ? 0.4 : 1};">
-            <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;transition:all 0.2s;
+            style="display:flex;align-items:center;gap:6px;flex-shrink:0;cursor:${accessible ? 'pointer' : 'default'};opacity:${!accessible ? 0.35 : 1};">
+            <div style="width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;transition:all 0.2s;flex-shrink:0;
               ${isDone
-                ? 'background:var(--success);color:white;'
+                ? 'background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:white;'
                 : isActive
-                  ? 'background:var(--accent);color:white;box-shadow:0 0 14px rgba(220,38,38,0.45);'
+                  ? 'background:var(--accent);color:white;box-shadow:0 0 10px rgba(220,38,38,0.4);'
                   : 'background:var(--bg-elevated);color:var(--text-tertiary);border:1px solid var(--border);'}">
-              ${isDone ? icon('check', 10) : n}
+              ${isDone ? icon('check', 8) : n}
             </div>
-            <div style="margin-top:5px;text-align:center;">
-              <div style="font-size:10px;font-weight:${isActive ? '800' : '600'};white-space:nowrap;
-                color:${isActive ? 'var(--text-primary)' : isDone ? 'var(--text-secondary)' : 'var(--text-tertiary)'};">${s.label}</div>
-              <div style="font-size:8px;color:var(--text-tertiary);white-space:nowrap;margin-top:1px;">${s.desc}</div>
-            </div>
+            <div style="font-size:11px;font-weight:${isActive ? '700' : '500'};white-space:nowrap;
+              color:${isActive ? 'var(--text-primary)' : isDone ? 'var(--text-secondary)' : 'var(--text-tertiary)'};">${s.label}</div>
           </div>
-          ${i < stepDefs.length - 1 ? `<div style="flex:1;height:1px;margin:0 8px;margin-bottom:20px;
-            background:${isDone ? 'var(--success)' : 'var(--border)'};opacity:${isDone ? '0.5' : '0.2'};"></div>` : ''}`;
+          ${i < stepDefs.length - 1 ? `<div style="flex:1;height:1px;margin:0 8px;
+            background:${isDone ? 'var(--accent)' : 'var(--border)'};opacity:${isDone ? '0.35' : '0.15'};"></div>` : ''}`;
         }).join('')}
       </div>
 
-      <!-- Project title pill -->
-      ${project ? `
-      <div style="text-align:center;margin-bottom:var(--space-lg);">
-        <div style="display:inline-flex;align-items:center;gap:8px;padding:5px 16px 5px 10px;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.22);border-radius:20px;max-width:90%;">
-          <span style="display:flex;align-items:center;opacity:0.7;">${icon('folder', 12)}</span>
-          <span style="font-size:12px;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</span>
-        </div>
-      </div>` : ''}
-
       <!-- Step content -->
-      <div id="step-content" style="min-height:300px;">
-        ${workflowStep === 1 ? renderProjectStep()
-          : workflowStep === 2 ? renderFormatStep()
-          : workflowStep === 3 ? renderStyleStep()
-          : workflowStep === 4 ? renderFaceStep()
+      <div id="step-content" style="min-height:300px;padding-bottom:90px;">
+        ${workflowStep === 1 ? renderFormatStep()
+          : workflowStep === 2 ? renderStyleStep()
+          : workflowStep === 3 ? renderFaceStep()
           : renderAnglesStep(project, selectedAngles)}
       </div>
 
-      <!-- Bottom nav -->
-      <div class="flex justify-between items-center" style="margin-top:var(--space-lg);padding-top:var(--space-md);border-top:1px solid var(--border);">
-        <button class="btn btn-secondary btn-sm" id="btn-prev-step" ${workflowStep === 1 ? 'disabled' : ''}>
-          ${icon('arrowLeft', 14)} Anterior
-        </button>
-        ${workflowStep < 5 ? `
-          <div style="display:flex;align-items:center;gap:10px;">
-            ${workflowStep === 1 && !canGoStep2 ? `<span class="text-xs text-muted">Seleccioná un proyecto</span>` : ''}
-            ${workflowStep === 2 && !canGoStep3 ? `<span class="text-xs text-muted">Elegí al menos un formato</span>` : ''}
-            ${workflowStep === 3 && !canGoStep4 ? `<span class="text-xs text-muted">Elegí un estilo visual</span>` : ''}
-            <button class="btn btn-primary" id="btn-next-step" style="padding:8px 20px;"
-              ${(workflowStep === 1 && !canGoStep2) || (workflowStep === 2 && !canGoStep3) || (workflowStep === 3 && !canGoStep4) ? 'disabled' : ''}>
-              Siguiente ${icon('arrowRight', 14)}
-            </button>
-          </div>
-        ` : `
-          <button class="btn btn-primary" id="btn-generate-master" ${!canGenerate ? 'disabled' : ''}
-            style="background:linear-gradient(135deg,var(--accent),#9333ea);font-size:14px;padding:12px 28px;font-weight:800;letter-spacing:0.5px;border-radius:var(--radius-md);">
-            ${isGenerating
-              ? `<span class="animate-pulse">${icon('clock', 16)}</span> Generando...`
-              : `${icon('rocket', 16)} GENERAR ${activeAngleIndices.length} MINIATURA${activeAngleIndices.length !== 1 ? 'S' : ''}`}
-          </button>
-        `}
-      </div>
+      <!-- Hidden generate button — triggered by fixed nav -->
+      ${workflowStep === 4 ? `
+        <button id="btn-generate-master" ${!canGenerate ? 'disabled' : ''} style="display:none;">generate</button>
+      ` : ''}
 
     </div>`;
 
     bindEvents();
+    syncEngineNav();
   }
 
   // ─── DNA CHECKLIST ────────────────────────────────────────────────────────
@@ -477,12 +545,12 @@ export async function renderEngine(container) {
     if (!el) { render(); return; }
     const project = getProject();
     const selectedAngles = project?.logic_dna?.selected_angles || [];
-    el.innerHTML = workflowStep === 1 ? renderProjectStep()
-      : workflowStep === 2 ? renderFormatStep()
-      : workflowStep === 3 ? renderStyleStep()
-      : workflowStep === 4 ? renderFaceStep()
+    el.innerHTML = workflowStep === 1 ? renderFormatStep()
+      : workflowStep === 2 ? renderStyleStep()
+      : workflowStep === 3 ? renderFaceStep()
       : renderAnglesStep(project, selectedAngles);
     bindStepContentEvents();
+    syncEngineNav();
   }
 
   // ─── STEP 1: Proyecto ─────────────────────────────────────────────────────
@@ -934,8 +1002,8 @@ export async function renderEngine(container) {
             ${useCase ? `
             <div style="margin-top:auto;padding-top:10px;width:100%;">
               <div style="border-top:1px solid var(--border);padding-top:8px;">
-                <div style="font-size:8px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">Ideal si tu video trata de:</div>
-                <div style="font-size:9px;color:var(--text-secondary);line-height:1.5;">${useCase}</div>
+                <div style="font-size:9px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">Ideal si tu video trata de:</div>
+                <div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">${useCase}</div>
               </div>
             </div>` : ''}
           </div>`;
@@ -974,8 +1042,8 @@ export async function renderEngine(container) {
             ${useCase ? `
             <div style="margin-top:auto;padding-top:10px;width:100%;">
               <div style="border-top:1px solid var(--border);padding-top:8px;">
-                <div style="font-size:8px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">Ideal si tu canal es de:</div>
-                <div style="font-size:9px;color:var(--text-secondary);line-height:1.5;">${useCase}</div>
+                <div style="font-size:9px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">Ideal si tu canal es de:</div>
+                <div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">${useCase}</div>
               </div>
             </div>` : ''}
           </div>`;
@@ -997,24 +1065,24 @@ export async function renderEngine(container) {
       <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
         ¿Incluir el rostro del creador?
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:var(--space-lg);">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:var(--space-lg);max-width:480px;">
 
         <!-- CON ROSTRO -->
-        <div id="face-opt-yes" style="cursor:pointer;padding:24px 20px;border-radius:var(--radius-lg);border:2px solid ${effectiveUseFace ? 'var(--accent)' : 'var(--border)'};
+        <div id="face-opt-yes" style="cursor:pointer;padding:12px 14px;border-radius:var(--radius-md);border:2px solid ${effectiveUseFace ? 'var(--accent)' : 'var(--border)'};
           background:${effectiveUseFace ? 'rgba(220,38,38,0.07)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
-          <div style="font-size:36px;margin-bottom:10px;">🤳</div>
-          <div class="font-bold" style="font-size:14px;margin-bottom:4px;">Con rostro</div>
-          <div class="text-xs text-muted">Incluye la foto del creador cargada en Face Vault</div>
-          ${effectiveUseFace ? `<div style="margin-top:8px;font-size:10px;padding:3px 10px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+          <div style="font-size:24px;margin-bottom:6px;">🤳</div>
+          <div class="font-bold" style="font-size:13px;margin-bottom:3px;">Con rostro</div>
+          <div style="font-size:11px;color:var(--text-muted);line-height:1.4;">Incluye la foto del creador del Face Vault</div>
+          ${effectiveUseFace ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
         </div>
 
         <!-- SIN ROSTRO -->
-        <div id="face-opt-no" style="cursor:pointer;padding:24px 20px;border-radius:var(--radius-lg);border:2px solid ${!effectiveUseFace ? 'rgba(99,102,241,0.6)' : 'var(--border)'};
+        <div id="face-opt-no" style="cursor:pointer;padding:12px 14px;border-radius:var(--radius-md);border:2px solid ${!effectiveUseFace ? 'rgba(99,102,241,0.6)' : 'var(--border)'};
           background:${!effectiveUseFace ? 'rgba(99,102,241,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
-          <div style="font-size:36px;margin-bottom:10px;">🎬</div>
-          <div class="font-bold" style="font-size:14px;margin-bottom:4px;">Sin rostro</div>
-          <div class="text-xs text-muted">Miniatura centrada en el objeto o escena, sin cara</div>
-          ${!effectiveUseFace ? `<div style="margin-top:8px;font-size:10px;padding:3px 10px;border-radius:20px;background:rgba(99,102,241,0.7);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+          <div style="font-size:24px;margin-bottom:6px;">🎬</div>
+          <div class="font-bold" style="font-size:13px;margin-bottom:3px;">Sin rostro</div>
+          <div style="font-size:11px;color:var(--text-muted);line-height:1.4;">Centrada en el objeto o escena, sin cara</div>
+          ${!effectiveUseFace ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:rgba(99,102,241,0.7);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
         </div>
       </div>
 

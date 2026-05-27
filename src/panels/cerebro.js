@@ -2,43 +2,56 @@ import { supabase } from '../lib/supabase.js';
 import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { callAI } from '../lib/intelligence.js';
-import { toast } from '../lib/toast.js';
+import { toast, inputDialog, confirmDialog } from '../lib/toast.js';
 import { showLoader, updateLoader, hideLoader } from '../lib/loader.js';
-import { getActiveProject, createProject, updateProjectFull, updateProjectLogicDna } from '../lib/projects.js';
+import { getActiveProject, createProject, updateProjectFull, updateProjectLogicDna, setActiveProject, renameProject, deleteProject } from '../lib/projects.js';
 
 export async function renderCerebro(container) {
   const { activeChannelId } = getState();
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
 
-  // Pre-load from active project if one exists
-  const activeProject = getActiveProject();
-  const projectDna = activeProject?.logic_dna || null;
+  // Siempre arrancamos en el paso 0 (selector de video)
+  let step = 0; // 0 = elegir video, 1 = guión/ADN, 2 = ángulos
 
-  let scriptText = activeProject?.script_text || '';
-  let inputType = 'script'; // 'script' or 'context'
+  // Datos del proyecto activo — se populan cuando el usuario elige uno
+  let scriptText = '';
+  let inputType = 'script';
   let contextText = '';
-  let analysisResult = (projectDna?.hook) ? {
-    hook: projectDna.hook,
-    tension: projectDna.tension,
-    promise: projectDna.promise,
-    text_suggestions: projectDna.text_suggestions || [],
-    visual_briefing: projectDna.visual_briefing || null,
-  } : null;
-  // Restore previously generated angles from DB (stored as generated_angles_raw)
-  let generatedAngles = projectDna?.generated_angles_raw || [];
+  let analysisResult = null;
+  let generatedAngles = [];
+  let selectedAngleIndices = [];
   let isGeneratingAngles = false;
 
-  // Restore selected indices by matching saved selected_angles names against generatedAngles
-  let selectedAngleIndices = [];
-  if (generatedAngles.length > 0 && projectDna?.selected_angles?.length > 0) {
-    projectDna.selected_angles.forEach(saved => {
-      const idx = generatedAngles.findIndex(a => a.name === saved.name);
-      if (idx !== -1 && !selectedAngleIndices.includes(idx)) selectedAngleIndices.push(idx);
-    });
-  }
+  // Estado del paso 0 (selector de video)
+  let viewMode = 'grid'; // 'grid' | 'list'
+  let currentPage = 0;
+  const PAGE_SIZE_GRID = 9;
+  const PAGE_SIZE_LIST = 10;
 
-  // Start at step 2 if we have both analysis and generated angles
-  let step = (analysisResult && generatedAngles.length > 0) ? 2 : 1;
+  // Carga los datos guardados de un proyecto en las variables locales
+  // y decide en qué paso arrancar (1 o 2)
+  function loadProjectData(project) {
+    const dna = project?.logic_dna || null;
+    scriptText = project?.script_text || '';
+    contextText = '';
+    inputType = 'script';
+    analysisResult = dna?.hook ? {
+      hook: dna.hook,
+      tension: dna.tension,
+      promise: dna.promise,
+      text_suggestions: dna.text_suggestions || [],
+      visual_briefing: dna.visual_briefing || null,
+    } : null;
+    generatedAngles = dna?.generated_angles_raw || [];
+    selectedAngleIndices = [];
+    if (generatedAngles.length > 0 && dna?.selected_angles?.length > 0) {
+      dna.selected_angles.forEach(saved => {
+        const idx = generatedAngles.findIndex(a => a.name === saved.name);
+        if (idx !== -1 && !selectedAngleIndices.includes(idx)) selectedAngleIndices.push(idx);
+      });
+    }
+    step = (analysisResult && generatedAngles.length > 0) ? 2 : 1;
+  }
 
   container.innerHTML = `<div class="loading-spinner"><span class="animate-pulse">${icon('clock', 24)}</span></div>`;
 
@@ -86,13 +99,24 @@ export async function renderCerebro(container) {
   }
 
   function render() {
+    const activeProject = step > 0 ? getActiveProject() : null;
+
     container.innerHTML = `<div class="animate-in">
     <div class="section-header">
       <div>
+        ${step > 0 ? `
+        <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-sm);">
+          <button class="btn btn-secondary btn-sm" id="btn-back-to-videos" style="gap:6px;padding:6px 14px;font-size:12px;font-weight:700;">
+            ${icon('arrowLeft', 13)} Tus Videos
+          </button>
+          <span style="color:var(--border);font-size:13px;">›</span>
+          <span style="font-size:12px;color:var(--text-secondary);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${activeProject?.title || 'Sin título'}</span>
+        </div>` : ''}
         <h2 class="section-title">${icon('brain', 22)} El Cerebro</h2>
-        <p class="section-subtitle">Extrae el ADN de tu guión y elige los ángulos psicológicos para tu miniatura</p>
+        ${step === 0 ? `<p class="section-subtitle">Elegí o creá el video en el que vas a trabajar</p>` : ''}
       </div>
-      <!-- Step indicator -->
+      <!-- Step indicator (solo visible en pasos 1 y 2) -->
+      ${step > 0 ? `
       <div class="flex gap-sm items-center">
         <div class="flex items-center gap-xs">
           <div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
@@ -107,14 +131,198 @@ export async function renderCerebro(container) {
             color:${step >= 2 ? 'white' : 'var(--text-tertiary)'};">2</div>
           <span class="text-xs ${step === 2 ? 'text-accent font-bold' : 'text-muted'}">Ángulos A/B/C Test</span>
         </div>
-      </div>
+      </div>` : ''}
     </div>
 
-    ${step === 1 ? renderStep1() : renderStep2()}
+    ${step === 0 ? renderStep0() : step === 1 ? renderStep1() : renderStep2()}
     </div>`;
 
     syncFixedCTA();
     bindEvents();
+  }
+
+  function renderStep0() {
+    const { projects, isLoadingProjects } = getState();
+
+    if (isLoadingProjects) {
+      return `<div style="text-align:center;padding:var(--space-2xl);">
+        <div class="animate-pulse">${icon('clock', 32)}</div>
+        <p class="text-sm text-muted mt-md">Cargando videos...</p>
+      </div>`;
+    }
+
+    const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+    const totalPages = Math.ceil(projects.length / pageSize);
+    const safePage = Math.min(currentPage, Math.max(0, totalPages - 1));
+    const paginated = projects.slice(safePage * pageSize, safePage * pageSize + pageSize);
+
+    function badgesHTML(hasADN, hasAngles, progress) {
+      return `
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:9px;padding:2px 8px;border-radius:99px;font-weight:700;
+          background:${hasADN ? 'rgba(220,38,38,0.1)' : 'rgba(255,255,255,0.04)'};
+          color:${hasADN ? 'var(--accent)' : 'var(--text-tertiary)'};
+          border:1px solid ${hasADN ? 'rgba(220,38,38,0.25)' : 'var(--border)'};">
+          ${hasADN ? '✓' : '○'} ADN
+        </span>
+        <span style="font-size:9px;padding:2px 8px;border-radius:99px;font-weight:700;
+          background:${hasAngles ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.04)'};
+          color:${hasAngles ? '#818cf8' : 'var(--text-tertiary)'};
+          border:1px solid ${hasAngles ? 'rgba(99,102,241,0.25)' : 'var(--border)'};">
+          ${hasAngles ? '✓' : '○'} Ángulos
+        </span>
+        ${progress === 2 ? `<span style="font-size:9px;padding:2px 8px;border-radius:99px;font-weight:700;
+          background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.25);">
+          Listo ✓
+        </span>` : ''}
+      </div>`;
+    }
+
+    function actionBtnsHTML(pid) {
+      return `
+      <div class="cerebro-card-actions" style="display:flex;gap:6px;align-items:center;">
+        <button class="btn-rename-project" data-project-id="${pid}"
+          style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;
+            background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-secondary);
+            cursor:pointer;transition:all 0.15s;white-space:nowrap;"
+          title="Renombrar">
+          ${icon('edit', 12)} Renombrar
+        </button>
+        <button class="btn-delete-project" data-project-id="${pid}"
+          style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;
+            background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);color:#ef4444;
+            cursor:pointer;transition:all 0.15s;white-space:nowrap;"
+          title="Borrar">
+          ${icon('trash', 12)} Borrar
+        </button>
+      </div>`;
+    }
+
+    const gridHTML = paginated.map(p => {
+      const dna      = p.logic_dna || {};
+      const hasADN   = !!dna.hook;
+      const hasAngles= (dna.selected_angles?.length || 0) > 0;
+      const progress = [hasADN, hasAngles].filter(Boolean).length;
+      const date     = new Date(p.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      return `
+      <div class="cerebro-card-wrapper" style="display:flex;flex-direction:column;background:var(--card-bg,#141414);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <!-- Zona clickeable para abrir el video -->
+        <div class="cerebro-project-card" data-project-id="${p.id}"
+          style="cursor:pointer;padding:var(--space-md);display:flex;flex-direction:column;gap:var(--space-sm);flex:1;">
+          <!-- Progress bar top -->
+          <div style="display:flex;gap:3px;margin-bottom:2px;">
+            <div style="flex:1;height:3px;border-radius:99px;background:${hasADN ? 'var(--accent)' : 'var(--bg-tertiary)'};" title="ADN analizado"></div>
+            <div style="flex:1;height:3px;border-radius:99px;background:${hasAngles ? '#818cf8' : 'var(--bg-tertiary)'};" title="Ángulos elegidos"></div>
+          </div>
+          <div style="font-size:14px;font-weight:700;line-height:1.35;color:var(--text-primary);">${p.title}</div>
+          <div style="font-size:10px;color:var(--text-tertiary);">${date}</div>
+          ${badgesHTML(hasADN, hasAngles, progress)}
+          <div style="margin-top:auto;display:flex;align-items:center;justify-content:flex-end;color:var(--text-tertiary);padding-top:4px;">
+            ${icon('arrowRight', 14)}
+          </div>
+        </div>
+        <!-- Acciones: editar / borrar -->
+        <div style="border-top:1px solid var(--border);padding:8px var(--space-md);display:flex;gap:6px;background:rgba(255,255,255,0.02);">
+          ${actionBtnsHTML(p.id)}
+        </div>
+      </div>`;
+    }).join('');
+
+    const listHTML = paginated.map(p => {
+      const dna      = p.logic_dna || {};
+      const hasADN   = !!dna.hook;
+      const hasAngles= (dna.selected_angles?.length || 0) > 0;
+      const progress = [hasADN, hasAngles].filter(Boolean).length;
+      const date     = new Date(p.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+
+      return `
+      <div class="cerebro-card-wrapper" style="display:flex;align-items:center;gap:var(--space-md);background:var(--card-bg,#141414);border:1px solid var(--border);border-radius:10px;overflow:hidden;padding:0 var(--space-md) 0 0;">
+        <!-- Clickeable -->
+        <div class="cerebro-project-card" data-project-id="${p.id}"
+          style="cursor:pointer;padding:12px var(--space-md);flex:1;display:flex;align-items:center;gap:var(--space-md);min-width:0;">
+          <!-- Dot indicador -->
+          <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;
+            background:${progress === 2 ? '#10b981' : progress === 1 ? 'var(--accent)' : 'var(--border)'};
+            box-shadow:${progress === 2 ? '0 0 6px rgba(16,185,129,0.5)' : progress === 1 ? '0 0 6px rgba(220,38,38,0.5)' : 'none'};"></div>
+          <!-- Título -->
+          <div style="flex:1;font-size:13px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.title}</div>
+          <!-- Badges -->
+          <div style="display:none;gap:5px;flex-shrink:0;" class="list-badges-md">
+            ${badgesHTML(hasADN, hasAngles, progress)}
+          </div>
+          <div style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;white-space:nowrap;">${date}</div>
+          <div style="color:var(--text-tertiary);flex-shrink:0;">${icon('arrowRight', 13)}</div>
+        </div>
+        <!-- Acciones -->
+        <div style="display:flex;gap:6px;flex-shrink:0;padding:8px 0;">
+          ${actionBtnsHTML(p.id)}
+        </div>
+      </div>`;
+    }).join('');
+
+    const paginationHTML = totalPages > 1 ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:var(--space-sm);margin-top:var(--space-lg);">
+      <button id="btn-prev-page" class="btn btn-secondary btn-sm" ${safePage === 0 ? 'disabled' : ''} style="gap:5px;">
+        ${icon('arrowLeft', 13)} Anterior
+      </button>
+      <span style="font-size:12px;color:var(--text-secondary);padding:0 var(--space-sm);">
+        ${safePage + 1} / ${totalPages}
+      </span>
+      <button id="btn-next-page" class="btn btn-secondary btn-sm" ${safePage >= totalPages - 1 ? 'disabled' : ''} style="gap:5px;">
+        Siguiente ${icon('arrowRight', 13)}
+      </button>
+    </div>` : '';
+
+    return `
+    <div>
+      <!-- Barra de controles -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-md);margin-bottom:var(--space-lg);">
+        <div>
+          <div style="font-size:16px;font-weight:800;margin-bottom:4px;">
+            ${projects.length === 0 ? 'Empezá por acá' : `${projects.length} video${projects.length !== 1 ? 's' : ''}`}
+          </div>
+          <div class="text-sm text-muted">
+            ${projects.length === 0 ? 'Creá tu primer video para empezar a generar miniaturas' : 'Seleccioná uno para continuar o creá uno nuevo'}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--space-sm);">
+          <!-- Toggle vista -->
+          ${projects.length > 0 ? `
+          <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+            <button id="btn-view-grid" title="Vista tarjetas"
+              style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;cursor:pointer;transition:all 0.15s;
+                background:${viewMode === 'grid' ? 'linear-gradient(135deg,var(--accent),var(--accent-dark))' : 'var(--bg-tertiary)'};
+                color:${viewMode === 'grid' ? 'white' : 'var(--text-tertiary)'};">
+              ${icon('grid', 14)}
+            </button>
+            <button id="btn-view-list" title="Vista lista"
+              style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;border-left:1px solid var(--border);cursor:pointer;transition:all 0.15s;
+                background:${viewMode === 'list' ? 'linear-gradient(135deg,var(--accent),var(--accent-dark))' : 'var(--bg-tertiary)'};
+                color:${viewMode === 'list' ? 'white' : 'var(--text-tertiary)'};">
+              ${icon('list', 14)}
+            </button>
+          </div>` : ''}
+          <!-- Crear nuevo -->
+          <button class="btn btn-primary" id="btn-create-video" style="gap:8px;white-space:nowrap;">
+            ${icon('plus', 15)} Nuevo Video
+          </button>
+        </div>
+      </div>
+
+      ${projects.length === 0
+        ? `<div class="card" style="text-align:center;padding:var(--space-2xl);border-style:dashed;opacity:0.65;">
+            <div style="margin-bottom:var(--space-md);opacity:0.4;">${icon('film', 40)}</div>
+            <p class="text-sm text-muted">Cada video tiene su propio guión, ángulos y miniaturas.<br>Empezá creando el primero.</p>
+            <button class="btn btn-primary mt-lg" id="btn-create-video-empty">${icon('plus', 14)} Crear primer video</button>
+          </div>`
+        : viewMode === 'grid'
+          ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--space-md);">${gridHTML}</div>`
+          : `<div style="display:flex;flex-direction:column;gap:8px;">${listHTML}</div>`
+      }
+
+      ${paginationHTML}
+    </div>`;
   }
 
   function renderStep1() {
@@ -433,6 +641,104 @@ export async function renderCerebro(container) {
   }
 
   function bindEvents() {
+    // --- STEP 0 events: selector/creador de video ---
+    document.getElementById('btn-back-to-videos')?.addEventListener('click', () => {
+      step = 0;
+      render();
+    });
+
+    async function handleCreateVideo() {
+      const title = await inputDialog('Nombre del video', '', {
+        placeholder: 'Ej: Por qué fracasan la mayoría de startups',
+        confirmLabel: 'Crear Video',
+      });
+      if (!title?.trim()) return;
+      try {
+        const project = await createProject(activeChannelId, title.trim());
+        loadProjectData(project);
+        render();
+      } catch (err) {
+        toast('Error al crear el video: ' + err.message, 'error');
+      }
+    }
+
+    document.getElementById('btn-create-video')?.addEventListener('click', handleCreateVideo);
+    document.getElementById('btn-create-video-empty')?.addEventListener('click', handleCreateVideo);
+
+    // Toggle vista grid/lista
+    document.getElementById('btn-view-grid')?.addEventListener('click', () => {
+      viewMode = 'grid'; currentPage = 0; render();
+    });
+    document.getElementById('btn-view-list')?.addEventListener('click', () => {
+      viewMode = 'list'; currentPage = 0; render();
+    });
+
+    // Paginación
+    document.getElementById('btn-prev-page')?.addEventListener('click', () => {
+      if (currentPage > 0) { currentPage--; render(); }
+    });
+    document.getElementById('btn-next-page')?.addEventListener('click', () => {
+      const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST;
+      const totalPages = Math.ceil(getState().projects.length / pageSize);
+      if (currentPage < totalPages - 1) { currentPage++; render(); }
+    });
+
+    // Cards clickeables (abrir video)
+    container.querySelectorAll('.cerebro-project-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const projectId = card.dataset.projectId;
+        const { projects } = getState();
+        const project = projects.find(p => p.id === projectId);
+        if (!project) return;
+        setActiveProject(projectId);
+        loadProjectData(project);
+        render();
+      });
+    });
+
+    // Botón renombrar
+    container.querySelectorAll('.btn-rename-project').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const projectId = btn.dataset.projectId;
+        const { projects } = getState();
+        const project = projects.find(p => p.id === projectId);
+        if (!project) return;
+        const newTitle = await inputDialog('Renombrar video', project.title, {
+          placeholder: 'Nombre del video',
+          confirmLabel: 'Guardar',
+        });
+        if (!newTitle?.trim() || newTitle.trim() === project.title) return;
+        try {
+          await renameProject(projectId, newTitle.trim());
+          render();
+        } catch (err) {
+          toast('Error al renombrar: ' + err.message, 'error');
+        }
+      });
+    });
+
+    // Botón borrar
+    container.querySelectorAll('.btn-delete-project').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const projectId = btn.dataset.projectId;
+        const { projects } = getState();
+        const project = projects.find(p => p.id === projectId);
+        if (!project) return;
+        const confirmed = await confirmDialog(`¿Borrar "${project.title}"?`, 'Esta acción eliminará el video y todos sus ángulos y variantes generadas. No se puede deshacer.');
+        if (!confirmed) return;
+        try {
+          await deleteProject(projectId);
+          currentPage = 0;
+          render();
+          toast('Video eliminado', 'success');
+        } catch (err) {
+          toast('Error al borrar: ' + err.message, 'error');
+        }
+      });
+    });
+
     // --- STEP 1 events ---
     const dz = document.getElementById('script-drop-zone');
     const si = document.getElementById('script-input');
