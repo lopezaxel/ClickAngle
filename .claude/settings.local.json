@@ -17,7 +17,13 @@
       "mcp__supabase__apply_migration",
       "WebFetch(domain:ai.google.dev)",
       "PowerShell(Stop-Process -Id 9544 -Force)",
-      "WebFetch(domain:docs.whop.com)"
+      "WebFetch(domain:docs.whop.com)",
+      "Bash(npm install *)",
+      "Bash(node --input-type=module --eval ' *)",
+      "WebSearch",
+      "WebFetch(domain:www.tubetuner.ai)",
+      "WebFetch(domain:blog.bananathumbnail.com)",
+      "Bash(node --input-type=module --eval \"import\\('./src/panels/engine.js'\\).then\\(\\(\\)=>console.log\\('OK'\\)\\).catch\\(e=>console.error\\('ERROR:',e.message\\)\\)\")"
     ]
   }
 }

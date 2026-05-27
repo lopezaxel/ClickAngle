@@ -65,6 +65,51 @@ Actualizar este archivo al cierre de cada sesión de desarrollo o tras cada camb
 
 ## Historial de cambios
 
+### 2026-05-27 — Sesión de ajustes pre-lanzamiento (mercado 2026)
+
+#### Contexto
+Sesión de análisis de mercado + ajustes estratégicos previos al lanzamiento. Se investigaron tendencias actuales de YouTube thumbnails 2026 y se cruzaron contra el estado de la app para identificar gaps y oportunidades.
+
+#### `src/panels/engine.js` — Fábrica Creativa
+
+**Nuevos formatos de composición (FORMATS array):**
+- **🤳 Emoción Pura** (`reaction`) — Formato #1 de CTR en YouTube 2026. Composición de DOS caminos inteligentes leídos desde el `hero_object` del Layer 3:
+  - **PATH A (celebridad)**: si el video habla de un personaje famoso (Shakira, Michael Jackson, etc.), el famoso es el anchor visual principal y el creador reacciona secundariamente hacia él.
+  - **PATH B (creador)**: si no hay celebridad, el rostro del creador (Face Vault, Paso 4) es el subject principal con 4 opciones de ejecución (Oversized Emotion, Conspiratorial Lean, Diptych, Macro Scale).
+- **🟥 Color Block** (`colorblock`) — Trend de mayor crecimiento en 2026. Bloques geométricos de color planos como arquitectura principal. 4 opciones: Diagonal Slash, Architectural Bands, Corner Invasion, Chromatic Triptych. Reglas absolutas: máx. 3 colores, fondos 100% flat, todo derivado de la paleta temática del video.
+
+**Nuevo estilo visual (STYLES array):**
+- **⬜ Neo-Minimal** (`neominimal`) — Trend 2026. Un sujeto, máx. 3 colores, negative space generoso, fondos flat, legible a 150px en mobile. Para: productividad, finanzas, educación, branding premium.
+
+**Constantes de casos de uso:**
+- `FORMAT_USE_CASES` — mapeo `id → texto "Ideal si tu video trata de:"` para los 6 formatos.
+- `STYLE_USE_CASES` — mapeo `id → texto "Ideal si tu canal es de:"` para los 6 estilos.
+
+**Rediseño de cards (Paso 2 y Paso 3):**
+- Cambiado de `display:grid; grid-template-columns:1fr 1fr` / `repeat(3,1fr)` a `display:flex; flex-wrap:wrap; gap:10px`.
+- Cada card ahora es vertical (`flex-direction:column; align-items:center; text-align:center`), `min-width:138px; flex:1 1 150px`.
+- Sección inferior en cada card: separador + "Ideal si tu video/canal trata de:" + texto de caso de uso en 9px.
+
+**Callout Test & Compare (Paso 5):**
+- Se muestra automáticamente cuando `masters.length > 0` (hay al menos 1 miniatura generada).
+- Explica en 3 pasos exactos cómo usar YouTube Studio → Miniatura → Probar y comparar.
+
+**Badge anti-clickbait (Paso 5):**
+- `renderAngleCard`: detecta ángulos con nombre/psicología que contiene `miedo|urgencia|fomo|amenaza|peligro`.
+- Muestra un aviso ⚠️ amarillo dentro de la card advirtiendo sobre el riesgo de watch time bajo.
+
+#### `src/panels/angulos.js` — Biblioteca de Ángulos
+
+- **Callout Test & Compare**: banner compacto debajo del header explicando el flujo de 3 pasos.
+- **Badge anti-clickbait**: ícono ⚠️ en header de card para categorías con `miedo|urgencia|fomo` en su nombre de categoría.
+
+#### Investigación de mercado realizada
+- Validados 4 formatos existentes contra tendencias 2026: todos vigentes.
+- Gaps identificados: Emoción Pura (face/reaction) y Color Block faltaban — agregados.
+- Fuentes: TubeTuner, BananaThumbnail, 1of10, ThumbMagic, Growthos.
+
+---
+
 ### 2026-05-22
 - **Sentry agregado** — `@sentry/browser` instalado, `src/lib/sentry.js` creado, integrado en la app para monitoreo de errores en producción.
 

@@ -50,6 +50,15 @@ export async function renderAngulos(container) {
         <span class="text-sm text-muted">Mostrando ${filtered.length} de ${CLICK_ANGLES.length}</span>
       </div>
 
+      <!-- Test & Compare tip -->
+      <div style="background:linear-gradient(135deg,rgba(16,185,129,0.07),rgba(99,102,241,0.04));border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:var(--space-lg);display:flex;align-items:center;gap:12px;">
+        <span style="font-size:20px;flex-shrink:0;">🧪</span>
+        <div>
+          <span style="font-size:11px;font-weight:800;color:#10b981;">Test & Compare de YouTube:</span>
+          <span style="font-size:11px;color:var(--text-secondary);"> elegí 2-3 ángulos opuestos, generá sus miniaturas en la Fábrica Creativa y testeálos simultáneamente en YouTube Studio → el algoritmo te dice cuál retiene mejor.</span>
+        </div>
+      </div>
+
       <div class="flex gap-sm mb-lg" style="flex-wrap: wrap;">
         <button class="btn btn-sm category-filter ${activeFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}" data-cat="ALL">
           Todos (${CLICK_ANGLES.length})
@@ -66,6 +75,7 @@ export async function renderAngulos(container) {
         ${filtered.map((angle, i) => {
       const cat = ANGLE_CATEGORIES[angle.category] || { label: angle.category };
       const isFav = favorites.includes(angle.id);
+      const isHighRiskCat = /miedo|urgencia|fomo/i.test(angle.category || '');
       return `<div class="angle-card" style="animation-delay: ${i * 0.05}s;">
                   <div class="flex items-center justify-between mb-sm">
                     <span class="angle-icon" style="color:var(--text-secondary);">${icon('crosshair', 24)}</span>
@@ -74,6 +84,7 @@ export async function renderAngulos(container) {
                         ${isFav ? icon('starFilled', 18) : icon('star', 18)}
                       </button>
                       <span class="badge badge-neutral">${cat.label}</span>
+                      ${isHighRiskCat ? `<span title="Alto impacto — verificá que el video cumpla lo que promete" style="font-size:13px;cursor:default;">⚠️</span>` : ''}
                     </div>
                   </div>
                   <div class="angle-name">${angle.name}</div>

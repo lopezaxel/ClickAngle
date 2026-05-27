@@ -86,6 +86,60 @@ OPTION D — THE EVIDENCE REVEAL: Document, photograph, screenshot, or physical 
 
 CHOSEN EXECUTION: Select ONE option that creates the most urgent "this just happened" feeling for this specific content. ALL text/letters/numbers in the image = ZERO. Pure visual language only. Alert colors from Layer 2.5.`,
   },
+  {
+    id: 'reaction',
+    label: 'Emoción Pura',
+    subtitle: 'Face / Reacción',
+    emoji: '🤳',
+    desc: 'La cara del creador ES la miniatura — o el creador reaccionando a un personaje famoso. El formato #1 de YouTube en 2026: el 40% de los clics vienen de la zona de emoción del frame.',
+    composition: `FORMAT: EMOCIÓN PURA — FACE-FORWARD REACTION (the #1 highest-CTR composition format on YouTube 2026, validated by eye-tracking: 40% of clicks originate from the face/emotion zone). You are a world-class YouTube thumbnail designer. BEFORE choosing any composition option, READ LAYER 3 carefully and decide which execution path applies:
+
+━━━ PATH A — CELEBRITY / PUBLIC FIGURE AS HERO ━━━
+Apply this path ONLY if the HERO ELEMENT in Layer 3 names a specific recognizable person: a celebrity, musician, athlete, politician, actor, historical icon, or famous public figure (examples: Shakira, Michael Jackson, Elon Musk, Cristiano Ronaldo, Taylor Swift, etc.).
+
+In Path A: THE CELEBRITY IS THE PRIMARY VISUAL ANCHOR.
+- The celebrity must occupy 50–60% of the frame in a position that makes their identity INSTANTLY recognizable — their signature features, iconic pose, characteristic style, or defining visual trait must be identifiable by any viewer in 0.2 seconds even at thumbnail size. Do not invent a generic face — represent this specific person's well-known visual identity.
+- The creator's face (if present from Layer 6) appears in a SECONDARY, SMALLER position — typically right side or upper corner — and expresses a visceral emotion DIRECTED AT the celebrity: shock, disbelief, excitement, awe, fear, or admiration. The creator does NOT compete with the celebrity for visual dominance — they AMPLIFY the emotional reading for the viewer.
+- If Layer 6 contains NO creator face, fill the secondary zone with a dramatic environmental element, strong graphic accent, or bold color from Layer 2.5 that contextualizes the celebrity's presence.
+- VISUAL RELATIONSHIP IS THE STORY: The celebrity and creator face must connect through eye-line direction — the creator visually reacts TO the celebrity. This tension between the two subjects IS the thumbnail narrative. The viewer asks: "What did [celebrity] do that caused that reaction?"
+- Lighting: celebrity = key-lit dominant subject; creator face (if present) = complementary accent rim light from behind. Background from Layer 2.5 thematic palette matching the video's emotional temperature.
+
+━━━ PATH B — CREATOR FACE AS HERO (no specific celebrity in Layer 3) ━━━
+Apply this path if the HERO ELEMENT in Layer 3 is abstract, conceptual, a generic object, a place, a topic (finanzas, negocios, salud, tecnología, etc.), or any non-recognizable/non-celebrity subject. In this path, the CREATOR'S FACE from the Layer 6 reference photo IS the primary visual anchor. Choose ONE of the following executions:
+
+OPTION B1 — THE OVERSIZED EMOTION FRAME: Creator's face anchored to the TOP-LEFT, filling 60–70% of the canvas. Expression cinematically over-the-top: eyes impossibly wide, jaw dropped, eyebrows at maximum height, or face contorted in pure shock/disbelief/triumph (2x more intense than any natural human expression). Background: single dramatically contrasting solid color or bold gradient that punches the skin tone forward — zero environment, zero texture, pure chromatic contrast. One accent visual element (an object, arrow, icon — zero text or letters) in the upper-right negative space implies the cause of the emotion. The viewer's brain reads the emotion in 0.1 seconds and MUST know what caused it.
+
+OPTION B2 — THE CONSPIRATORIAL LEAN: Creator in tight 3/4 close-up, leaning TOWARD the camera — as if sharing a forbidden secret directly with the viewer. Eyes locked into the camera with an "I know something you don't" intensity. One hand raised naturally toward the face (finger to lips, cupping the jaw, or pointing off-frame). Background: deep vignette darkness with a single sharp rim light in the Layer 2.5 accent color isolating the face from the void. Simultaneously intimate and urgent.
+
+OPTION B3 — THE EMOTION + EVIDENCE DIPTYCH: Creator face LEFT 55% — pure raw emotion matching the emotion_label from Layer 3. RIGHT 45%: ONE concrete visual element (product, chart silhouette, symbolic object, graphic icon) showing the WHY of the emotion. Hard boundary (color shift, shadow edge, or light spill) separates the two zones. Zero text — the composition tells the complete story in 0.3 seconds.
+
+OPTION B4 — THE MACRO SCALE EXPRESSION: Creator face at MASSIVE scale — only the eye-to-jaw zone visible, top of head and chin both cropped off. Skin texture, the fire in the eyes, the jaw tension — all rendered at cinematic macro scale that makes the emotion feel physically overwhelming. Background: single oversaturated bold color from Layer 2.5 for maximum skin-tone contrast. Zero environmental elements, zero distractions.
+
+ABSOLUTE RULES (apply to BOTH Path A and Path B):
+(1) The dominant expression — whether celebrity, creator, or both — MUST match the emotion_label from Layer 3 (SORPRESA/AUTORIDAD/MIEDO/DUDA). Exaggerated 2x beyond natural.
+(2) Dramatic studio or cinematic lighting ONLY — volumetric key light carving facial geometry, colored rim lights from behind. Natural ambient lighting is NOT allowed.
+(3) All accent colors from Layer 2.5 thematic palette — NEVER generic defaults.
+(4) Zero text, letters, or words anywhere in the image.
+(5) The composition must pop at 150px mobile thumbnail size — the primary face must remain the instant focal point at any display size.`,
+  },
+  {
+    id: 'colorblock',
+    label: 'Color Block',
+    subtitle: 'Impacto Geométrico',
+    emoji: '🟥',
+    desc: 'Bloques geométricos de color como arquitectura principal. El trend de mayor crecimiento en 2026 — se diferencia instantáneamente en feeds saturados de fotorrealismo.',
+    composition: `FORMAT: COLOR BLOCK — GEOMETRIC CHROMATIC ARCHITECTURE (the fastest-growing CTR composition trend of 2026, dominating finance, motivation, and brand channels — especially powerful in dark mode feeds where pure color geometry creates instant scroll-stopping contrast against complex photorealistic competition). You are a world-class YouTube thumbnail designer and senior brand strategist who understands that in a feed saturated with complex imagery, pure color geometry commands attention faster than any photograph. The color structure IS the communication. Choose the most visually explosive execution:
+
+OPTION A — THE DIAGONAL CHROMATIC SLASH: The frame is divided by a razor-sharp diagonal line cutting from one corner to the opposite (upper-left to lower-right, or upper-right to lower-left — choose the direction that creates maximum tension for this content). Each geometric triangle zone has its own FLAT SOLID bold color from the Layer 2.5 thematic palette — one warm-saturated anchor color, one cool-dark contrast. The subject (face or object) straddles the dividing line, partially bathed in each color zone — existing at the collision point of two worlds. No gradients, no textures in the color zones — PURE FLAT fills with maximum pigment intensity. Complementary color pairs for maximum contrast: red/white, electric orange/near-black, cobalt blue/warm yellow, deep purple/gold. The diagonal generates aggressive forward momentum that makes the eye move across the frame.
+
+OPTION B — THE ARCHITECTURAL BAND SPLIT: The frame uses bold horizontal or vertical solid-color bands of dramatically different hues. One dominant anchor band (55-65% of frame area) and one or two high-contrast accent bands. The subject is fully placed within one color zone, cleanly isolated as if printed on a graphic poster — zero background complexity, zero depth simulation. A secondary visual element (object, icon silhouette, symbolic shape — zero letters) lives in the contrasting band. Each zone: absolutely flat color, zero gradients, zero noise, zero texture. The composition reads as designed — like a premium advertising campaign where every pixel has a purpose. Colors all from Layer 2.5 content theme.
+
+OPTION C — THE CORNER INVASION FRAME: Bold geometric color shapes (oversized rectangles, aggressive angled blocks, thick L-brackets, diagonal wedges) burst in from multiple corners or frame edges, creating a "graphic design layer" that frames the subject without covering their face or key elements. Each shape is a flat saturated solid color — confident, oversized, unmissable. The subject appears to exist in front of the color geometry, creating a dimensional layering effect (subject → color shapes → background). Maximum 3 colors total: one for the geometric invasion shapes, one for the background zone, one accent. Derive every color from the Layer 2.5 content palette — never generic defaults.
+
+OPTION D — THE CHROMATIC TRIPTYCH: Frame divided into exactly 3 vertical bands of sharply contrasting colors. The central band (widest, 50% of frame) anchors the primary subject in full contrast against its color. The flanking left and right bands (25% each) are narrower, bolder accent colors that create symmetric bracket tension around the center. The overall composition reads as a graphic design system — mathematical, intentional, premium. The subject is photographically real (photorealistic face or object) but the color architecture makes the entire frame feel designed rather than captured. All 3 colors from Layer 2.5 thematic palette, chosen for maximum three-way contrast.
+
+CHOSEN EXECUTION: Select ONE option that creates the most graphically powerful "designed-not-shot" impact for this content. ABSOLUTE RULES: (1) Maximum 3 colors in the ENTIRE frame — no exceptions. (2) ALL background zones are FLAT SOLID FILLS — zero gradients, zero textures, zero atmospheric effects, zero noise. (3) Subject must be razor-sharp with clean edges, maximally contrasted against their color zone. (4) The composition must read with equal impact in light mode AND dark mode feeds. (5) Zero text or letters in the image. (6) Derive every color from Layer 2.5 thematic content palette — never generic reds, blues, or yellows as defaults. The color choices must be EARNED by the content's emotional temperature.`,
+  },
 ];
 
 const STYLES = [
@@ -129,7 +183,36 @@ const STYLES = [
     keywords: 'Hollywood A-list movie poster craft, anamorphic lens flares, dramatic cinematic shadows, rich film color grade matched to emotional content, 35mm film grain texture, golden ratio composition, epic atmospheric depth.',
     lighting: 'VISUAL STYLE — EPIC HOLLYWOOD CINEMATIC: Execute this as a cinematographer and poster designer for a $200M Hollywood production. Every lighting and color decision must serve the emotional content from Layer 2.5 and Layer 3. Lighting matched to content emotional temperature: action/drama/intensity → extreme high-contrast side or under-lighting with deep actor shadows; historical/power → warm golden-hour side light casting long dramatic shadows; mystery/revelation → single harsh overhead or side spotlight, everything else swallowed by near-black. Anamorphic horizontal lens flares in the thematic accent color — subtle, elegant, not cartoonish. Color grade: derive from content mood — tension/triumph → teal shadows with warm-orange highlights; mystery/revelation → desaturated cold teal; wealth/power → rich warm golden tones with lifted shadows. 35mm film grain overlay at 15% — it feels shot on film, not rendered by AI. Epic atmospheric backdrop with atmospheric perspective depth. The result should look like a real movie poster.',
   },
+  {
+    id: 'neominimal',
+    label: 'Neo-Minimal',
+    subtitle: 'Trend 2026',
+    emoji: '⬜',
+    desc: 'El trend #1 del 2026. Un sujeto, 2-3 colores, máximo impacto. Legible a 150px en mobile.',
+    keywords: 'neo-minimalist YouTube thumbnail 2026, single bold subject, maximum 2-3 color palette, generous negative space, clean geometric composition, strong contrast ratio, zero visual noise, premium brand feel, mobile-first design, readable at any thumbnail size.',
+    lighting: 'VISUAL STYLE — NEO-MINIMAL 2026 (the #1 CTR trend for mobile-first consumption): Execute this as a senior art director who treats "less is more" as an absolute law. RULES: ONE dominant subject only — remove everything else. Maximum 3 colors in the entire frame (including the subject). Generous negative space around the subject — it must breathe. Lighting: flat, even, clean product photography — no dramatic shadows, no atmospheric effects, no haze, no particles. Background: single bold solid color derived from Layer 2.5 thematic palette (choose the most emotionally resonant color for this specific content — NOT a generic default). Subject must have razor-sharp clean edges, as if precision-cut and placed on the background. ZERO textures, ZERO gradients on background, ZERO decorative noise. The entire composition must communicate the concept in 0.3 seconds at 150px width — if it reads as complex at small size, it has failed. Remove any element that does not directly reinforce the single core message. Final result must feel premium, confident, and impossibly clean — like a $200 product on a white background. Mental test before finalizing: does it still create an immediate visual impact at thumbnail size? If not — simplify further.',
+  },
 ];
+
+// ─── Use-case labels (shown on format/style cards) ──────────────────────────
+
+const FORMAT_USE_CASES = {
+  versus:     'Comparaciones A vs B · Antes/Después · "¿Cuál es mejor?" · Debates · Transformaciones',
+  authority:  'Tutoriales · Reviews de producto · Guías paso a paso · "El mejor X del mercado"',
+  shock:      'Secretos revelados · "Nadie te dijo esto" · Misterios · Cosas ocultas · Curiosidades',
+  breaking:   'Noticias urgentes · Advertencias del sector · FOMO · "Esto está pasando ahora"',
+  reaction:   'Opiniones personales · Reacciones · Storytime · "Mi verdad sobre..." · Experiencias',
+  colorblock: 'Finanzas · Motivación · Marca personal · Mensajes directos · Una idea, máximo impacto',
+};
+
+const STYLE_USE_CASES = {
+  hyperrealist: 'Lifestyle · Vlog · Tech reviews · Todo nicho donde la credibilidad visual es clave',
+  mrbeast:      'Entretenimiento · Retos · Gaming · Reacciones · Contenido viral de alto impacto',
+  cyberpunk:    'Inteligencia Artificial · Tech futurista · Gaming · Criptomonedas · Ciencia · Sci-fi',
+  minimal:      'Negocios · Coaching · Finanzas · Marcas premium · Cursos online · Contenido corporativo',
+  cinematic:    'Documentales · Historias personales · Viajes · Drama · Motivación épica · Storytelling',
+  neominimal:   'Productividad · Educación · Branding minimalista · Finanzas · Contenido premium 2026',
+};
 
 // ─── Main Panel ─────────────────────────────────────────────────────────────
 
@@ -822,28 +905,39 @@ export async function renderEngine(container) {
       </div>
       ` : ''}
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md);">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
         ${FORMATS.map(f => {
           const isSelected = selectedFormats.includes(f.id);
           const rec = recMap[f.id];
           const isHighRec = rec?.confidence === 'alta';
+          const useCase = FORMAT_USE_CASES[f.id] || '';
           return `
-          <div class="card format-card" data-format-id="${f.id}" style="cursor:pointer;padding:var(--space-md);transition:all 0.15s;position:relative;
+          <div class="card format-card" data-format-id="${f.id}" style="
+            cursor:pointer;padding:14px 12px;transition:all 0.15s;position:relative;
+            flex:1 1 150px;min-width:138px;max-width:200px;
+            display:flex;flex-direction:column;align-items:center;text-align:center;
             ${isSelected
               ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);'
               : isHighRec
                 ? 'border-color:rgba(16,185,129,0.35);'
                 : ''}">
-            <div style="position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;
+            <div style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;
               border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
               background:${isSelected ? 'var(--accent)' : 'transparent'};
               display:flex;align-items:center;justify-content:center;color:white;">
-              ${isSelected ? icon('check', 10) : ''}
+              ${isSelected ? icon('check', 9) : ''}
             </div>
-            ${isHighRec && !isSelected ? `<div style="position:absolute;top:10px;left:10px;font-size:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35);">✦ IA</div>` : ''}
-            <div style="font-size:32px;margin-bottom:8px;margin-top:${isHighRec ? '18px' : '0'};">${f.emoji}</div>
-            <div class="font-bold" style="font-size:14px;">${f.label}</div>
-            <div class="text-xs" style="color:${isHighRec ? '#10b981' : 'var(--accent)'};margin-top:2px;">${f.subtitle}</div>
+            ${isHighRec && !isSelected ? `<div style="position:absolute;top:8px;left:8px;font-size:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35);">✦ IA</div>` : ''}
+            <div style="font-size:34px;margin-bottom:8px;margin-top:${isHighRec ? '16px' : '4px'};">${f.emoji}</div>
+            <div class="font-bold" style="font-size:13px;line-height:1.3;margin-bottom:3px;">${f.label}</div>
+            <div class="text-xs" style="color:${isHighRec ? '#10b981' : 'var(--accent)'};">${f.subtitle}</div>
+            ${useCase ? `
+            <div style="margin-top:auto;padding-top:10px;width:100%;">
+              <div style="border-top:1px solid var(--border);padding-top:8px;">
+                <div style="font-size:8px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">Ideal si tu video trata de:</div>
+                <div style="font-size:9px;color:var(--text-secondary);line-height:1.5;">${useCase}</div>
+              </div>
+            </div>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -858,22 +952,32 @@ export async function renderEngine(container) {
       <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
         Elegí el estilo visual de tu miniatura
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
         ${STYLES.map(s => {
           const isSelected = selectedStyleId === s.id;
+          const useCase = STYLE_USE_CASES[s.id] || '';
           return `
-          <div class="card style-card" data-style-id="${s.id}" style="cursor:pointer;padding:14px;transition:all 0.15s;position:relative;
+          <div class="card style-card" data-style-id="${s.id}" style="
+            cursor:pointer;padding:14px 12px;transition:all 0.15s;position:relative;
+            flex:1 1 150px;min-width:138px;max-width:200px;
+            display:flex;flex-direction:column;align-items:center;text-align:center;
             ${isSelected ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);box-shadow:0 0 0 1px var(--accent);' : ''}">
-            <div style="position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;
+            <div style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;
               border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
               background:${isSelected ? 'var(--accent)' : 'transparent'};
               display:flex;align-items:center;justify-content:center;color:white;">
               ${isSelected ? icon('check', 9) : ''}
             </div>
-            <div style="font-size:28px;margin-bottom:8px;">${s.emoji}</div>
-            <div class="font-bold" style="font-size:12px;">${s.label}</div>
-            <div class="text-xs" style="color:var(--accent);margin-top:2px;">${s.subtitle}</div>
-            <div class="text-xs text-muted" style="margin-top:6px;font-size:10px;line-height:1.4;">${s.desc}</div>
+            <div style="font-size:34px;margin-bottom:8px;margin-top:4px;">${s.emoji}</div>
+            <div class="font-bold" style="font-size:13px;line-height:1.3;margin-bottom:3px;">${s.label}</div>
+            <div class="text-xs" style="color:var(--accent);">${s.subtitle}</div>
+            ${useCase ? `
+            <div style="margin-top:auto;padding-top:10px;width:100%;">
+              <div style="border-top:1px solid var(--border);padding-top:8px;">
+                <div style="font-size:8px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;">Ideal si tu canal es de:</div>
+                <div style="font-size:9px;color:var(--text-secondary);line-height:1.5;">${useCase}</div>
+              </div>
+            </div>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -1036,6 +1140,9 @@ export async function renderEngine(container) {
       const hasError = !!latest?.ai_metadata?.error;
       const safeTitle = project.title.slice(0, 20).replace(/\s+/g, '-');
       const isExpanding = expandingVariantsSet.has(latest?.id);
+      // Detectar ángulos de alto riesgo clickbait (MIEDO/URGENCIA/FOMO)
+      const isHighRiskAngle = /miedo|urgencia|fomo|amenaza|peligro/i.test(angle.name || '') ||
+                              /miedo|urgencia|fomo/i.test(angle.psychology || angle.psychology_text || '');
 
       return `
       <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px;animation:fadeIn 0.3s ease both;">
@@ -1051,6 +1158,11 @@ export async function renderEngine(container) {
                 ${angle.psychology || angle.psychology_text
                   ? `<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;margin-top:4px;">${(angle.psychology || angle.psychology_text).slice(0, 160)}</div>`
                   : ''}
+                ${isHighRiskAngle ? `
+                <div style="margin-top:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm);display:flex;align-items:flex-start;gap:6px;">
+                  <span style="font-size:12px;flex-shrink:0;">⚠️</span>
+                  <span style="font-size:10px;color:#f59e0b;line-height:1.5;"><strong>Ángulo de alto impacto:</strong> Asegurate de que el video cumpla lo que la miniatura promete. Un CTR alto con poco watch time le dice al algoritmo que defraudaste al espectador.</span>
+                </div>` : ''}
               </div>
               <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                 ${latest?.style_preset ? `<span class="badge badge-accent" style="font-size:9px;">${latest.style_preset}</span>` : ''}
@@ -1177,6 +1289,21 @@ export async function renderEngine(container) {
           <button class="btn btn-sm angles-page-btn ${i===safePage?'btn-primary':'btn-secondary'}" data-page="${i}"
             style="min-width:32px;font-size:12px;">${i+1}</button>`).join('')}
         <button class="btn btn-secondary btn-sm angles-page-btn" data-page="${safePage + 1}" ${safePage >= totalPages-1 ? 'disabled' : ''}>${icon('arrowRight',12)}</button>
+      </div>` : ''}
+
+      <!-- Test & Compare callout -->
+      ${masters.length > 0 ? `
+      <div style="background:linear-gradient(135deg,rgba(16,185,129,0.07),rgba(99,102,241,0.04));border:1px solid rgba(16,185,129,0.22);border-radius:var(--radius-lg);padding:16px 20px;margin-top:var(--space-lg);display:flex;align-items:flex-start;gap:14px;">
+        <div style="font-size:26px;flex-shrink:0;margin-top:2px;">🧪</div>
+        <div>
+          <div style="font-weight:800;font-size:13px;color:#10b981;margin-bottom:5px;">Tus miniaturas están listas para el Test & Compare de YouTube</div>
+          <div style="font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">YouTube Studio te permite testear hasta 3 variantes simultáneamente. Mide cuál <strong>retiene mejor</strong> al espectador — no solo el CTR. Es gratis para todos los canales elegibles.</div>
+          <div style="font-size:11px;color:var(--text-secondary);line-height:2;">
+            <span style="color:#10b981;font-weight:800;">①</span>&nbsp; Descargá 2 o 3 de tus miniaturas generadas<br/>
+            <span style="color:#10b981;font-weight:800;">②</span>&nbsp; En YouTube Studio → tu video → <span style="background:rgba(16,185,129,0.12);padding:1px 6px;border-radius:4px;font-weight:700;color:#10b981;">Miniatura → Probar y comparar</span><br/>
+            <span style="color:#10b981;font-weight:800;">③</span>&nbsp; Subí las variantes. YouTube las rota automáticamente entre tu audiencia y te dice cuál gana en 3-14 días.
+          </div>
+        </div>
       </div>` : ''}
     </div>`;
   }
