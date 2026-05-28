@@ -19,6 +19,7 @@ export async function renderCerebro(container) {
   let contextText = '';
   let analysisResult = null;
   let generatedAngles = [];
+  let channelYtAnalysis = null; // YouTube ADN — se carga en step 1, enriquece los ángulos
   let selectedAngleIndices = [];
   let isGeneratingAngles = false;
 
@@ -831,6 +832,7 @@ export async function renderCerebro(container) {
       try {
         const { data: brandKit } = await supabase.from('brand_kits').select('detailed_adn').eq('channel_id', activeChannelId).maybeSingle();
         const adn = brandKit?.detailed_adn || {};
+        channelYtAnalysis = brandKit?.detailed_adn?.youtube_analysis || null;
         const promptModel = inputType === 'script' ? 'SCRIPT_ANALYSIS' : 'CONTEXT_ANALYSIS';
         analysisResult = await callAI(promptModel, textToProcess, adn);
         hideLoader();
@@ -977,6 +979,12 @@ export async function renderCerebro(container) {
         promise: analysisResult?.promise || '',
         visual_briefing: analysisResult?.visual_briefing || null,
         existing_angles: generatedAngles.map(a => a.name),
+        // YouTube ADN — enriquece los ángulos con la psicología real de la audiencia del canal
+        ...(channelYtAnalysis && {
+          channel_archetype: channelYtAnalysis.channel_archetype,
+          audience_psychology: channelYtAnalysis.audience_psychology,
+          content_pillars: channelYtAnalysis.content_pillars,
+        }),
       };
       const result = await callAI('ANGLES_GENERATION', textContent, context);
       generatedAngles = [...generatedAngles, ...(result?.angles || [])];

@@ -500,7 +500,9 @@ export async function renderEngine(container) {
 
   function renderDNAChecklist(project) {
     const vb = project?.logic_dna?.visual_briefing;
-    const adn = brandKit?.detailed_adn?.synthesis || brandKit?.detailed_adn || {};
+    const adnData = brandKit?.detailed_adn;
+    const adn = adnData?.synthesis || adnData || {};
+    const ytAnalysis = adnData?.youtube_analysis || null;
     const styleSummary = brandKit?.style_summary;
     const marketContrast = project?.logic_dna?.market_contrast;
 
@@ -509,7 +511,7 @@ export async function renderEngine(container) {
     const matchedFace = faceList.find(f => f.id === autoMatchedFaceId);
     const visualStyle = styleSummary?.visual_style || styleSummary?.winning_pattern;
     const avoidColors = marketContrast?.avoid_colors || [];
-    const brandTone = adn?.tone;
+    const brandTone = adn?.tone || ytAnalysis?.channel_archetype || null;
 
     const checkItem = (ok, label, value) => `
       <div class="flex items-start gap-sm" style="padding:6px 0; border-bottom:1px solid var(--border);">
@@ -520,7 +522,7 @@ export async function renderEngine(container) {
         </div>
       </div>`;
 
-    const allReady = heroObject && emotionLabel && matchedFace && visualStyle && brandTone;
+    const allReady = heroObject && emotionLabel && matchedFace && visualStyle;
 
     return `
     <div class="card mb-md" style="background:linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05)); border-color:rgba(99,102,241,0.3);">
@@ -533,7 +535,8 @@ export async function renderEngine(container) {
       ${checkItem(!!heroObject, 'Objeto Héroe Detectado', heroObject)}
       ${checkItem(!!(emotionLabel && matchedFace), 'Cara Seleccionada por Match', matchedFace ? `${matchedFace.expression_type} — match con emoción "${emotionLabel}"` : emotionLabel ? `"${emotionLabel}" detectada, sin foto con ese label en Face Vault` : null)}
       ${checkItem(!!visualStyle, 'Estilo Visual de Galería', visualStyle)}
-      ${checkItem(!!brandTone, 'Tono de Marca (ADN)', brandTone)}
+      ${checkItem(!!brandTone, 'Identidad del Canal', brandTone)}
+      ${checkItem(!!ytAnalysis, 'YouTube ADN', ytAnalysis ? `"${ytAnalysis.channel_archetype}" · ${ytAnalysis.content_pillars?.slice(0,2).join(', ')}` : null)}
       ${checkItem(avoidColors.length > 0, 'Restricción de Mercado', avoidColors.length > 0 ? `Evitar: ${avoidColors.join(', ')}` : null)}
     </div>`;
   }
@@ -2369,8 +2372,10 @@ export async function renderEngine(container) {
     // === LAYER 5: BRAND ADN (tone, identity, gallery style, market contrast) ===
     const adnData = brandKit?.detailed_adn;
     const adn = adnData?.synthesis || adnData || {};
-    const brandTone = adnData ? (adn.tone || '') : '';
-    const brandBranding = adnData ? (adn.branding || '') : '';
+    const ytAnalysis = adnData?.youtube_analysis || null;
+    // Campos del ADN — YouTube ADN tiene precedencia sobre el formato viejo de entrevista
+    const brandTone = adn.tone || ytAnalysis?.channel_archetype || '';
+    const brandBranding = adn.branding || ytAnalysis?.visual_signature || '';
     const styleSummary = brandKit?.style_summary || {};
     const winningStyle = styleSummary.visual_style || styleSummary.winning_pattern || '';
     const palette = styleSummary.palette?.join(', ') || '';
@@ -2379,8 +2384,14 @@ export async function renderEngine(container) {
     const avoidColors = mc.avoid_colors?.join(', ') || '';
     const crowdPattern = mc.crowd_pattern || '';
     const adnLayer = [
-      (brandTone || brandBranding) ? `Brand tone: ${brandTone}. Identity: ${brandBranding}.` : '',
-      winningStyle ? `Creator's proven visual style: ${winningStyle}` : '',
+      (brandTone || brandBranding) ? `Brand tone & archetype: ${brandTone}. Visual identity: ${brandBranding}.` : '',
+      // YouTube ADN — datos reales del canal (condicional, no bloquea si no existe)
+      ytAnalysis?.visual_signature ? `Channel's proven visual signature (from top-performing videos): ${ytAnalysis.visual_signature}` : '',
+      ytAnalysis?.audience_psychology ? `Audience psychology — what makes THIS specific audience stop and click: ${ytAnalysis.audience_psychology}` : '',
+      ytAnalysis?.performance_insights ? `What drives performance in this channel: ${ytAnalysis.performance_insights}` : '',
+      ytAnalysis?.differentiation ? `Channel market differentiation (use this to stand out): ${ytAnalysis.differentiation}` : '',
+      // Galería de éxitos
+      winningStyle ? `Creator's proven visual style from winning thumbnails: ${winningStyle}` : '',
       composition ? `Composition signature: ${composition}` : '',
       palette ? `Brand palette: ${palette}` : '',
       avoidColors ? `Market contrast — AVOID these competitor colors as dominant: ${avoidColors}` : '',
@@ -2410,9 +2421,15 @@ export async function renderEngine(container) {
     // Never describe facial traits as text — the model must anchor to the actual photo.
     const faceLayer = useFace && selectedFace
       ? `CREATOR FACE (mandatory): The reference photo of the real creator is attached to this request as an image. You MUST use that exact real person's face — do NOT generate a fictional or AI-invented face. Preserve 100% of their real identity: bone structure, eyes, nose, mouth, hair, skin tone, piercing or any distinctive features. Required expression: ${requiredEmotion || selectedFace.expression_type} — make it hyper-expressive and over-the-top cinematic, but the face must unmistakably be the same real person from the reference photo.`
-      : 'NO people or faces. Focus entirely on objects, environments, and graphic elements.';
+      : `NO HUMAN PRESENCE — ABSOLUTE RULE: Zero faces, zero people, zero bodies, zero hands, zero silhouettes, zero humanoid shapes of any kind. If any option in LAYER 2 describes a face-based composition, SKIP that option entirely and choose the next available option that builds visual impact using only objects, environments, graphic elements, symbols, or abstract visual language. This rule is NON-NEGOTIABLE and overrides any face-related instruction in any other layer.`;
 
-    return `━━━ ROLE & MISSION ━━━
+    // Hard preamble injected before all layers when no face is used —
+    // prevents the model from defaulting to AI-generated faces when format options reference them.
+    const noFacePreamble = !useFace ? `🚫 HARD CONSTRAINT — READ BEFORE ANYTHING ELSE: This thumbnail must contain ZERO human faces, people, or body parts of any kind. No real faces, no AI-generated faces, no silhouettes, no hands, no humanoid figures. Any composition option in LAYER 2 that involves a person's face or body MUST be skipped. Build maximum visual impact using only objects, environments, graphic design, symbols, and abstract elements. This constraint cannot be overridden by any instruction that follows.
+
+` : '';
+
+    return `${noFacePreamble}━━━ ROLE & MISSION ━━━
 You are the world's best YouTube thumbnail graphic designer — a creative director with 15+ years of experience studying viral content across every niche: crime, tech, finance, sports, entertainment, history, lifestyle. You have analyzed over 50,000 high-performing thumbnails and understand exactly what makes a human stop mid-scroll and click. You think in terms of visual hierarchy, emotional triggers, color psychology, negative space, and compositional tension. Your thumbnails consistently achieve CTR above 15%. You NEVER produce generic or predictable compositions. You invent unexpected, surprising, and visually stunning executions while staying completely true to the video's content and emotional DNA.
 
 Your task: generate the single most visually impactful, click-worthy YouTube thumbnail possible for this specific video — 16:9 aspect ratio, maximum CTR optimized. Surprise the viewer. Make it impossible to ignore.

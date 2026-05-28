@@ -7,7 +7,6 @@ import { renderSearchbar } from './src/components/searchbar.js';
 import { renderWorkflow, updateWorkflow } from './src/components/workflow.js';
 import { renderDashboard } from './src/panels/dashboard.js';
 import { renderCerebro } from './src/panels/cerebro.js';
-import { renderBrand } from './src/panels/brand.js';
 import { renderEspionaje } from './src/panels/espionaje.js';
 
 import { renderEngine } from './src/panels/engine.js';
@@ -27,7 +26,6 @@ import { showLoader, hideLoader } from './src/lib/loader.js';
 // Register all panel routes
 registerRoute('dashboard', renderDashboard);
 registerRoute('cerebro', renderCerebro);
-registerRoute('brand', renderBrand);
 registerRoute('espionaje', renderEspionaje);
 
 registerRoute('engine', renderEngine);

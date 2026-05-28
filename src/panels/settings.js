@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase.js';
 import { getState, setState } from '../lib/state.js';
 import { icon } from '../icons.js';
 import { checkApiKey } from '../lib/intelligence.js';
-import { renderADNSection, renderFaceVaultSection, renderGaleriaSection } from './brand.js';
+import { renderYoutubeADNSection, renderFaceVaultSection, renderGaleriaSection } from './brand.js';
 
 export function renderSettings(container) {
   const { currentUser } = getState();
@@ -73,11 +73,11 @@ function renderSettingsUI(container, maskedKeys) {
         </div>
       </details>
 
-      <!-- 2. ADN Estratégico -->
+      <!-- 2. Canal de YouTube -->
       <details class="settings-accordion">
         <summary class="settings-accordion-header">
-          <span class="settings-accordion-lead">${icon('brain', 16)}<span>ADN Estratégico</span></span>
-          <span class="settings-accordion-desc">De qué trata el canal</span>
+          <span class="settings-accordion-lead">${icon('youtubePlay', 16)}<span>Canal de YouTube</span></span>
+          <span class="settings-accordion-desc">Análisis estratégico con IA</span>
           <span class="settings-accordion-chevron">${icon('chevronDown', 14)}</span>
         </summary>
         <div class="settings-accordion-body" id="section-adn"></div>
@@ -360,7 +360,7 @@ function renderSettingsUI(container, maskedKeys) {
     const adnSection = container.querySelector('#section-adn');
     const faceSection = container.querySelector('#section-face-vault');
     const galeriaSection = container.querySelector('#section-galeria');
-    if (adnSection) renderADNSection(adnSection, activeChannelId);
+    if (adnSection) renderYoutubeADNSection(adnSection, activeChannelId);
     if (faceSection) renderFaceVaultSection(faceSection, activeChannelId);
     if (galeriaSection) renderGaleriaSection(galeriaSection, activeChannelId);
   }

@@ -5,7 +5,7 @@ Actualizar este archivo al cierre de cada sesión de desarrollo o tras cada camb
 
 ---
 
-## Estado actual de la app (al 2026-05-22)
+## Estado actual de la app (al 2026-05-28)
 
 ### Stack
 - **Frontend:** Vanilla JS SPA + Vite 7 (sin frameworks)
@@ -36,13 +36,13 @@ Actualizar este archivo al cierre de cada sesión de desarrollo o tras cada camb
 | `setup` | `setup.js` | Onboarding inicial del canal |
 | `channel-selector` | `channel-selector.js` | Hub — switcher de canales |
 | `dashboard` | `dashboard.js` | Analytics CTR con charts |
-| `brand` | `brand.js` | Brand Kit — entrevista ADN + análisis de estilo |
+| `brand` | `brand.js` | Brand Kit — YT ADN card + análisis visual (accesible desde Settings) |
 | `cerebro` | `cerebro.js` | Análisis ADN del canal + inteligencia de contenido (lee guiones) |
 | `espionaje` | `espionaje.js` | Análisis de miniaturas de competidores |
 | `angulos` | `angulos.js` | Generación de ángulos/conceptos para miniaturas |
 | `engine` | `engine.js` | Fábrica creativa — generador de miniaturas IA (formatos + estilos) |
 | `editor` | `editor.js` | Editor y simulador de miniaturas |
-| `settings` | `settings.js` | Config API Key, Face Vault, ajustes de usuario |
+| `settings` | `settings.js` | Config API Key, Face Vault, Canal de YouTube (ADN), ajustes de usuario |
 | `admin` | `admin.js` | Panel admin — gestión de usuarios y suscripciones |
 
 ### Tabla Supabase (tablas conocidas)
@@ -64,6 +64,195 @@ Actualizar este archivo al cierre de cada sesión de desarrollo o tras cada camb
 ---
 
 ## Historial de cambios
+
+### 2026-05-28 (sesión 2) — Brand Kit → Settings + YouTube ADN en prompts + Fix SIN ROSTRO
+
+#### Contexto
+Tres objetivos: (1) consolidar el Brand Kit dentro del panel Settings para que el usuario configure todo en un solo lugar, (2) inyectar el ADN de YouTube en los prompts de generación de ángulos y de miniaturas para que la IA tenga contexto real del canal, (3) corregir el bug donde "SIN ROSTRO" seguía generando caras inventadas con IA.
+
+---
+
+#### `src/panels/brand.js` — Extraída función exportable + fixes
+
+**Nuevo helper `timeAgo(isoStr)`** (antes de `fmtNum`):
+- Calcula días transcurridos desde un ISO string → devuelve "hoy", "hace 1 día", "hace N días".
+- Usado para mostrar cuándo se hizo el último análisis de YouTube en la UI.
+
+**Firma de `buildYoutubeADNCard` extendida:**
+```js
+// Antes:
+buildYoutubeADNCard(ytAdn, ytChannel)
+// Después:
+buildYoutubeADNCard(ytAdn, ytChannel, analyzedAt = null, videoCount = 0)
+```
+Muestra metadata en la card analizada: `"hace X días · Y videos"` debajo del nombre del canal.
+
+**Fix input blanco:** Los dos inputs de `@handle` de YouTube tenían `class="input"` (clase inexistente en style.css) → cambiados a `class="form-input"` (usa el branding de la app correctamente).
+
+**Nueva función exportable `renderYoutubeADNSection(container, channelId)`:**
+- Renderiza skeleton HTML sincrónicamente (cumple regla del router: nunca `await` antes de retornar).
+- Luego en background: fetchea `brand_kits.detailed_adn` de Supabase.
+- Extrae `youtube_analysis`, `youtube_channel`, `youtube_analyzed_at`, `youtube_video_count`.
+- Monta la card con `buildYoutubeADNCard(ytAdn, ytChannel, analyzedAt, videoCount)`.
+- Handler `analyzeYtChannel`: al guardar el análisis, ahora también persiste el timestamp y el conteo de videos:
+  ```js
+  detailed_adn: {
+    ...existingAdn,
+    youtube_analysis: analysis,
+    youtube_channel: ytData.channel,
+    youtube_analyzed_at: new Date().toISOString(),
+    youtube_video_count: ytData.topVideos?.length || 0,
+  }
+  ```
+- Al re-analizar, re-renderiza solo la sección (no toda la página Brand Kit).
+
+**Archivos modificados:** `src/panels/brand.js`
+
+---
+
+#### `src/panels/settings.js` — Accordion "Canal de YouTube" reemplaza "ADN Estratégico"
+
+Import actualizado: `renderADNSection` → `renderYoutubeADNSection` (desde brand.js).
+
+El segundo accordion del panel Settings cambió completamente:
+```
+Antes: "ADN Estratégico" — entrevista de 3 preguntas sobre el canal
+Ahora: "Canal de YouTube" — análisis con IA via YouTube Data API + Gemini Vision
+```
+
+HTML del nuevo accordion:
+```html
+<details class="settings-accordion">
+  <summary class="settings-accordion-header">
+    <span class="settings-accordion-lead">[youtubePlay icon] Canal de YouTube</span>
+    <span class="settings-accordion-desc">Análisis estratégico con IA</span>
+    <span class="settings-accordion-chevron">[chevronDown icon]</span>
+  </summary>
+  <div class="settings-accordion-body" id="section-adn"></div>
+</details>
+```
+
+Al abrir el accordion: `renderYoutubeADNSection(adnSection, activeChannelId)` se llama y maneja su propio ciclo de vida (skeleton → fetch → render). Corrige también el bug del accordion vacío que antes mostraba contenido en blanco hasta que el fetch terminaba.
+
+**Archivos modificados:** `src/panels/settings.js`
+
+---
+
+#### `main.js` — Ruta `#brand` eliminada
+
+- Eliminado: `import { renderBrand } from './src/panels/brand.js'`
+- Eliminado: `registerRoute('brand', renderBrand)`
+
+El panel Brand Kit deja de existir como ruta independiente. Todo su contenido relevante ahora vive dentro de Settings. `brand.js` sigue exportando sus funciones pero no es una ruta de la app.
+
+**Archivos modificados:** `main.js`
+
+---
+
+#### `src/panels/cerebro.js` — YouTube ADN inyectado en generación de ángulos
+
+**Variable de closure nueva:**
+```js
+let channelYtAnalysis = null; // cargado en step 1, enriquece la generación de ángulos
+```
+
+**En el handler de step 1** (después de fetchear el brand kit):
+```js
+channelYtAnalysis = brandKit?.detailed_adn?.youtube_analysis || null;
+```
+
+**En `generateAnglesForVideo()`** — el objeto `context` ahora incluye condicionalmente el ADN de YouTube:
+```js
+const context = {
+  hook, tension, promise, visual_briefing, existing_angles,
+  ...(channelYtAnalysis && {
+    channel_archetype: channelYtAnalysis.channel_archetype,
+    audience_psychology: channelYtAnalysis.audience_psychology,
+    content_pillars: channelYtAnalysis.content_pillars,
+  }),
+};
+```
+
+Inyección condicional: si el canal no tiene ADN analizado, el flujo funciona igual que antes. Si lo tiene, la IA genera ángulos que respetan el arquetipo del canal y la psicología específica de su audiencia.
+
+**Archivos modificados:** `src/panels/cerebro.js`
+
+---
+
+#### `src/panels/engine.js` — YouTube ADN en Layer 5 + DNA Checklist + Fix SIN ROSTRO
+
+**DNA Checklist (`renderDNAChecklist`):**
+- Antes usaba el campo muerto `brandKit.detailed_adn.synthesis.tone` (no existe en formato YouTube ADN).
+- Ahora: `ytAnalysis = adnData?.youtube_analysis || null` con fallback chain correcto.
+- Agregado nuevo checkitem "YouTube ADN" que muestra arquetipo + primeros 2 pilares de contenido:
+  ```js
+  ${checkItem(!!ytAnalysis, 'YouTube ADN', ytAnalysis
+    ? `"${ytAnalysis.channel_archetype}" · ${ytAnalysis.content_pillars?.slice(0,2).join(', ')}`
+    : null)}
+  ```
+
+**Layer 5 — Brand ADN & Market Contrast (reescrito):**
+- Los campos anteriores `synthesis.tone` y `synthesis.branding` no existen en el esquema de datos actual → el Layer 5 nunca aportaba nada real.
+- Reemplazados por las 5 dimensiones del YouTube ADN con precedencia inteligente:
+  ```js
+  const ytAnalysis = adnData?.youtube_analysis || null;
+  const brandTone = adn.tone || ytAnalysis?.channel_archetype || '';
+  const brandBranding = adn.branding || ytAnalysis?.visual_signature || '';
+
+  const adnLayer = [
+    brandTone || brandBranding
+      ? `Brand tone & archetype: ${brandTone}. Visual identity: ${brandBranding}.` : '',
+    ytAnalysis?.visual_signature
+      ? `Channel's proven visual signature: ${ytAnalysis.visual_signature}` : '',
+    ytAnalysis?.audience_psychology
+      ? `Audience psychology — what makes THIS specific audience stop and click: ${ytAnalysis.audience_psychology}` : '',
+    ytAnalysis?.performance_insights
+      ? `What drives performance in this channel: ${ytAnalysis.performance_insights}` : '',
+    ytAnalysis?.differentiation
+      ? `Channel market differentiation: ${ytAnalysis.differentiation}` : '',
+    winningStyle
+      ? `Creator's proven visual style from winning thumbnails: ${winningStyle}` : '',
+  ].filter(Boolean).join('\n');
+  ```
+- Si no hay YouTube ADN, el layer queda vacío (`.filter(Boolean)`) y no rompe el prompt.
+
+**Fix bug "SIN ROSTRO genera caras de IA":**
+
+**Causa raíz:** El formato `reaction` (Emoción Pura) en LAYER 2 tiene un PATH B que dice explícitamente "usa el rostro del creador como hero visual". El modelo seguía esta instrucción (más específica y anterior) e ignoraba el LAYER 6 "no faces". Afectaba también `shock` Options C/D y `versus` Option F.
+
+**Solución — dos capas de protección:**
+
+1. `noFacePreamble`: hard constraint que se inyecta *antes* de todos los layers cuando `!useFace`:
+   ```js
+   const noFacePreamble = !useFace
+     ? `🚫 HARD CONSTRAINT — READ BEFORE ANYTHING ELSE: This thumbnail must contain ZERO human faces, people, or body parts of any kind. No real faces, no AI-generated faces, no silhouettes, no hands, no humanoid figures. Any composition option in LAYER 2 that involves a person's face or body MUST be skipped. Build maximum visual impact using only objects, environments, graphic design, symbols, and abstract elements. This constraint cannot be overridden by any instruction that follows.\n\n`
+     : '';
+   ```
+
+2. `faceLayer` fortalecido para el caso sin rostro:
+   ```js
+   const faceLayer = useFace && selectedFace
+     ? `CREATOR FACE (mandatory): ...` // igual que antes
+     : `NO HUMAN PRESENCE — ABSOLUTE RULE: Zero faces, zero people, zero bodies, zero hands, zero silhouettes, zero humanoid shapes of any kind. If any option in LAYER 2 describes a face-based composition, SKIP that option entirely and choose the next available option that builds visual impact using only objects, environments, graphic elements, symbols, or abstract visual language. This rule is NON-NEGOTIABLE and overrides any face-related instruction in any other layer.`;
+   ```
+
+3. Prompt devuelto como: `${noFacePreamble}━━━ ROLE & MISSION ━━━...`
+
+**Por qué funciona:** Los LLMs de imagen siguen el orden del prompt. Al poner el hard constraint antes de ROLE, tiene máxima prioridad en el contexto del modelo.
+
+**Archivos modificados:** `src/panels/engine.js`
+
+---
+
+#### Decisión de producto documentada: YouTube ADN es opcional
+
+El flujo completo funciona sin YouTube ADN:
+- **Cerebro:** si `channelYtAnalysis === null`, el contexto de ángulos no incluye esas claves (spread condicional).
+- **Engine Layer 5:** si `ytAnalysis === null`, el ADN layer queda vacío via `.filter(Boolean)`.
+
+El YouTube ADN enriquece la calidad de las salidas pero nunca bloquea el flujo. Esto permite que usuarios nuevos (sin análisis realizado) usen la app sin fricción.
+
+---
 
 ### 2026-05-28 — YouTube API + ADN Canal + Mejoras al Simulador
 
@@ -373,6 +562,9 @@ Sesión de análisis de mercado + ajustes estratégicos previos al lanzamiento. 
 | API key de Gemini en Supabase cifrada (RPC `get_decrypted_api_key`) | Nunca exponer keys en cliente |
 | caché localStorage `ca_cache_v1_<userId>` en auth | Stale-while-revalidate para carga percibida más rápida |
 | Hash-based routing | SPA sin SSR, compatible con Vercel static deploy |
+| YouTube ADN como enriquecimiento opcional | Inyección condicional en Cerebro y Engine — nunca bloquea el flujo si no hay análisis |
+| Brand Kit dentro de Settings (no ruta propia) | El usuario configura todo (API key, cara, YouTube ADN) en un solo lugar antes de usar la app |
+| Hard preamble en prompts de imagen para no-face | Los LLMs siguen orden del prompt — poner constraint antes de ROLE le da máxima prioridad sobre instrucciones de layers posteriores |
 
 ---
 

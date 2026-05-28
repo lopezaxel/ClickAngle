@@ -103,6 +103,14 @@ async function uploadToStorage(bucket, file, channelId) {
 }
 
 
+function timeAgo(isoStr) {
+  if (!isoStr) return null;
+  const days = Math.floor((Date.now() - new Date(isoStr)) / 86400000);
+  if (days === 0) return 'hoy';
+  if (days === 1) return 'hace 1 día';
+  return `hace ${days} días`;
+}
+
 function fmtNum(n) {
   if (!n) return '0';
   if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
@@ -111,7 +119,7 @@ function fmtNum(n) {
   return String(n);
 }
 
-function buildYoutubeADNCard(ytAdn, ytChannel) {
+function buildYoutubeADNCard(ytAdn, ytChannel, analyzedAt = null, videoCount = 0) {
   if (!ytAdn) {
     return `
       <div class="card mb-md" id="yt-adn-card">
@@ -127,7 +135,7 @@ function buildYoutubeADNCard(ytAdn, ytChannel) {
           <div style="display:flex; gap:var(--space-sm); align-items:center;">
             <div style="position:relative; flex:1;">
               <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:13px; pointer-events:none; font-weight:600;">@</span>
-              <input type="text" id="yt-handle-input" class="input" placeholder="tucanal"
+              <input type="text" id="yt-handle-input" class="form-input" placeholder="tucanal"
                 style="padding-left:28px; width:100%; box-sizing:border-box;" />
             </div>
             <button class="btn btn-primary btn-sm" id="btn-analyze-yt" style="white-space:nowrap; flex-shrink:0;">
@@ -153,6 +161,7 @@ function buildYoutubeADNCard(ytAdn, ytChannel) {
         <div class="card-title">${icon('youtubePlay', 16)} ADN del Canal YouTube</div>
         <div style="display:flex; gap:var(--space-xs); align-items:center;">
           <span class="badge" style="background:rgba(220,38,38,0.12); color:#EF4444; border:1px solid rgba(220,38,38,0.25);">Analizado</span>
+          ${analyzedAt ? `<span style="font-size:10px; color:var(--text-tertiary);">${timeAgo(analyzedAt)}${videoCount ? ` · ${videoCount} videos` : ''}</span>` : ''}
           <button class="btn btn-ghost btn-xs" id="btn-reanalyze-yt" style="font-size:10px;">${icon('zap', 10)} Re-analizar</button>
         </div>
       </div>
@@ -204,7 +213,7 @@ function buildYoutubeADNCard(ytAdn, ytChannel) {
         <div style="display:flex; gap:var(--space-sm); align-items:center;">
           <div style="position:relative; flex:1;">
             <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:13px; pointer-events:none; font-weight:600;">@</span>
-            <input type="text" id="yt-handle-input" class="input" placeholder="tucanal"
+            <input type="text" id="yt-handle-input" class="form-input" placeholder="tucanal"
               value="${ytChannel?.handle?.replace('@', '') || ''}"
               style="padding-left:28px; width:100%; box-sizing:border-box;" />
           </div>
@@ -1175,6 +1184,129 @@ export async function renderFaceVaultSection(container, channelId) {
         alert('Error al eliminar: ' + err.message);
       }
     });
+  });
+}
+
+export async function renderYoutubeADNSection(container, channelId) {
+  // Skeleton sincrónico — el accordion nunca queda vacío mientras carga
+  container.innerHTML = `<div style="padding:var(--space-md);display:flex;align-items:center;gap:10px;color:var(--text-tertiary);font-size:12px;">
+    <div class="loader" style="width:14px;height:14px;border-width:2px;flex-shrink:0;"></div> Cargando...
+  </div>`;
+
+  let brandKit = null;
+  try {
+    const { data } = await supabase.from('brand_kits')
+      .select('detailed_adn')
+      .eq('channel_id', channelId)
+      .maybeSingle();
+    brandKit = data;
+  } catch (err) {
+    console.error('renderYoutubeADNSection fetch error:', err);
+  }
+  if (!container.isConnected) return;
+
+  const ytAdn = brandKit?.detailed_adn?.youtube_analysis || null;
+  const ytChannel = brandKit?.detailed_adn?.youtube_channel || null;
+  const analyzedAt = brandKit?.detailed_adn?.youtube_analyzed_at || null;
+  const videoCount = brandKit?.detailed_adn?.youtube_video_count || 0;
+
+  container.innerHTML = buildYoutubeADNCard(ytAdn, ytChannel, analyzedAt, videoCount);
+
+  const analyzeYtChannel = async () => {
+    const input = container.querySelector('#yt-handle-input');
+    const btn = container.querySelector('#btn-analyze-yt');
+    if (!input || !btn) return;
+
+    const handle = input.value.trim().replace(/^@/, '');
+    if (!handle) { input.style.borderColor = 'var(--danger)'; return; }
+
+    const errorEl = container.querySelector('#yt-analyze-error') || container.querySelector('#yt-reanalyze-error');
+    if (errorEl) errorEl.style.display = 'none';
+
+    const originalBtnHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Obteniendo datos...`;
+
+    try {
+      showLoader(container, {
+        title: 'Conectando con YouTube',
+        subtitle: `Obteniendo datos de @${handle}: videos más vistos, estadísticas y miniaturas...`,
+        detail: 'YOUTUBE API'
+      });
+
+      const { data: ytData, error: ytError } = await supabase.functions.invoke('youtube-channel', {
+        body: { handle, includeImages: true }
+      });
+
+      if (ytError) throw new Error(ytError.message || 'Error al conectar con YouTube API');
+      if (ytData?.error) throw new Error(ytData.error);
+
+      hideLoader();
+      showLoader(container, {
+        title: 'Gemini analiza tu canal',
+        subtitle: `Procesando ${ytData.thumbnailImages?.length || 0} miniaturas y ${ytData.topVideos?.length || 0} videos para extraer el ADN estratégico...`,
+        detail: 'CHANNEL DNA ANALYSIS'
+      });
+
+      const topVideosText = (ytData.topVideos || []).slice(0, 15).map((v, i) =>
+        `${i + 1}. "${v.title}" — ${(v.viewCount || 0).toLocaleString()} vistas`
+      ).join('\n');
+
+      const textContent = [
+        `Canal: ${ytData.channel.title} (${ytData.channel.handle})`,
+        `Descripción: ${ytData.channel.description?.slice(0, 400) || 'N/A'}`,
+        `Suscriptores: ${(ytData.channel.subscriberCount || 0).toLocaleString()}`,
+        `Total Videos: ${ytData.channel.videoCount}`,
+        `Vistas Totales: ${(ytData.channel.viewCount || 0).toLocaleString()}`,
+        `País: ${ytData.channel.country || 'No especificado'}`,
+        '',
+        'TOP VIDEOS POR VISTAS:',
+        topVideosText
+      ].join('\n');
+
+      const analysis = await callAIWithImages(
+        'CHANNEL_DNA_ANALYSIS',
+        textContent,
+        ytData.thumbnailImages || [],
+        { channel: ytData.channel }
+      );
+
+      const existingAdn = brandKit?.detailed_adn || {};
+      await supabase.from('brand_kits').upsert({
+        channel_id: channelId,
+        detailed_adn: {
+          ...existingAdn,
+          youtube_analysis: analysis,
+          youtube_channel: ytData.channel,
+          youtube_analyzed_at: new Date().toISOString(),
+          youtube_video_count: ytData.topVideos?.length || 0,
+        }
+      }, { onConflict: 'channel_id' });
+
+      hideLoader();
+      renderYoutubeADNSection(container, channelId);
+
+    } catch (err) {
+      hideLoader();
+      console.error('YouTube ADN error:', err);
+      if (btn) { btn.innerHTML = originalBtnHtml; btn.disabled = false; }
+      const errEl = container.querySelector('#yt-analyze-error') || container.querySelector('#yt-reanalyze-error');
+      if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+      else toast(err.message, 'error');
+    }
+  };
+
+  container.querySelector('#btn-analyze-yt')?.addEventListener('click', analyzeYtChannel);
+  container.querySelector('#yt-handle-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') analyzeYtChannel();
+  });
+
+  container.querySelector('#btn-reanalyze-yt')?.addEventListener('click', () => {
+    const form = container.querySelector('#yt-reanalyze-form');
+    if (!form) return;
+    const isHidden = form.style.display === 'none';
+    form.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) container.querySelector('#yt-handle-input')?.focus();
   });
 }
 
