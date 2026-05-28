@@ -65,6 +65,97 @@ Actualizar este archivo al cierre de cada sesión de desarrollo o tras cada camb
 
 ## Historial de cambios
 
+### 2026-05-28 — YouTube API + ADN Canal + Mejoras al Simulador
+
+#### Contexto
+Dos objetivos principales: (1) mejorar el ADN estratégico del canal con datos objetivos reales de YouTube y visión de Gemini sobre las miniaturas reales, (2) refinar el Simulador para que filtre por proyecto activo y tenga placeholders realistas.
+
+---
+
+#### `supabase/functions/youtube-channel/index.ts` — NUEVA Edge Function
+
+Proxy seguro para la YouTube Data API v3. La API key está en Supabase Secrets (`YOUTUBE_API_KEY`), nunca llega al browser.
+
+**Flujo:**
+1. Recibe POST `{ handle, includeImages }` con CORS handling.
+2. `channels?part=snippet,statistics,brandingSettings&forHandle={handle}` (1 unidad).
+3. `search?part=snippet&channelId={id}&order=viewCount&maxResults=20&type=video` (100 unidades).
+4. `videos?part=statistics&id={videoIds}` (1 unidad por 50 videos).
+5. Convierte las top 7 miniaturas a base64 via `thumbnailToBase64()` para Gemini Vision.
+6. Devuelve `{ channel, topVideos, thumbnailImages: [{ title, views, base64 }] }`.
+
+**Costo:** ~102 unidades/análisis completo. Free tier ~96 análisis/día.
+**Deploy:** `supabase functions deploy youtube-channel --project-ref ahbrflukfncghlyscogq`
+
+---
+
+#### `src/lib/intelligence.js` — Nuevo prompt y función multimodal
+
+**Nuevo `SYSTEM_PROMPTS.CHANNEL_DNA_ANALYSIS`:**
+Prompt que recibe estadísticas del canal + títulos de top videos (texto) + imágenes base64 de las miniaturas (visual). Extrae 7 dimensiones: `content_pillars`, `title_patterns`, `visual_signature`, `audience_psychology`, `performance_insights`, `differentiation`, `channel_archetype`.
+
+**Nueva función `callAIWithImages(promptType, textContent, images, context)`:**
+Versión multimodal de `callAI`. Construye un request Gemini con `inlineData` parts para hasta 7 imágenes JPEG base64 además del texto. Timeout 120s. Misma lógica de retry/error handling que `callAI`.
+
+---
+
+#### `src/panels/brand.js` — Nueva sección "ADN del Canal YouTube"
+
+**Nueva card encima del ADN Estratégico existente.** Dos estados:
+
+- **Sin analizar:** Input `@handle` + botón "Analizar Canal" + Enter key. Muestra error inline en la card si falla.
+- **Analizado:** 
+  - Info del canal (avatar, nombre, handle, subs, videos, vistas).
+  - Arquetipo del canal en itálica roja grande.
+  - Pillars de contenido como badges.
+  - Grid 2 columnas con los 5 insights (Patrones en Títulos, Firma Visual, Psicología del Espectador, Performance Insights, Diferenciación).
+  - Botón "Re-analizar" que despliega inline el input de handle.
+
+**Helpers nuevos a nivel de módulo:**
+- `fmtNum(n)` — formatea números grandes (1.2M, 500K, etc.).
+- `buildYoutubeADNCard(ytAdn, ytChannel)` — genera el HTML de la card.
+
+**Handler `analyzeYtChannel()`:**
+1. Llama `supabase.functions.invoke('youtube-channel', { body: { handle, includeImages: true } })`.
+2. Llama `callAIWithImages('CHANNEL_DNA_ANALYSIS', textContent, thumbnailImages, context)`.
+3. Upsert a `brand_kits.detailed_adn` usando spread para no pisar datos existentes:
+   ```js
+   detailed_adn: { ...existingAdn, youtube_analysis: analysis, youtube_channel: ytData.channel }
+   ```
+4. Re-render completo de la página Brand Kit.
+
+**Archivos modificados:** `src/panels/brand.js`, `src/lib/intelligence.js`, `supabase/functions/youtube-channel/index.ts` (nuevo)
+
+---
+
+#### `src/panels/editor.js` — Mejoras al Simulador
+
+**Filtrado por proyecto activo:**
+- El simulador ahora muestra solo las miniaturas del `activeProjectId` del state global, no todas las del canal.
+- Suscripción al state con `subscribe()` detecta cambios de `activeProjectId` y recarga el picker. Usa `container.isConnected` para limpiar la suscripción al desmontar el panel.
+- Consulta: `supabase.from('thumbnail_variants').select(...).eq('project_id', projectId)` — directo por proyecto.
+
+**Placeholders realistas:**
+- Las posiciones vacías del feed usan Lorem Picsum (`https://picsum.photos/seed/{n+10}/{w}/{h}`) en lugar de bloques de color plano.
+- Función `buildThumbOverlay(title, i)` agrega texto YouTube-style encima: divide el título en 2 líneas de 3 palabras, con colores accent alternados de `OVERLAY_ACCENT` array.
+- Avatares circulares: `picsum.photos/seed/{n+50}/40/40` (fotos de cara consistentes).
+
+**`style.css` — Botones de paginación del simulador:**
+```css
+.sim-picker-nav {
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  color: var(--accent);
+}
+.sim-picker-nav:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.22);
+  box-shadow: 0 0 14px rgba(220, 38, 38, 0.3);
+}
+```
+Overlay CSS: `.sim-thumb-overlay`, `.sim-thumb-overlay-l1`, `.sim-thumb-overlay-l2`.
+
+---
+
 ### 2026-05-27 — Sesión de UX y navegación (Cerebro + Fábrica Creativa)
 
 #### Contexto

@@ -79,7 +79,7 @@ function buildHubHTML(channels, user, isLoading) {
     <div class="hub-header">
       <div class="hub-header-text">
         <div class="hub-greeting">Hola, ${greeting} 👋</div>
-        <h1 class="hub-title">Tus Proyectos</h1>
+        <h1 class="hub-title">Tus Canales</h1>
         <p class="hub-subtitle">Seleccioná un canal para empezar a trabajar o creá uno nuevo.</p>
       </div>
       <button class="btn btn-primary btn-lg" id="hub-btn-create">

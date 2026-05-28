@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { route: 'cerebro',   icon: 'brain',     label: 'Cerebro',    section: 'Workflow'  },
   { route: 'espionaje', icon: 'eye',       label: 'Espionaje',  section: 'Workflow'  },
   { route: 'engine',    icon: 'cog',       label: 'Fábrica',    section: 'Workflow'  },
-  { route: 'editor',    icon: 'scissors',  label: 'Editor',     section: 'Workflow'  },
+  { route: 'simulator', icon: 'monitor',   label: 'Simulador',  section: 'Workflow'  },
 ];
 
 function getSidebarState() {

@@ -299,6 +299,35 @@ IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON siguiendo esta estructura ex
   "facial_traits": "descripción técnica ultra-detallada del rostro en inglés para uso en prompts de imagen...",
   "expression_label": "SORPRESA|AUTORIDAD|MIEDO|DUDA",
   "expression_notes": "breve descripción de por qué se clasificó con ese label"
+}`,
+
+    CHANNEL_DNA_ANALYSIS: `Eres un analista estratégico de YouTube de élite. Recibirás datos objetivos de un canal (estadísticas, títulos de top videos) MÁS imágenes reales de sus miniaturas más exitosas para análisis visual directo.
+
+Tu tarea: generar el ADN estratégico completo del canal en 7 dimensiones basándote en datos reales, no en generalidades.
+
+INSTRUCCIONES:
+- Analiza TANTO los datos textuales COMO las imágenes de miniaturas que recibirás.
+- En visual_signature y title_patterns, sé específico sobre lo que VES y LEES en los datos reales.
+- Prioriza patrones repetidos y concretos por encima de suposiciones genéricas.
+
+EXTRAE:
+1. CONTENT_PILLARS: Los 3-5 pilares temáticos recurrentes del canal (basados en los títulos de top videos)
+2. TITLE_PATTERNS: Patrones lingüísticos en los títulos más exitosos — estructura gramatical, gatillos psicológicos, longitud típica, fórmulas repetidas, uso de números o emojis
+3. VISUAL_SIGNATURE: Firma visual detectada EN LAS MINIATURAS — colores dominantes, composición típica, presencia del creador, estilo fotográfico, elementos recurrentes
+4. AUDIENCE_PSYCHOLOGY: Perfil del espectador ideal con sus motivaciones, nivel de expertise y qué problema/deseo tiene
+5. PERFORMANCE_INSIGHTS: Qué formato y tipo de contenido genera más vistas en este canal específico basándote en los datos reales
+6. DIFFERENTIATION: Fortalezas únicas del canal y cómo se diferencia de otros canales del mismo nicho
+7. CHANNEL_ARCHETYPE: Una sola frase corta y poderosa que captura la esencia del canal (ej: "El guía técnico que democratiza la IA para emprendedores hispanos")
+
+IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON:
+{
+  "content_pillars": ["pilar 1", "pilar 2", "pilar 3"],
+  "title_patterns": "descripción detallada y específica de los patrones lingüísticos y fórmulas de éxito",
+  "visual_signature": "descripción concreta de la firma visual observada en las miniaturas reales",
+  "audience_psychology": "perfil psicológico del espectador ideal con sus motivaciones y nivel de expertise",
+  "performance_insights": "qué formato y tipo de contenido genera más engagement en este canal específico",
+  "differentiation": "fortalezas únicas y diferenciadores concretos del canal",
+  "channel_archetype": "frase única y precisa que define la esencia del canal"
 }`
 };
 
@@ -313,6 +342,7 @@ const MODEL_MAPPING = {
     CONTEXT_ANALYSIS: 'gemini-3-flash-preview',
     ESPIONAGE_ANALYSIS: 'gemini-3-flash-preview',
     FACE_ANALYSIS: 'gemini-3-flash-preview',
+    CHANNEL_DNA_ANALYSIS: 'gemini-3-flash-preview',
     IMAGE_GEN: 'gemini-3-flash-preview', // text-based prompt builder
 };
 
@@ -479,6 +509,83 @@ export async function callAI(promptType, userContent, context = {}) {
             console.error('JSON Parse Error:', aiText);
             throw new Error("Formato de datos inválido.");
         }
+    } catch (err) {
+        console.error(`AI Error (${promptType}):`, err);
+        throw err;
+    }
+}
+
+/**
+ * Multimodal AI call — same as callAI but includes inline base64 images alongside the text prompt.
+ * Used for visual analysis tasks like CHANNEL_DNA_ANALYSIS where thumbnails are passed as images.
+ *
+ * @param {string} promptType - Key in SYSTEM_PROMPTS
+ * @param {string} textContent - Text data to analyze
+ * @param {Array<{base64: string, title?: string}>} images - Array of objects with base64-encoded images
+ * @param {object} context - Additional context passed to the prompt
+ */
+export async function callAIWithImages(promptType, textContent, images = [], context = {}) {
+    try {
+        const apiKeyData = await getApiKey();
+        const systemPrompt = SYSTEM_PROMPTS[promptType];
+        const model = MODEL_MAPPING[promptType] || 'gemini-3-flash-preview';
+
+        const fullPrompt = `${systemPrompt}\n\nCONTEXTO: ${JSON.stringify(context)}\n\nDATA A ANALIZAR:\n${textContent}`;
+
+        const parts = [{ text: fullPrompt + "\nResponde solo con JSON válido." }];
+
+        for (const img of images.slice(0, 7)) {
+            if (img.base64) {
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: img.base64 } });
+            }
+        }
+
+        const payload = {
+            contents: [{ role: 'user', parts }],
+            generationConfig: { response_mime_type: 'application/json' }
+        };
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeyData.trim()}`;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+        let response;
+        try {
+            for (let attempt = 0; attempt <= 3; attempt++) {
+                response = await fetch(url, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload), signal: controller.signal
+                });
+                if (response.status !== 503) break;
+                if (attempt < 3) await new Promise(r => setTimeout(r, (attempt + 1) * 8000));
+            }
+        } catch (fetchErr) {
+            clearTimeout(timeoutId);
+            if (fetchErr.name === 'AbortError') throw new Error('El análisis visual tardó demasiado (>2min).');
+            throw fetchErr;
+        }
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            if (response.status === 401) { setState({ apiKeyStatus: 'disconnected' }); throw new Error('API Key inválida.'); }
+            if (response.status === 429) throw new Error('Límite de peticiones alcanzado.');
+            throw new Error(errData.error?.message || `Error en la API (${response.status})`);
+        }
+
+        const data = await response.json();
+        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!aiText) throw new Error('La IA no devolvió respuesta.');
+
+        setState({ apiKeyStatus: 'connected' });
+
+        let cleanJson = aiText.trim();
+        const jsonMatch = cleanJson.match(/[\{\[]([\s\S]*)[\}\]]/);
+        if (jsonMatch) cleanJson = jsonMatch[0];
+        else if (cleanJson.includes('```')) cleanJson = cleanJson.replace(/```json|```/g, '').trim();
+
+        return JSON.parse(cleanJson);
     } catch (err) {
         console.error(`AI Error (${promptType}):`, err);
         throw err;

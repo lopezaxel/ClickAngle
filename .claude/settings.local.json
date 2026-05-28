@@ -25,7 +25,13 @@
       "WebFetch(domain:blog.bananathumbnail.com)",
       "Bash(node --input-type=module --eval \"import\\('./src/panels/engine.js'\\).then\\(\\(\\)=>console.log\\('OK'\\)\\).catch\\(e=>console.error\\('ERROR:',e.message\\)\\)\")",
       "Bash(Start-Sleep -Seconds 3)",
-      "Bash(Get-Content \"C:\\\\Users\\\\0012\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--ad-otross-visual-studio-sistema-niki-ClickAngle\\\\dd295966-03c9-44da-b7cf-08eae1c50a1e\\\\tasks\\\\bsesdc59m.output\")"
+      "Bash(Get-Content \"C:\\\\Users\\\\0012\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--ad-otross-visual-studio-sistema-niki-ClickAngle\\\\dd295966-03c9-44da-b7cf-08eae1c50a1e\\\\tasks\\\\bsesdc59m.output\")",
+      "Bash(Remove-Item \"d:\\\\INTELIGENCIA ARTIFICIAL\\\\Antigravity\\\\ClickAngle\\\\src\\\\panels\\\\angulos.js\")",
+      "Bash(del \"d:\\\\INTELIGENCIA ARTIFICIAL\\\\Antigravity\\\\ClickAngle\\\\src\\\\panels\\\\angulos.js\")",
+      "Bash(supabase --version)",
+      "Bash(supabase link *)",
+      "Bash(supabase functions *)",
+      "Bash(supabase secrets *)"
     ]
   }
 }

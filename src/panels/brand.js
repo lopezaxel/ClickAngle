@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getState } from '../lib/state.js';
 import { icon } from '../icons.js';
-import { callAI } from '../lib/intelligence.js';
+import { callAI, callAIWithImages } from '../lib/intelligence.js';
 import { showLoader, hideLoader } from '../lib/loader.js';
 import { confirmDialog, toast } from '../lib/toast.js';
 
@@ -103,6 +103,119 @@ async function uploadToStorage(bucket, file, channelId) {
 }
 
 
+function fmtNum(n) {
+  if (!n) return '0';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return Math.round(n / 1e3) + 'K';
+  return String(n);
+}
+
+function buildYoutubeADNCard(ytAdn, ytChannel) {
+  if (!ytAdn) {
+    return `
+      <div class="card mb-md" id="yt-adn-card">
+        <div class="card-header">
+          <div class="card-title">${icon('youtubePlay', 16)} ADN del Canal YouTube</div>
+          <span class="badge badge-neutral">Sin analizar</span>
+        </div>
+        <div style="padding:var(--space-md);">
+          <p style="font-size:12px; color:var(--text-secondary); margin-bottom:var(--space-md); line-height:1.6;">
+            Conectá tu canal de YouTube para obtener un análisis estratégico profundo basado en tus videos más vistos. La IA analizará las miniaturas reales y extraerá el ADN visual y temático de tu canal.
+          </p>
+          <div id="yt-analyze-error" style="display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:8px; padding:8px 12px; margin-bottom:var(--space-sm); font-size:12px; color:#EF4444;"></div>
+          <div style="display:flex; gap:var(--space-sm); align-items:center;">
+            <div style="position:relative; flex:1;">
+              <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:13px; pointer-events:none; font-weight:600;">@</span>
+              <input type="text" id="yt-handle-input" class="input" placeholder="tucanal"
+                style="padding-left:28px; width:100%; box-sizing:border-box;" />
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-analyze-yt" style="white-space:nowrap; flex-shrink:0;">
+              ${icon('zap', 14)} Analizar Canal
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const pillars = ytAdn.content_pillars || [];
+  const insights = [
+    { label: 'Patrones en Títulos', value: ytAdn.title_patterns, color: '#3B82F6' },
+    { label: 'Firma Visual', value: ytAdn.visual_signature, color: '#8B5CF6' },
+    { label: 'Psicología del Espectador', value: ytAdn.audience_psychology, color: '#F59E0B' },
+    { label: 'Performance Insights', value: ytAdn.performance_insights, color: '#10B981' },
+    { label: 'Diferenciación', value: ytAdn.differentiation, color: '#DC2626' },
+  ].filter(i => i.value);
+
+  return `
+    <div class="card mb-md" id="yt-adn-card">
+      <div class="card-header">
+        <div class="card-title">${icon('youtubePlay', 16)} ADN del Canal YouTube</div>
+        <div style="display:flex; gap:var(--space-xs); align-items:center;">
+          <span class="badge" style="background:rgba(220,38,38,0.12); color:#EF4444; border:1px solid rgba(220,38,38,0.25);">Analizado</span>
+          <button class="btn btn-ghost btn-xs" id="btn-reanalyze-yt" style="font-size:10px;">${icon('zap', 10)} Re-analizar</button>
+        </div>
+      </div>
+
+      <!-- Channel info bar -->
+      <div style="display:flex; align-items:center; gap:var(--space-md); padding:var(--space-sm) var(--space-md); background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border);">
+        <div style="width:32px; height:32px; border-radius:50%; flex-shrink:0; background:linear-gradient(135deg,#DC2626,#B91C1C); display:flex; align-items:center; justify-content:center; box-shadow:0 0 12px rgba(220,38,38,0.25);">
+          ${icon('youtubePlay', 14)}
+        </div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            ${ytChannel?.title || 'Canal de YouTube'}
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary);">
+            ${ytChannel?.handle || ''} · ${fmtNum(ytChannel?.subscriberCount)} subs · ${fmtNum(ytChannel?.videoCount)} videos · ${fmtNum(ytChannel?.viewCount)} vistas
+          </div>
+        </div>
+      </div>
+
+      <!-- Archetype -->
+      ${ytAdn.channel_archetype ? `
+        <div style="padding:var(--space-md) var(--space-md) var(--space-sm); text-align:center; border-bottom:1px solid var(--border);">
+          <div style="font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:4px;">Arquetipo del Canal</div>
+          <div style="font-size:14px; font-weight:700; color:var(--accent); font-style:italic; line-height:1.4;">"${ytAdn.channel_archetype}"</div>
+        </div>` : ''}
+
+      <!-- Content pillars -->
+      ${pillars.length ? `
+        <div style="padding:var(--space-md) var(--space-md) var(--space-sm);">
+          <div style="font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">Pilares de Contenido</div>
+          <div style="display:flex; gap:var(--space-xs); flex-wrap:wrap;">
+            ${pillars.map(p => `<span class="badge" style="background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.2); color:var(--text-primary); font-size:11px; font-weight:600;">${p}</span>`).join('')}
+          </div>
+        </div>` : ''}
+
+      <!-- Analysis grid -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-sm); padding:var(--space-sm) var(--space-md) var(--space-md);">
+        ${insights.map(item => `
+          <div style="background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); overflow:hidden;">
+            <div style="font-size:9px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:${item.color}; margin-bottom:4px;">${item.label}</div>
+            <div style="font-size:11px; color:var(--text-secondary); line-height:1.5;">${item.value}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Re-analyze inline form (hidden by default) -->
+      <div id="yt-reanalyze-form" style="display:none; padding:0 var(--space-md) var(--space-md); border-top:1px solid var(--border);">
+        <p style="font-size:11px; color:var(--text-secondary); margin:var(--space-sm) 0;">Ingresá el handle del canal:</p>
+        <div id="yt-reanalyze-error" style="display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:8px; padding:8px 12px; margin-bottom:var(--space-sm); font-size:12px; color:#EF4444;"></div>
+        <div style="display:flex; gap:var(--space-sm); align-items:center;">
+          <div style="position:relative; flex:1;">
+            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:13px; pointer-events:none; font-weight:600;">@</span>
+            <input type="text" id="yt-handle-input" class="input" placeholder="tucanal"
+              value="${ytChannel?.handle?.replace('@', '') || ''}"
+              style="padding-left:28px; width:100%; box-sizing:border-box;" />
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-analyze-yt" style="white-space:nowrap; flex-shrink:0;">
+            ${icon('zap', 14)} Analizar
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
 export async function renderBrand(container) {
   const { activeChannelId } = getState();
   if (!activeChannelId) {
@@ -133,6 +246,8 @@ export async function renderBrand(container) {
     const colors = brandKit?.colors || ['#DC2626', '#10B981', '#F5F5F5', '#6B7280', '#3B82F6', '#F59E0B'];
     const adn = brandKit?.detailed_adn || brandKit?.channel_adn || null;
     const styleSummary = brandKit?.style_summary || null;
+    const ytAdn = brandKit?.detailed_adn?.youtube_analysis || null;
+    const ytChannel = brandKit?.detailed_adn?.youtube_channel || null;
 
     container.innerHTML = `<div class="animate-in">
       <div class="section-header">
@@ -141,6 +256,8 @@ export async function renderBrand(container) {
           <p class="section-subtitle">El ADN completo que alimenta cada generación de miniaturas</p>
         </div>
       </div>
+
+      ${buildYoutubeADNCard(ytAdn, ytChannel)}
 
       <!-- ROW 1: ADN Estratégico full-width -->
       <div class="card mb-md">
@@ -352,6 +469,103 @@ export async function renderBrand(container) {
 
     // --- Handlers ---
     const setupHandlers = () => {
+
+      // ── YouTube ADN Analysis ───────────────────────────────────────────────
+      const analyzeYtChannel = async () => {
+        const input = container.querySelector('#yt-handle-input');
+        const btn = container.querySelector('#btn-analyze-yt');
+        if (!input || !btn) return;
+
+        const handle = input.value.trim().replace(/^@/, '');
+        if (!handle) { input.style.borderColor = 'var(--danger)'; return; }
+
+        const errorEl = container.querySelector('#yt-analyze-error') || container.querySelector('#yt-reanalyze-error');
+        if (errorEl) errorEl.style.display = 'none';
+
+        const originalBtnHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-pulse">${icon('clock', 14)}</span> Obteniendo datos...`;
+
+        try {
+          showLoader(container, {
+            title: 'Conectando con YouTube',
+            subtitle: `Obteniendo datos de @${handle}: videos más vistos, estadísticas y miniaturas...`,
+            detail: 'YOUTUBE API'
+          });
+
+          const { data: ytData, error: ytError } = await supabase.functions.invoke('youtube-channel', {
+            body: { handle, includeImages: true }
+          });
+
+          if (ytError) throw new Error(ytError.message || 'Error al conectar con YouTube API');
+          if (ytData?.error) throw new Error(ytData.error);
+
+          hideLoader();
+          showLoader(container, {
+            title: 'Gemini analiza tu canal',
+            subtitle: `Procesando ${ytData.thumbnailImages?.length || 0} miniaturas y ${ytData.topVideos?.length || 0} videos para extraer el ADN estratégico...`,
+            detail: 'CHANNEL DNA ANALYSIS'
+          });
+
+          const topVideosText = (ytData.topVideos || []).slice(0, 15).map((v, i) =>
+            `${i + 1}. "${v.title}" — ${(v.viewCount || 0).toLocaleString()} vistas`
+          ).join('\n');
+
+          const textContent = [
+            `Canal: ${ytData.channel.title} (${ytData.channel.handle})`,
+            `Descripción: ${ytData.channel.description?.slice(0, 400) || 'N/A'}`,
+            `Suscriptores: ${(ytData.channel.subscriberCount || 0).toLocaleString()}`,
+            `Total Videos: ${ytData.channel.videoCount}`,
+            `Vistas Totales: ${(ytData.channel.viewCount || 0).toLocaleString()}`,
+            `País: ${ytData.channel.country || 'No especificado'}`,
+            '',
+            'TOP VIDEOS POR VISTAS:',
+            topVideosText
+          ].join('\n');
+
+          const analysis = await callAIWithImages(
+            'CHANNEL_DNA_ANALYSIS',
+            textContent,
+            ytData.thumbnailImages || [],
+            { channel: ytData.channel }
+          );
+
+          const existingAdn = brandKit?.detailed_adn || {};
+          await supabase.from('brand_kits').upsert({
+            channel_id: activeChannelId,
+            detailed_adn: {
+              ...existingAdn,
+              youtube_analysis: analysis,
+              youtube_channel: ytData.channel
+            }
+          }, { onConflict: 'channel_id' });
+
+          hideLoader();
+          renderBrand(container);
+
+        } catch (err) {
+          hideLoader();
+          console.error('YouTube ADN error:', err);
+          if (btn) { btn.innerHTML = originalBtnHtml; btn.disabled = false; }
+          const errEl = container.querySelector('#yt-analyze-error') || container.querySelector('#yt-reanalyze-error');
+          if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+          else toast(err.message, 'error');
+        }
+      };
+
+      container.querySelector('#btn-analyze-yt')?.addEventListener('click', analyzeYtChannel);
+      container.querySelector('#yt-handle-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') analyzeYtChannel();
+      });
+
+      container.querySelector('#btn-reanalyze-yt')?.addEventListener('click', () => {
+        const form = container.querySelector('#yt-reanalyze-form');
+        if (!form) return;
+        const isHidden = form.style.display === 'none';
+        form.style.display = isHidden ? 'block' : 'none';
+        if (isHidden) container.querySelector('#yt-handle-input')?.focus();
+      });
+
       // ADN Interview
       document.getElementById('btn-start-adn-interview')?.addEventListener('click', () => {
         showADNInterview(activeChannelId, () => renderBrand(container));

@@ -9,9 +9,9 @@ import { renderDashboard } from './src/panels/dashboard.js';
 import { renderCerebro } from './src/panels/cerebro.js';
 import { renderBrand } from './src/panels/brand.js';
 import { renderEspionaje } from './src/panels/espionaje.js';
-import { renderAngulos } from './src/panels/angulos.js';
+
 import { renderEngine } from './src/panels/engine.js';
-import { renderEditor } from './src/panels/editor.js';
+import { renderSimulator } from './src/panels/editor.js';
 import { renderLogin } from './src/panels/login.js';
 import { renderSettings } from './src/panels/settings.js';
 import { renderChannelSelector } from './src/panels/channel-selector.js';
@@ -29,9 +29,9 @@ registerRoute('dashboard', renderDashboard);
 registerRoute('cerebro', renderCerebro);
 registerRoute('brand', renderBrand);
 registerRoute('espionaje', renderEspionaje);
-registerRoute('angulos', renderAngulos);
+
 registerRoute('engine', renderEngine);
-registerRoute('editor', renderEditor);
+registerRoute('simulator', renderSimulator);
 registerRoute('settings', renderSettings);
 registerRoute('channel-selector', renderChannelSelector);
 registerRoute('admin', renderAdmin);
@@ -146,29 +146,29 @@ function initApp() {
 
     // Determine current route (let — may be updated below by replaceState)
     let currentHash = window.location.hash.slice(1);
-    let isOnHub = currentHash === 'channel-selector';
+    let isOnHome = currentHash === 'dashboard' || currentHash === '' || currentHash === 'channel-selector';
 
     // While channels load, show a workspace spinner (sidebar is already visible above)
-    if (isLoadingChannels && !isOnHub) {
+    if (isLoadingChannels && !isOnHome) {
       if (workspace && !document.getElementById('ca-global-loader')) {
-        showLoader(workspace, { title: 'Cargando tus proyectos...', subtitle: 'Sincronizando canales con el servidor', detail: 'SINCRONIZANDO' });
+        showLoader(workspace, { title: 'Cargando tus canales...', subtitle: 'Sincronizando canales con el servidor', detail: 'SINCRONIZANDO' });
       }
       return;
     }
 
-    // Navigate to hub once per session after channels load.
+    // Navigate to dashboard once per session after channels load.
     // Uses replaceState (no hashchange event) so we can continue rendering in the same pass.
     if (!hasNavigatedToHub && !isLoadingChannels) {
       hasNavigatedToHub = true;
-      if (!isOnHub) {
-        history.replaceState(null, '', '#channel-selector');
-        currentHash = 'channel-selector';
-        isOnHub = true;
+      if (!isOnHome) {
+        history.replaceState(null, '', '#dashboard');
+        currentHash = 'dashboard';
+        isOnHome = true;
       }
     }
 
-    if (!activeChannelId && !isOnHub) {
-      window.location.hash = '#channel-selector';
+    if (!activeChannelId && !isOnHome) {
+      window.location.hash = '#dashboard';
       return;
     }
 
