@@ -328,22 +328,60 @@ IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON:
   "performance_insights": "qué formato y tipo de contenido genera más engagement en este canal específico",
   "differentiation": "fortalezas únicas y diferenciadores concretos del canal",
   "channel_archetype": "frase única y precisa que define la esencia del canal"
+}`,
+
+    FORMAT_STYLE_REC: `Eres un estratega senior de miniaturas de YouTube con dominio en psicología visual del clic. Tu misión: analizar el DNA de un video y recomendar qué formatos de composición y estilo visual generan el mayor CTR para ese contenido específico.
+
+FORMATOS DISPONIBLES — usa exactamente estos IDs:
+- "versus": Split screen / confrontación visual. Ideal para: comparaciones directas, antes/después, duelos, contrastes extremos.
+- "authority": Objeto héroe dominante con profundidad de campo extrema. Ideal para: tutoriales, herramientas, guías, productos de deseo, posicionamiento de experto.
+- "shock": Caja negra / curiosity gap / misterio estratégico. Ideal para: secretos revelados, información oculta, conspiración, preguntas sin respuesta visible.
+- "breaking": Estética de urgencia / noticia de última hora. Ideal para: alertas, errores críticos, peligros, novedades urgentes, contenido de FOMO.
+- "reaction": Emoción facial del creador como hero visual o celebridad relevante. Ideal para: reacciones genuinas, análisis con fuerte presencia del creador, contenido con personajes reconocibles.
+- "colorblock": Bloques geométricos de color como arquitectura principal. Ideal para: productividad, branding, finanzas, educación premium, contenido minimalista.
+
+ESTILOS DISPONIBLES — usa exactamente estos IDs:
+- "hyperrealist": Fotografía ultra-realista 8K, iluminación profesional de estudio, máxima credibilidad fotográfica. Para: contenido serio, entrevistas, documentales.
+- "mrbeast": Hipercolorido, saturación extrema, rim lights vivos, impacto visual inmediato. Para: entretenimiento, viralidad, contenido juvenil, gaming.
+- "cyberpunk": Neon eléctrico, dark mode, splits de color cyan-magenta. Para: IA, tecnología, software, innovación digital, sci-fi.
+- "minimal": Fondo de color sólido bold, espacio negativo generoso, estética de campaña publicitaria premium. Para: branding limpio, contenido muy visual.
+- "cinematic": Calidad de póster Hollywood, luz dramática, grano de película. Para: storytelling, historia, motivación, aventura, documentales emocionales.
+- "neominimal": 1 sujeto, máximo 3 colores, espacio negativo extremo. Trend #1 de 2026 para mobile. Para: productividad, finanzas, educación, branding premium.
+
+REGLAS:
+- Recomendá entre 1 y 3 formatos. Match muy claro → 1 con "alta". Varios igualmente válidos → incluílos con "media".
+- Recomendá exactamente 1 estilo, el que mejor combine con el nicho del canal y el contenido del video.
+- Las razones deben ser ESPECÍFICAS para este video: mencioná elementos concretos del hook, tensión o ángulos.
+- Si los ángulos psicológicos tienen dirección clara, priorizalos sobre el hook general.
+
+IMPORTANTE: Responde ÚNICAMENTE con JSON válido:
+{
+  "recommended_formats": [
+    { "id": "versus|authority|shock|breaking|reaction|colorblock", "reason": "razón concisa en español", "confidence": "alta|media" }
+  ],
+  "recommended_style": {
+    "id": "hyperrealist|mrbeast|cyberpunk|minimal|cinematic|neominimal",
+    "reason": "razón concisa en español"
+  }
 }`
 };
 
 const MODEL_MAPPING = {
-    CHANNEL_ADN: 'gemini-3-flash-preview',
-    ADN_INTERVIEW: 'gemini-3-flash-preview',
-    ADN_SYNTHESIS: 'gemini-3-flash-preview',
-    ANGLES_GENERATION: 'gemini-3-flash-preview',
-    BRANDING_ANALYSIS: 'gemini-3-flash-preview',
-    STYLE_ANALYSIS: 'gemini-3-flash-preview',
-    SCRIPT_ANALYSIS: 'gemini-3-flash-preview',
-    CONTEXT_ANALYSIS: 'gemini-3-flash-preview',
-    ESPIONAGE_ANALYSIS: 'gemini-3-flash-preview',
-    FACE_ANALYSIS: 'gemini-3-flash-preview',
-    CHANNEL_DNA_ANALYSIS: 'gemini-3-flash-preview',
-    IMAGE_GEN: 'gemini-3-flash-preview', // text-based prompt builder
+    // Críticos: impactan directamente la calidad del prompt y la miniatura final
+    FORMAT_STYLE_REC:     'gemini-3.5-flash',
+    IMAGE_GEN:            'gemini-3.5-flash',
+    ANGLES_GENERATION:    'gemini-3.5-flash',
+    SCRIPT_ANALYSIS:      'gemini-3.5-flash',
+    CHANNEL_DNA_ANALYSIS: 'gemini-3.5-flash',
+    CONTEXT_ANALYSIS:     'gemini-3.5-flash',
+    ESPIONAGE_ANALYSIS:   'gemini-3.5-flash',
+    // Configuración: baja frecuencia, tarea simple
+    CHANNEL_ADN:          'gemini-3.1-flash-lite',
+    ADN_INTERVIEW:        'gemini-3.1-flash-lite',
+    ADN_SYNTHESIS:        'gemini-3.1-flash-lite',
+    BRANDING_ANALYSIS:    'gemini-3.1-flash-lite',
+    STYLE_ANALYSIS:       'gemini-3.1-flash-lite',
+    FACE_ANALYSIS:        'gemini-3.1-flash-lite',
 };
 
 // Dedicated image generation model

@@ -65,6 +65,120 @@ Actualizar este archivo al cierre de cada sesión de desarrollo o tras cada camb
 
 ## Historial de cambios
 
+### 2026-06-01 — Lightbox, upgrades de modelos IA, recomendaciones IA en Fábrica Creativa
+
+#### Contexto
+Sesión de mejoras en tres frentes: (1) rediseño del lightbox de miniaturas con descarga y navegación, (2) upgrade estratégico de todos los modelos Gemini con investigación de capacidades actuales, (3) sistema de recomendaciones IA real en la Fábrica Creativa reemplazando el keyword matching.
+
+---
+
+#### `src/panels/engine.js` + `style.css` — Lightbox rediseñado
+
+**Antes:** lightbox simple con solo imagen, sin descarga, sin navegación.
+
+**Ahora:**
+- Barra superior con contador (`1 / 3`), botón **DESCARGAR MINIATURA** (gradiente rojo primario, glow), botón cerrar
+- Flechas de navegación `‹ ›` (círculos glass con hover rojo) para navegar entre imágenes del **mismo ángulo**
+- Soporte de teclado: `ArrowLeft`, `ArrowRight`, `Escape`
+- Cierra al clickear el fondo
+
+**Lógica de agrupación:**
+- `data-angle-group="angle-${globalIdx}"` en imágenes de `renderAngleCard` (imagen principal + strip)
+- `data-angle-group="drawer-${cardIdx}"` en imágenes de `renderVariantDrawerCard`
+- Al abrir, `openLightboxForImg(img)` colecta todas las imágenes del grupo y navega dentro de ellas
+
+**Estado de módulo** (persiste entre renders):
+```js
+let lbImages = []; // [{src, name}]
+let lbIdx = 0;
+```
+Funciones: `closeLightbox`, `lbNav(delta)`, `lbDownload()`, `updateLightboxUI()`, `openLightboxForImg(img)`
+
+**Archivos modificados:** `src/panels/engine.js`, `style.css`
+
+---
+
+#### `src/lib/intelligence.js` — Upgrade estratégico de modelos Gemini
+
+**Investigación realizada:** Revisión completa de la documentación oficial de Gemini API (junio 2026).
+
+**Modelos de texto — MODEL_MAPPING actualizado:**
+```js
+// Antes: todo apuntaba a 'gemini-3-flash-preview'
+// Ahora:
+IMAGE_GEN:            'gemini-3.5-flash',  // builder del visual prompt
+ANGLES_GENERATION:    'gemini-3.5-flash',  // ángulos psicológicos
+SCRIPT_ANALYSIS:      'gemini-3.5-flash',  // análisis de guión
+CHANNEL_DNA_ANALYSIS: 'gemini-3.5-flash',  // análisis multimodal YouTube
+CONTEXT_ANALYSIS:     'gemini-3.5-flash',  // contexto para imagen
+ESPIONAGE_ANALYSIS:   'gemini-3.5-flash',  // análisis de competidores
+FORMAT_STYLE_REC:     'gemini-3.5-flash',  // NUEVO: recomendación formato/estilo
+
+CHANNEL_ADN:          'gemini-3.1-flash-lite',
+ADN_INTERVIEW:        'gemini-3.1-flash-lite',
+ADN_SYNTHESIS:        'gemini-3.1-flash-lite',
+BRANDING_ANALYSIS:    'gemini-3.1-flash-lite',
+STYLE_ANALYSIS:       'gemini-3.1-flash-lite',
+FACE_ANALYSIS:        'gemini-3.1-flash-lite',
+```
+
+**Modelo de imagen — ciclo de esta sesión:**
+1. `gemini-2.5-flash-image` → `gemini-3.1-flash-image` (upgrade)
+2. `gemini-3.1-flash-image` → `gemini-2.5-flash-image` (revertido)
+
+**Razón del revert:** `gemini-3.1-flash-image` tiene filtros más estrictos para likenesses de celebridades (error codes internos `29310472` y `15236754`). Cuando se nombra una celebridad en el prompt, la omite silenciosamente sin devolver error. El modelo viejo era más permisivo. La calidad visual de `gemini-3.1-flash-image` es notablemente superior — se documentó para retomarlo con la estrategia de "traducción de celebridades" (ver ideas pendientes).
+
+**Nuevo prompt `FORMAT_STYLE_REC`:** Sistema de recomendación de formato y estilo vía IA real. Describe los 6 formatos y 6 estilos con IDs exactos y le pide a Gemini que recomiende basado en el DNA del video. Reemplaza el keyword matching determinista anterior que solo cubría 4/6 formatos y 0 estilos.
+
+**Archivos modificados:** `src/lib/intelligence.js`
+
+---
+
+#### `src/panels/engine.js` — Recomendaciones IA en Fábrica Creativa
+
+**Antes:** Paso 1 usaba `recommendFormats()` (keyword matching hardcodeado, solo 4/6 formatos, 0 estilos). Paso 2 no tenía ninguna recomendación.
+
+**Ahora:**
+
+**`fetchAIRecs(project)`** — función async que:
+- Se dispara al entrar al Paso 1 por primera vez para ese proyecto
+- Llama `callAI('FORMAT_STYLE_REC', content)` con el DNA del video (título, hook, tensión, promesa, héroe, ángulos seleccionados)
+- Devuelve `{ formats: [...], style: {...} }`
+- Cachea el resultado por proyecto (`aiRecsProjectId`)
+- Estado: `null` = no iniciado, `false` = cargando, `{...}` = listo
+
+**Summary bar (`#engine-summary-bar`)** — barra de chips centrada ENCIMA de la barra de pasos:
+- Muestra formato(s) y estilo seleccionados/recomendados en todo momento
+- 3 estados por chip: **rojo sólido** = usuario seleccionó, **verde punteado** = IA recomienda, **gris placeholder** = aún sin datos
+- Spinner "Analizando tu video..." mientras carga
+- Se actualiza desde `render()` y desde `rerenderStep()` via `updateSummaryBar()`
+
+**Paso 1 (Formato):** Overlay glassmorphism centrado sobre las cards con mensaje grande "Analizando y recomendando un formato basado en tu video" + dots pulsantes. Cards deshabilitadas (`pointer-events:none`, `opacity:0.12`) mientras carga.
+
+**Paso 2 (Estilo):** Badge `✦ IA` en esquina superior izquierda de la card recomendada (igual al de formatos). Borde verde en card recomendada.
+
+**Eliminado:** texto largo de razones de recomendación que aparecía debajo de los chips — todo se consolidó en la summary bar.
+
+**Archivos modificados:** `src/panels/engine.js`
+
+---
+
+#### Investigación documentada: modelos de imagen Gemini (junio 2026)
+
+| Modelo | Estado | Celebridades | Notas |
+|---|---|---|---|
+| `gemini-2.5-flash-image` | Activo | ✅ Permisivo | El que usa la app actualmente |
+| `gemini-3.1-flash-image` | GA (28 mayo) | ⚠️ Estricto | Calidad notablemente superior, pero omite celebridades silenciosamente |
+| `gemini-3-pro-image` | GA (28 mayo) | ⚠️ Igual o más estricto | Usa Thinking interno, máxima calidad |
+| `imagen-4.0-generate-001` | GA | ⚠️ Similar | API diferente, límite 480 tokens (incompatible con prompts actuales) |
+
+**Parámetro `imageConfig` — diferencia detectada:**
+- Modelo viejo (`gemini-2.5-flash-image`): acepta `imageConfig: { aspectRatio: '16:9' }`
+- Modelo nuevo (`gemini-3.1-flash-image`): requiere `responseFormat: { image: { aspectRatio: '16:9', imageSize: '2K' } }`
+- No afecta al modelo actual pero documentado para cuando se migre.
+
+---
+
 ### 2026-05-28 (sesión 2) — Brand Kit → Settings + YouTube ADN en prompts + Fix SIN ROSTRO
 
 #### Contexto
@@ -553,6 +667,61 @@ Sesión de análisis de mercado + ajustes estratégicos previos al lanzamiento. 
 
 ---
 
+## Ideas pendientes (próxima sesión)
+
+### 🔴 PRIORITARIA — Traducción de celebridades para usar `gemini-3.1-flash-image`
+
+**Problema:** `gemini-3.1-flash-image` genera imágenes de calidad notablemente superior pero sus filtros de seguridad omiten silenciosamente a celebridades reales (MJ, Shakira, Elon, etc.) sin devolver error. `gemini-2.5-flash-image` sí las renderiza pero con menor calidad visual.
+
+**Solución diseñada (no implementada):**
+Antes de llamar a `generateImage`, interceptar el `hero_object` del prompt cuando contiene un nombre de persona real y pasarlo por `gemini-3.1-flash-lite` para "traducirlo" a descriptores visuales puros sin nombrar a la persona:
+
+```
+Input:  "Michael Jackson"
+Output: "iconic male pop star, black curly hair, sequined red jacket, single white glove, moonwalk dance pose, spotlight stage, 1980s aesthetic"
+```
+
+Esto bypasea el filtro de celebridades (que detecta el nombre, no la descripción visual) mientras preserva el concepto. Permitiría migrar `IMAGE_GEN_MODEL` a `gemini-3.1-flash-image` permanentemente.
+
+**Archivos a modificar:** `src/lib/intelligence.js` — nueva función `translateHeroToVisualDescriptors()`, nuevo prompt `HERO_TRANSLATOR` en SYSTEM_PROMPTS. Llamar antes de `generateImage` en `generateAndSaveVariant()` de `engine.js`.
+
+**Costo:** 1 call extra de texto por generación (baratísimo con flash-lite). Latencia adicional: ~300ms.
+
+---
+
+### 🟡 IMPORTANTE — Modo Agente: Critique-and-Refine de miniaturas
+
+**Idea:** Toggle opt-in en el Paso 4 de la Fábrica Creativa que activa un loop de 2 generaciones:
+
+1. **Draft:** Generar imagen con el prompt actual
+2. **Critique:** Enviar el draft generado a `gemini-3.5-flash` con visión: *"¿El objeto héroe está presente? ¿La composición sigue el formato elegido? ¿Qué falta para máximo impacto de CTR? Dá 3 mejoras concretas al prompt."*
+3. **Refine:** Incorporar la crítica al prompt original
+4. **Final:** Generar la imagen final con el prompt reforzado
+
+**UX pensada:** El usuario ve el draft + la crítica en texto + el resultado final. Botón "Modo Agente 🤖" en el step 4, desactivado por defecto. Se procesa por ángulo individualmente.
+
+**Costo:** ~2x precio de generación de imagen por miniatura + 1 call de texto con imagen adjunta.
+
+**Archivos a modificar:** `engine.js` — nueva función `generateWithAgentLoop()`, nuevo estado `agentModeEnabled`, UI en `renderAnglesStep()`.
+
+---
+
+### 🟢 MENOR — Fix `imageConfig` → `responseFormat` para `gemini-3.1-flash-image`
+
+Cuando se migre a `gemini-3.1-flash-image`, el payload de `generateImage()` en `intelligence.js` necesita actualizar el parámetro de aspect ratio:
+
+```js
+// Actual (funciona con gemini-2.5-flash-image):
+generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9' } }
+
+// Nuevo (requerido por gemini-3.1-flash-image):
+generationConfig: { responseModalities: ['TEXT', 'IMAGE'], responseFormat: { image: { aspectRatio: '16:9', imageSize: '2K' } } }
+```
+
+Hacer este fix junto con la implementación de la traducción de celebridades.
+
+---
+
 ## Decisiones de arquitectura registradas
 
 | Decisión | Razón |
@@ -565,6 +734,9 @@ Sesión de análisis de mercado + ajustes estratégicos previos al lanzamiento. 
 | YouTube ADN como enriquecimiento opcional | Inyección condicional en Cerebro y Engine — nunca bloquea el flujo si no hay análisis |
 | Brand Kit dentro de Settings (no ruta propia) | El usuario configura todo (API key, cara, YouTube ADN) en un solo lugar antes de usar la app |
 | Hard preamble en prompts de imagen para no-face | Los LLMs siguen orden del prompt — poner constraint antes de ROLE le da máxima prioridad sobre instrucciones de layers posteriores |
+| `gemini-2.5-flash-image` para generación de imagen | `gemini-3.1-flash-image` tiene calidad superior pero filtros que omiten celebridades silenciosamente — revertido hasta implementar traducción de celebridades |
+| `gemini-3.5-flash` para tareas críticas de texto | Modelo GA más capaz actualmente — mejora ángulos, análisis de guión y prompts de imagen |
+| `gemini-3.1-flash-lite` para tareas de configuración | Baja frecuencia, tarea simple — ahorra costo sin impactar calidad perceptible |
 
 ---
 

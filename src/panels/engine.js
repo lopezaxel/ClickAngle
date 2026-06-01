@@ -246,6 +246,63 @@ function thumbLoaderHTML(title = 'Generando miniatura...', detail = 'IA PROCESAN
   </div>`;
 }
 
+// ─── Lightbox state — persists across renders ────────────────────────────────
+let lbImages = []; // [{src, name}]
+let lbIdx    = 0;
+
+function closeLightbox() {
+  const lb = document.getElementById('thumb-lightbox');
+  if (!lb) return;
+  lb.classList.remove('active');
+  setTimeout(() => { const img = lb.querySelector('img'); if (img) img.src = ''; }, 260);
+}
+
+function lbNav(delta) {
+  const next = lbIdx + delta;
+  if (next < 0 || next >= lbImages.length) return;
+  lbIdx = next;
+  updateLightboxUI();
+}
+
+async function lbDownload() {
+  const item = lbImages[lbIdx];
+  if (!item?.src) return;
+  try {
+    const resp = await fetch(item.src);
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = item.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch { const a = document.createElement('a'); a.href = item.src; a.download = item.name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+}
+
+function updateLightboxUI() {
+  const lbImg     = document.getElementById('thumb-lightbox-img');
+  const lbCounter = document.getElementById('lbcounter');
+  const lbPrev    = document.getElementById('lbprev');
+  const lbNext    = document.getElementById('lbnext');
+  if (!lbImg) return;
+  lbImg.src = lbImages[lbIdx]?.src || '';
+  const multi = lbImages.length > 1;
+  if (lbCounter) lbCounter.textContent = multi ? `${lbIdx + 1} / ${lbImages.length}` : '';
+  if (lbPrev) { lbPrev.style.display = multi ? 'flex' : 'none'; lbPrev.disabled = lbIdx === 0; }
+  if (lbNext) { lbNext.style.display = multi ? 'flex' : 'none'; lbNext.disabled = lbIdx === lbImages.length - 1; }
+}
+
+function openLightboxForImg(clickedImg) {
+  const group = clickedImg.dataset.angleGroup;
+  if (group) {
+    const groupEls = [...document.querySelectorAll(`.thumb-preview-trigger[data-angle-group="${group}"]`)];
+    lbImages = groupEls.map(el => ({ src: el.dataset.preview, name: el.dataset.name || 'miniatura.png' }));
+    lbIdx = Math.max(0, groupEls.indexOf(clickedImg));
+  } else {
+    lbImages = [{ src: clickedImg.dataset.preview, name: clickedImg.dataset.name || 'miniatura.png' }];
+    lbIdx = 0;
+  }
+  updateLightboxUI();
+  document.getElementById('thumb-lightbox')?.classList.add('active');
+}
+
 export async function renderEngine(container) {
   const { activeChannelId } = getState();
   if (!activeChannelId) { container.innerHTML = '<div class="loading-spinner">Selecciona un canal</div>'; return; }
@@ -289,6 +346,8 @@ export async function renderEngine(container) {
   let batchAngleSelection = null; // null = all selected; array of indices = specific selection
   let faceEnabled = null;         // null = follow DNA match default; true/false = explicit user choice
   let selectedExpressionId = null; // persists face select across renders
+  let aiRecs          = null; // null=not fetched | false=loading | {formats,style}=done
+  let aiRecsProjectId = null; // project ID for which aiRecs was computed
   let textMode = 'none';           // 'none' | 'ai' — persists text mode across renders
   let anglesPage = 0;              // pagination for step 5 angle cards
   let variantsPage = 0;            // pagination for history section
@@ -403,6 +462,72 @@ export async function renderEngine(container) {
     });
   }
 
+  // ─── SUMMARY BAR ──────────────────────────────────────────────────────────
+
+  function renderSummaryBar() {
+    const isLoadingRecs = aiRecs === false;
+    const hasRecs       = aiRecs && aiRecs !== false;
+    const chip = (emoji, labelTop, labelMain, accent) =>
+      `<div style="display:flex;align-items:center;gap:8px;padding:7px 16px;border-radius:20px;
+        background:${accent === 'red' ? 'rgba(220,38,38,0.12)' : 'rgba(16,185,129,0.08)'};
+        border:${accent === 'red' ? '1px solid rgba(220,38,38,0.4)' : '1px dashed rgba(16,185,129,0.45)'};">
+        <span style="font-size:18px;line-height:1;">${emoji}</span>
+        <div>
+          <div style="font-size:9px;font-weight:800;color:${accent === 'red' ? 'var(--accent)' : '#10b981'};letter-spacing:1px;text-transform:uppercase;margin-bottom:1px;">${labelTop}</div>
+          <div style="font-size:12px;font-weight:800;color:var(--text-primary);white-space:nowrap;">${labelMain}</div>
+        </div>
+      </div>`;
+    const placeholder = (label) =>
+      `<div style="padding:7px 16px;border-radius:20px;background:var(--bg-secondary);border:1px dashed rgba(255,255,255,0.06);">
+        <div style="font-size:9px;font-weight:800;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">${label}</div>
+        <div style="font-size:12px;color:var(--text-muted);">—</div>
+      </div>`;
+    const divider = `<div style="width:1px;height:32px;background:var(--border);opacity:0.35;flex-shrink:0;"></div>`;
+
+    let formatChips, styleChip;
+
+    if (isLoadingRecs) {
+      formatChips = `<div style="display:flex;align-items:center;gap:8px;padding:7px 18px;border-radius:20px;background:var(--bg-secondary);border:1px solid var(--border);">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;animation:ca-blink 1.1s ease-in-out infinite;"></span>
+        <span style="font-size:11px;color:var(--text-tertiary);font-weight:600;">Analizando tu video...</span>
+      </div>`;
+      styleChip = '';
+    } else if (selectedFormats.length > 0) {
+      formatChips = selectedFormats.map(id => {
+        const f = FORMATS.find(x => x.id === id);
+        return chip(f?.emoji, 'Formato', f?.label, 'red');
+      }).join('');
+      const s = STYLES.find(x => x.id === selectedStyleId);
+      styleChip = selectedStyleId
+        ? chip(s?.emoji, 'Estilo', s?.label, 'red')
+        : hasRecs && aiRecs.style
+          ? chip(STYLES.find(x => x.id === aiRecs.style.id)?.emoji, '✦ IA recomienda', STYLES.find(x => x.id === aiRecs.style.id)?.label, 'green')
+          : placeholder('Estilo');
+    } else if (hasRecs && aiRecs.formats.length > 0) {
+      formatChips = aiRecs.formats.slice(0, 2).map(r => {
+        const f = FORMATS.find(x => x.id === r.id);
+        return chip(f?.emoji, '✦ IA recomienda', f?.label, 'green');
+      }).join('');
+      styleChip = aiRecs.style
+        ? chip(STYLES.find(x => x.id === aiRecs.style.id)?.emoji, '✦ IA recomienda', STYLES.find(x => x.id === aiRecs.style.id)?.label, 'green')
+        : placeholder('Estilo');
+    } else {
+      formatChips = placeholder('Formato');
+      styleChip   = placeholder('Estilo');
+    }
+
+    return `<div style="display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:var(--space-md);flex-wrap:wrap;padding:0 2px;">
+      ${formatChips}
+      ${styleChip ? divider : ''}
+      ${styleChip}
+    </div>`;
+  }
+
+  function updateSummaryBar() {
+    const el = document.getElementById('engine-summary-bar');
+    if (el) el.innerHTML = renderSummaryBar();
+  }
+
   // ─── RENDER ROOT ──────────────────────────────────────────────────────────
 
   function render() {
@@ -413,11 +538,27 @@ export async function renderEngine(container) {
     if (!document.getElementById('thumb-lightbox')) {
       const lb = document.createElement('div');
       lb.id = 'thumb-lightbox';
-      lb.innerHTML = '<img id="thumb-lightbox-img" src="" alt="Previsualización" />';
+      lb.innerHTML = `
+        <div id="lbbar">
+          <span id="lbcounter"></span>
+          <button id="lbdl">${icon('download', 15)} DESCARGAR MINIATURA</button>
+          <button id="lbclose" title="Cerrar (Esc)">${icon('x', 16)}</button>
+        </div>
+        <button id="lbprev" title="Anterior (←)">&#8249;</button>
+        <img id="thumb-lightbox-img" src="" alt="Previsualización" />
+        <button id="lbnext" title="Siguiente (→)">&#8250;</button>
+      `;
       document.body.appendChild(lb);
-      lb.addEventListener('click', () => {
-        lb.classList.remove('active');
-        setTimeout(() => { lb.querySelector('img').src = ''; }, 260);
+      lb.addEventListener('click', (e) => { if (e.target === lb) closeLightbox(); });
+      document.getElementById('lbclose').addEventListener('click', closeLightbox);
+      document.getElementById('lbprev').addEventListener('click', (e) => { e.stopPropagation(); lbNav(-1); });
+      document.getElementById('lbnext').addEventListener('click', (e) => { e.stopPropagation(); lbNav(1); });
+      document.getElementById('lbdl').addEventListener('click', async (e) => { e.stopPropagation(); await lbDownload(); });
+      document.addEventListener('keydown', function lbKeyHandler(e) {
+        if (!document.getElementById('thumb-lightbox')?.classList.contains('active')) return;
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); lbNav(-1); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); lbNav(1); }
+        else if (e.key === 'Escape') closeLightbox();
       });
     }
 
@@ -450,6 +591,9 @@ export async function renderEngine(container) {
           <p class="section-subtitle">DNA Chain → Miniatura de alto CTR</p>
         </div>
       </div>
+
+      <!-- Summary bar: formato + estilo seleccionado/recomendado -->
+      <div id="engine-summary-bar">${renderSummaryBar()}</div>
 
       <!-- Progress bar — compacto -->
       <div style="display:flex;align-items:center;margin-bottom:var(--space-md);padding:0 2px;gap:0;">
@@ -554,6 +698,7 @@ export async function renderEngine(container) {
       : renderAnglesStep(project, selectedAngles);
     bindStepContentEvents();
     syncEngineNav();
+    updateSummaryBar();
   }
 
   // ─── STEP 1: Proyecto ─────────────────────────────────────────────────────
@@ -878,6 +1023,36 @@ export async function renderEngine(container) {
 
   // ─── STEP 2: Formato ──────────────────────────────────────────────────────
 
+  async function fetchAIRecs(project) {
+    if (aiRecs !== null) return; // already loading or done
+    aiRecs = false; // mark as loading
+    rerenderStep();
+    try {
+      const dna    = project.logic_dna || {};
+      const angles = (dna.selected_angles || [])
+        .map(a => `- ${a.name}: ${a.psychology || a.psychology_text || ''}`)
+        .join('\n');
+      const content = [
+        `TÍTULO DEL VIDEO: ${project.title}`,
+        `HOOK: ${dna.hook || '—'}`,
+        `TENSIÓN: ${dna.tension || '—'}`,
+        `PROMESA: ${dna.promise || '—'}`,
+        `OBJETO HÉROE: ${dna.visual_briefing?.hero_object || '—'}`,
+        `CONFLICTO CENTRAL: ${dna.visual_briefing?.central_conflict || '—'}`,
+        `ÁNGULOS PSICOLÓGICOS SELECCIONADOS:\n${angles || '—'}`,
+      ].join('\n');
+      const result = await callAI('FORMAT_STYLE_REC', content);
+      aiRecs = {
+        formats: Array.isArray(result?.recommended_formats) ? result.recommended_formats : [],
+        style:   result?.recommended_style || null,
+      };
+    } catch (err) {
+      console.warn('[fetchAIRecs] failed:', err);
+      aiRecs = { formats: [], style: null };
+    }
+    rerenderStep();
+  }
+
   // Analyzes project DNA and returns format recommendations with reasons.
   // Deterministic — no API call. Runs on the logic_dna already in the project.
   function recommendFormats(project) {
@@ -953,8 +1128,11 @@ export async function renderEngine(container) {
 
   function renderFormatStep() {
     const project = getProject();
-    const recs = project ? recommendFormats(project) : [];
-    const recMap = Object.fromEntries(recs.map(r => [r.id, r]));
+    if (project && project.id !== aiRecsProjectId) { aiRecs = null; aiRecsProjectId = project.id; }
+    if (project && aiRecs === null) fetchAIRecs(project);
+    const recs          = (aiRecs && aiRecs !== false) ? aiRecs.formats : [];
+    const recMap        = Object.fromEntries(recs.map(r => [r.id, r]));
+    const isLoadingRecs = aiRecs === false;
 
     return `
     <div>
@@ -962,21 +1140,18 @@ export async function renderEngine(container) {
         Elegí el formato de composición — podés seleccionar varios
       </div>
 
-      ${recs.length > 0 ? `
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:var(--space-md);">
-        <span style="font-size:10px;font-weight:700;color:var(--text-tertiary);white-space:nowrap;">✦ IA recomienda:</span>
-        ${recs.map(r => {
-          const f = FORMATS.find(x => x.id === r.id);
-          return `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;
-            ${r.confidence === 'alta'
-              ? 'background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35);'
-              : 'background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);'}
-          ">${f?.emoji} ${f?.label}</span>`;
-        }).join('')}
-      </div>
-      ` : ''}
-
-      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+      <div style="position:relative;${isLoadingRecs ? 'min-height:220px;' : ''}">
+        ${isLoadingRecs ? `
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:5;background:rgba(10,10,10,0.88);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border-radius:12px;padding:40px 20px;text-align:center;">
+          <div style="display:flex;gap:7px;margin-bottom:16px;">
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;animation:ca-blink 1.1s ease-in-out infinite;"></span>
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;animation:ca-blink 1.1s ease-in-out .3s infinite;"></span>
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block;animation:ca-blink 1.1s ease-in-out .6s infinite;"></span>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">Analizando y recomendando un formato basado en tu video</div>
+          <div style="font-size:12px;color:var(--text-tertiary);">La IA está procesando el DNA del video...</div>
+        </div>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:10px;${isLoadingRecs ? 'pointer-events:none;opacity:0.12;' : ''}">
         ${FORMATS.map(f => {
           const isSelected = selectedFormats.includes(f.id);
           const rec = recMap[f.id];
@@ -1011,6 +1186,7 @@ export async function renderEngine(container) {
             </div>` : ''}
           </div>`;
         }).join('')}
+        </div>
       </div>
     </div>`;
   }
@@ -1018,6 +1194,8 @@ export async function renderEngine(container) {
   // ─── STEP 3: Estilo visual ────────────────────────────────────────────────
 
   function renderStyleStep() {
+    const styleRec      = (aiRecs && aiRecs !== false) ? aiRecs.style : null;
+    const isLoadingRecs = aiRecs === false;
     return `
     <div>
       <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
@@ -1026,22 +1204,24 @@ export async function renderEngine(container) {
       <div style="display:flex;flex-wrap:wrap;gap:10px;">
         ${STYLES.map(s => {
           const isSelected = selectedStyleId === s.id;
+          const isRec      = styleRec?.id === s.id;
           const useCase = STYLE_USE_CASES[s.id] || '';
           return `
           <div class="card style-card" data-style-id="${s.id}" style="
             cursor:pointer;padding:14px 12px;transition:all 0.15s;position:relative;
             flex:1 1 150px;min-width:138px;max-width:200px;
             display:flex;flex-direction:column;align-items:center;text-align:center;
-            ${isSelected ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);box-shadow:0 0 0 1px var(--accent);' : ''}">
+            ${isSelected ? 'border-color:var(--accent);background:rgba(220,38,38,0.07);box-shadow:0 0 0 1px var(--accent);' : isRec ? 'border-color:rgba(16,185,129,0.35);' : ''}">
             <div style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;
               border:2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};
               background:${isSelected ? 'var(--accent)' : 'transparent'};
               display:flex;align-items:center;justify-content:center;color:white;">
               ${isSelected ? icon('check', 9) : ''}
             </div>
-            <div style="font-size:34px;margin-bottom:8px;margin-top:4px;">${s.emoji}</div>
+            ${isRec && !isSelected ? `<div style="position:absolute;top:8px;left:8px;font-size:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35);">✦ IA</div>` : ''}
+            <div style="font-size:34px;margin-bottom:8px;margin-top:${isRec ? '16px' : '4px'};">${s.emoji}</div>
             <div class="font-bold" style="font-size:13px;line-height:1.3;margin-bottom:3px;">${s.label}</div>
-            <div class="text-xs" style="color:var(--accent);">${s.subtitle}</div>
+            <div class="text-xs" style="color:${isRec ? '#10b981' : 'var(--accent)'};">${s.subtitle}</div>
             ${useCase ? `
             <div style="margin-top:auto;padding-top:10px;width:100%;">
               <div style="border-top:1px solid var(--border);padding-top:8px;">
@@ -1267,7 +1447,7 @@ export async function renderEngine(container) {
             ${isGen
               ? thumbLoaderHTML()
               : hasImg
-                ? `<img src="${latest.image_url}" class="thumb-preview-trigger" data-preview="${latest.image_url}"
+                ? `<img src="${latest.image_url}" class="thumb-preview-trigger" data-preview="${latest.image_url}" data-angle-group="angle-${globalIdx}" data-name="miniatura-${safeTitle}-${letters[globalIdx]}.png"
                      style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block;" />
                    ${latest.overlay_text ? `<div style="position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));">
                      <div style="font-family:var(--font-impact);font-size:13px;color:white;letter-spacing:2px;">${latest.overlay_text}</div>
@@ -1300,7 +1480,7 @@ export async function renderEngine(container) {
               return `
               <div style="flex-shrink:0;width:180px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);${isOld ? 'opacity:0.75;' : ''}">
                 ${c.image_url
-                  ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
+                  ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" data-angle-group="angle-${globalIdx}" data-name="var-${letters[globalIdx]}-${ci+1}.png" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
                   : isStuck
                     ? `${thumbLoaderHTML('', '')}
                        <button class="btn-cancel-variant" data-variant-id="${c.id}" title="Cancelar" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(220,38,38,0.9);border:none;border-radius:3px;padding:2px 8px;cursor:pointer;color:white;font-size:9px;font-weight:700;z-index:20;white-space:nowrap;display:flex;align-items:center;gap:3px;">${icon('x',8)} Cancelar</button>`
@@ -1435,7 +1615,7 @@ export async function renderEngine(container) {
           ${isGen
             ? thumbLoaderHTML()
             : hasImg
-              ? `<img src="${latest.image_url}" class="thumb-preview-trigger" data-preview="${latest.image_url}"
+              ? `<img src="${latest.image_url}" class="thumb-preview-trigger" data-preview="${latest.image_url}" data-angle-group="drawer-${cardIdx}" data-name="miniatura-${safeTitle}-${cardIdx+1}.png"
                    style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block;" />
                  ${latest.overlay_text ? `<div style="position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));">
                    <div style="font-family:var(--font-impact);font-size:13px;color:white;letter-spacing:2px;">${latest.overlay_text}</div>
@@ -1462,7 +1642,7 @@ export async function renderEngine(container) {
             return `
             <div style="flex-shrink:0;width:140px;border-radius:var(--radius-md);overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--bg-tertiary);${isOld?'opacity:0.7;':''}">
               ${c.image_url
-                ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
+                ? `<img src="${c.image_url}" class="thumb-preview-trigger" data-preview="${c.image_url}" data-angle-group="drawer-${cardIdx}" data-name="var-${cardIdx+1}-${ci+1}.png" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;" />`
                 : isStuck
                   ? `${thumbLoaderHTML('', '')}
                      <button class="btn-cancel-variant" data-variant-id="${c.id}" title="Cancelar generación" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(220,38,38,0.9);border:none;border-radius:3px;padding:2px 8px;cursor:pointer;color:white;font-size:9px;font-weight:700;z-index:20;white-space:nowrap;display:flex;align-items:center;gap:3px;">${icon('x',8)} Cancelar</button>`
@@ -1592,9 +1772,7 @@ export async function renderEngine(container) {
     document.querySelectorAll('#variants-history-section .thumb-preview-trigger').forEach(img => {
       img.addEventListener('click', (e) => {
         e.stopPropagation();
-        const lb = document.getElementById('thumb-lightbox');
-        const lbImg = document.getElementById('thumb-lightbox-img');
-        if (lb && lbImg) { lbImg.src = img.dataset.preview; lb.classList.add('active'); }
+        openLightboxForImg(img);
       });
     });
     document.querySelectorAll('#variants-history-section .btn-download').forEach(btn => {
@@ -1883,11 +2061,7 @@ export async function renderEngine(container) {
     container.querySelectorAll('.thumb-preview-trigger').forEach(img => {
       img.addEventListener('click', (e) => {
         e.stopPropagation();
-        const lb = document.getElementById('thumb-lightbox');
-        const lbImg = document.getElementById('thumb-lightbox-img');
-        if (!lb || !lbImg) return;
-        lbImg.src = img.dataset.preview;
-        lb.classList.add('active');
+        openLightboxForImg(img);
       });
     });
 
@@ -2295,9 +2469,7 @@ export async function renderEngine(container) {
       el.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (el.classList.contains('thumb-preview-trigger')) {
-          const lb = document.getElementById('thumb-lightbox');
-          const lbImg = document.getElementById('thumb-lightbox-img');
-          if (lb && lbImg) { lbImg.src = el.dataset.preview; lb.classList.add('active'); }
+          openLightboxForImg(el);
         } else {
           const src = el.dataset.src, name = el.dataset.name;
           try {

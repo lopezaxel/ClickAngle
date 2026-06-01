@@ -31,7 +31,9 @@
       "Bash(supabase --version)",
       "Bash(supabase link *)",
       "Bash(supabase functions *)",
-      "Bash(supabase secrets *)"
+      "Bash(supabase secrets *)",
+      "WebFetch(domain:discuss.ai.google.dev)",
+      "WebFetch(domain:docs.cloud.google.com)"
     ]
   }
 }
