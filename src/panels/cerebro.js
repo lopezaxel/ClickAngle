@@ -978,8 +978,10 @@ export async function renderCerebro(container) {
         tension: analysisResult?.tension || '',
         promise: analysisResult?.promise || '',
         visual_briefing: analysisResult?.visual_briefing || null,
+        text_suggestions: analysisResult?.text_suggestions || [],
+        text_decision: analysisResult?.text_decision || null,
         existing_angles: generatedAngles.map(a => a.name),
-        // YouTube ADN — enriquece los ángulos con la psicología real de la audiencia del canal
+        // YouTube ADN — enriches angles with the real psychology of the channel's audience
         ...(channelYtAnalysis && {
           channel_archetype: channelYtAnalysis.channel_archetype,
           audience_psychology: channelYtAnalysis.audience_psychology,

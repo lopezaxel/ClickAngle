@@ -2,7 +2,7 @@
 import { getState, subscribe } from '../lib/state.js';
 import { setActiveProject } from '../lib/projects.js';
 import { icon } from '../icons.js';
-import { callAI, generateImage } from '../lib/intelligence.js';
+import { callAI, generateImage, callAIWithImages, translateCelebrityIfNeeded, critiqueAndRefinePrompt, critiqueImageForRefinement, IMAGE_GEN_MODEL_CELEBRITY } from '../lib/intelligence.js';
 import { toast, confirmDialog, inputDialog } from '../lib/toast.js';
 import { showLoader, updateLoader, hideLoader, ensureLoaderStyles } from '../lib/loader.js';
 import { openVideoSwitcher } from '../components/video-switcher.js';
@@ -348,9 +348,12 @@ export async function renderEngine(container) {
   let selectedExpressionId = null; // persists face select across renders
   let aiRecs          = null; // null=not fetched | false=loading | {formats,style}=done
   let aiRecsProjectId = null; // project ID for which aiRecs was computed
-  let textMode = 'none';           // 'none' | 'ai' — persists text mode across renders
+  let textMode = 'none';           // 'none' | 'ai' | 'canvas' — persists text mode across renders
+  let agentMode = false;           // Modo Agente: draft → image critique → refined final
   let anglesPage = 0;              // pagination for step 5 angle cards
   let variantsPage = 0;            // pagination for history section
+  let useCelebrityModel = false;   // true = use gemini-2.5 permissive model for real person likenesses
+  let detectedCelebrity = null;    // null=unchecked | false=none | true=celebrity found in hero_object
 
   // Auto-matched face from DNA (set during render based on emotion_label)
   let autoMatchedFaceId = null;
@@ -1006,6 +1009,7 @@ export async function renderEngine(container) {
         faceEnabled = null;
         selectedExpressionId = null;
         textMode = 'none';
+        agentMode = false;
         anglesPage = 0;
         variantsPage = 0;
         workflowStep = 2;
@@ -1237,14 +1241,68 @@ export async function renderEngine(container) {
 
   // ─── STEP 4: Rostro del creador ───────────────────────────────────────────
 
+  async function detectCelebrity() {
+    const heroObject = getProject()?.logic_dna?.visual_briefing?.hero_object || '';
+    if (!heroObject) { detectedCelebrity = false; rerenderStep(); return; }
+    try {
+      const translated = await translateCelebrityIfNeeded(heroObject);
+      detectedCelebrity = translated !== heroObject;
+    } catch {
+      detectedCelebrity = false;
+    }
+    rerenderStep();
+  }
+
   function renderFaceStep() {
     const matchedFace = faceList.find(f => f.id === autoMatchedFaceId);
     const effectiveUseFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
     const effectiveExpressionId = selectedExpressionId || autoMatchedFaceId;
     const hasFaces = faceList.length > 0;
 
+    // Trigger celebrity detection on first render of this step
+    if (detectedCelebrity === null) detectCelebrity();
+
+    const celebSection = (() => {
+      if (detectedCelebrity === null) return `
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:var(--radius-md);background:var(--bg-tertiary);border:1px solid var(--border);margin-bottom:var(--space-lg);">
+          <span style="font-size:14px;animation:ca-blink 1.1s ease-in-out infinite;">🔍</span>
+          <span style="font-size:12px;color:var(--text-tertiary);">Analizando si hay una celebridad en este video...</span>
+        </div>`;
+      if (!detectedCelebrity) return '';
+      return `
+        <div style="margin-bottom:var(--space-lg);padding:14px 16px;border-radius:var(--radius-md);
+          background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.3);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="font-size:16px;">🎬</span>
+            <span style="font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:#f59e0b;">Celebridad detectada en este video</span>
+          </div>
+          <p style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;line-height:1.5;">
+            El objeto héroe de este video incluye una persona real. Elegí cómo generarla:
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div id="celeb-opt-quality" style="cursor:pointer;padding:10px 12px;border-radius:var(--radius-md);text-align:center;transition:all 0.15s;
+              border:2px solid ${!useCelebrityModel ? 'var(--accent)' : 'var(--border)'};
+              background:${!useCelebrityModel ? 'rgba(220,38,38,0.08)' : 'var(--bg-secondary)'};">
+              <div style="font-size:20px;margin-bottom:4px;">⭐</div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px;">Máxima calidad</div>
+              <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">Descriptor visual de la celebridad — sin nombre real</div>
+              ${!useCelebrityModel ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+            </div>
+            <div id="celeb-opt-celebrity" style="cursor:pointer;padding:10px 12px;border-radius:var(--radius-md);text-align:center;transition:all 0.15s;
+              border:2px solid ${useCelebrityModel ? 'rgba(245,158,11,0.7)' : 'var(--border)'};
+              background:${useCelebrityModel ? 'rgba(245,158,11,0.07)' : 'var(--bg-secondary)'};">
+              <div style="font-size:20px;margin-bottom:4px;">🎭</div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:2px;">Con celebridad</div>
+              <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">Genera el rostro real — modelo anterior, menor calidad</div>
+              ${useCelebrityModel ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:rgba(245,158,11,0.8);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+    })();
+
     return `
     <div>
+      ${celebSection}
       <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:var(--space-md);">
         ¿Incluir el rostro del creador?
       </div>
@@ -1256,6 +1314,7 @@ export async function renderEngine(container) {
           <div style="font-size:24px;margin-bottom:6px;">🤳</div>
           <div class="font-bold" style="font-size:13px;margin-bottom:3px;">Con rostro</div>
           <div style="font-size:11px;color:var(--text-muted);line-height:1.4;">Incluye la foto del creador del Face Vault</div>
+          ${useCelebrityModel && effectiveUseFace ? `<div style="margin-top:4px;font-size:9px;color:#f59e0b;font-weight:700;">+ junto a la celebridad</div>` : ''}
           ${effectiveUseFace ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
         </div>
 
@@ -1313,7 +1372,7 @@ export async function renderEngine(container) {
     const useFace = faceEnabled !== null ? faceEnabled : !!matchedFace;
     const expressionId = selectedExpressionId || autoMatchedFaceId;
     const selectedFace = faceList.find(f => f.id === expressionId);
-    return { project, style, formats, useFace, selectedFace, textMode };
+    return { project, style, formats, useFace, selectedFace, textMode, useCelebrity: useCelebrityModel };
   }
 
   async function generateSingleAngle(angleIndex, overrideTextMode = null, signal = null) {
@@ -1358,8 +1417,8 @@ export async function renderEngine(container) {
     const tMode = effectiveTextMode; // always use the explicitly captured mode
     const angle = (project.logic_dna?.selected_angles || [])[angleIndex];
     if (!angle) return;
-    const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode: tMode });
-    await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null, signal });
+    const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode: tMode, useCelebrity: useCelebrityModel });
+    await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null, useCelebrity: useCelebrityModel, signal });
   }
 
   // ─── STEP 5: Ángulos + Generar ────────────────────────────────────────────
@@ -1426,7 +1485,7 @@ export async function renderEngine(container) {
                 ? `<span class="text-xs text-accent animate-pulse">${icon('clock', 12)} Generando...</span>
                    <button class="btn btn-xs btn-cancel-angle" data-angle-index="${globalIdx}" style="margin-left:auto;font-size:10px;padding:3px 10px;border:1px solid rgba(220,38,38,0.4);background:rgba(220,38,38,0.08);color:#ef4444;border-radius:var(--radius-sm);cursor:pointer;">✕ Cancelar</button>`
                 : hasImg
-                  ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${letters[globalIdx]}.png">${icon('download', 11)} Descargar</button>
+                  ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${letters[globalIdx]}.jpg">${icon('download', 11)} Descargar</button>
                      <button class="btn btn-secondary btn-xs btn-generate-angle" data-angle-index="${globalIdx}" ${generatingAnglesSet.has(globalIdx) ? 'disabled' : ''} style="font-size:10px;">${icon('rocket', 10)} Regenerar</button>
                      ${!isExpanding ? `
                      <div style="display:flex;align-items:center;gap:4px;margin-left:auto;">
@@ -1501,23 +1560,47 @@ export async function renderEngine(container) {
 
     return `
     <div>
-      <!-- Header: text mode toggle + Generar Todas -->
+      <!-- Header: text mode toggle + Agent Mode + Generar Todas -->
       <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:var(--space-lg);">
+
+        <!-- Text mode selector -->
         <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:12px;">✍️ ¿Tu miniatura lleva texto?</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-          <div id="text-opt-none" style="cursor:pointer;padding:14px 12px;border-radius:var(--radius-md);border:2px solid ${textMode === 'none' ? 'var(--accent)' : 'var(--border)'};background:${textMode === 'none' ? 'rgba(220,38,38,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
-            <div style="font-size:22px;margin-bottom:6px;">🚫</div>
-            <div class="font-bold" style="font-size:12px;margin-bottom:3px;color:${textMode === 'none' ? 'var(--text-primary)' : 'var(--text-secondary)'};">SIN TEXTO</div>
-            <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">Solo imagen, sin palabras</div>
-            ${textMode === 'none' ? `<div style="margin-top:8px;font-size:9px;padding:2px 10px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+          <div id="text-opt-none" style="cursor:pointer;padding:12px 8px;border-radius:var(--radius-md);border:2px solid ${textMode === 'none' ? 'var(--accent)' : 'var(--border)'};background:${textMode === 'none' ? 'rgba(220,38,38,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
+            <div style="font-size:20px;margin-bottom:5px;">🚫</div>
+            <div class="font-bold" style="font-size:11px;margin-bottom:2px;color:${textMode === 'none' ? 'var(--text-primary)' : 'var(--text-secondary)'};">SIN TEXTO</div>
+            <div style="font-size:9px;color:var(--text-muted);line-height:1.4;">Solo imagen pura</div>
+            ${textMode === 'none' ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:var(--accent);color:white;display:inline-block;font-weight:700;">ACTIVO</div>` : ''}
           </div>
-          <div id="text-opt-ai" style="cursor:pointer;padding:14px 12px;border-radius:var(--radius-md);border:2px solid ${textMode === 'ai' ? 'rgba(99,102,241,0.6)' : 'var(--border)'};background:${textMode === 'ai' ? 'rgba(99,102,241,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
-            <div style="font-size:22px;margin-bottom:6px;">✍️</div>
-            <div class="font-bold" style="font-size:12px;margin-bottom:3px;color:${textMode === 'ai' ? '#818cf8' : 'var(--text-secondary)'};">CON TEXTO</div>
-            <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">La IA elige la fuente,<br/>la ubicación, el estilo y el color</div>
-            ${textMode === 'ai' ? `<div style="margin-top:8px;font-size:9px;padding:2px 10px;border-radius:20px;background:rgba(99,102,241,0.7);color:white;display:inline-block;font-weight:700;">SELECCIONADO</div>` : ''}
+          <div id="text-opt-canvas" style="cursor:pointer;padding:12px 8px;border-radius:var(--radius-md);border:2px solid ${textMode === 'canvas' ? 'rgba(16,185,129,0.7)' : 'var(--border)'};background:${textMode === 'canvas' ? 'rgba(16,185,129,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
+            <div style="font-size:20px;margin-bottom:5px;">🖼️</div>
+            <div class="font-bold" style="font-size:11px;margin-bottom:2px;color:${textMode === 'canvas' ? '#10b981' : 'var(--text-secondary)'};">TEXTO CANVAS</div>
+            <div style="font-size:9px;color:var(--text-muted);line-height:1.4;">Tipografía perfecta<br/>sobre imagen limpia</div>
+            ${textMode === 'canvas' ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:#10b981;color:white;display:inline-block;font-weight:700;">ACTIVO</div>` : ''}
+          </div>
+          <div id="text-opt-ai" style="cursor:pointer;padding:12px 8px;border-radius:var(--radius-md);border:2px solid ${textMode === 'ai' ? 'rgba(99,102,241,0.6)' : 'var(--border)'};background:${textMode === 'ai' ? 'rgba(99,102,241,0.06)' : 'var(--bg-tertiary)'};transition:all 0.15s;text-align:center;">
+            <div style="font-size:20px;margin-bottom:5px;">✍️</div>
+            <div class="font-bold" style="font-size:11px;margin-bottom:2px;color:${textMode === 'ai' ? '#818cf8' : 'var(--text-secondary)'};">TEXTO IA</div>
+            <div style="font-size:9px;color:var(--text-muted);line-height:1.4;">IA elige fuente,<br/>posición y estilo</div>
+            ${textMode === 'ai' ? `<div style="margin-top:6px;font-size:9px;padding:2px 8px;border-radius:20px;background:rgba(99,102,241,0.7);color:white;display:inline-block;font-weight:700;">ACTIVO</div>` : ''}
           </div>
         </div>
+
+        <!-- Agent Mode toggle -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--radius-md);border:1px solid ${agentMode ? 'rgba(251,191,36,0.4)' : 'var(--border)'};background:${agentMode ? 'rgba(251,191,36,0.05)' : 'var(--bg-tertiary)'};margin-bottom:14px;cursor:pointer;" id="toggle-agent-mode">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:18px;">🤖</div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:${agentMode ? '#fbbf24' : 'var(--text-secondary)'};">MODO AGENTE</div>
+              <div style="font-size:9px;color:var(--text-muted);">Draft → Crítica visual → Miniatura potenciada (2× tiempo)</div>
+            </div>
+          </div>
+          <div style="width:36px;height:20px;border-radius:10px;background:${agentMode ? '#fbbf24' : 'var(--border)'};position:relative;transition:background 0.2s;flex-shrink:0;">
+            <div style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;left:${agentMode ? '18px' : '2px'};transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+          </div>
+        </div>
+
+        <!-- Generate All button -->
         <div style="display:flex;justify-content:flex-end;">
           <button id="btn-generate-all" class="btn btn-primary" ${isGenerating ? 'disabled' : ''}
             style="background:linear-gradient(135deg,var(--accent),#9333ea);font-weight:800;white-space:nowrap;">
@@ -1594,7 +1677,7 @@ export async function renderEngine(container) {
             ${isGen
               ? `<span class="text-xs text-accent animate-pulse">${icon('clock',12)} Generando...</span>`
               : hasImg
-                ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${cardIdx+1}.png">${icon('download',11)} Descargar</button>
+                ? `<button class="btn btn-secondary btn-xs btn-download" data-src="${latest.image_url}" data-name="miniatura-${safeTitle}-${cardIdx+1}.jpg">${icon('download',11)} Descargar</button>
                    ${!isExpanding ? `
                    <div style="display:flex;align-items:center;gap:4px;">
                      <select class="form-select" id="expand-count-${latest.id}" style="font-size:10px;padding:2px 4px;height:26px;width:60px;">
@@ -2137,8 +2220,8 @@ export async function renderEngine(container) {
             subtitle: `"${angle.name}" — aplicando Visual Twist único + ADN de Marca`,
             detail: `VARIANTE ${i + 1} DE ${anglesToGenerate.length} — IMAGE GENERATION`,
           });
-          const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode });
-          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null });
+          const imagePrompt = buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode, useCelebrity: useCelebrityModel });
+          await generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode, faceImageUrl: useFace ? (selectedFace?.image_url || null) : null, useCelebrity: useCelebrityModel });
         }
         hideLoader();
         toast(`✅ Batch completado — ${anglesToGenerate.length} miniatura${anglesToGenerate.length !== 1 ? 's' : ''} generada${anglesToGenerate.length !== 1 ? 's' : ''}`, 'success', 4000);
@@ -2277,13 +2360,33 @@ export async function renderEngine(container) {
       rerenderStep();
     });
 
+    // ── Celebrity model toggle (step 4) ──
+    document.getElementById('celeb-opt-quality')?.addEventListener('click', () => {
+      useCelebrityModel = false;
+      rerenderStep();
+    });
+    document.getElementById('celeb-opt-celebrity')?.addEventListener('click', () => {
+      useCelebrityModel = true;
+      rerenderStep();
+    });
+
     // ── Text mode toggle (step 5) ──
     document.getElementById('text-opt-none')?.addEventListener('click', () => {
       textMode = 'none';
       rerenderStep();
     });
+    document.getElementById('text-opt-canvas')?.addEventListener('click', () => {
+      textMode = 'canvas';
+      rerenderStep();
+    });
     document.getElementById('text-opt-ai')?.addEventListener('click', () => {
       textMode = 'ai';
+      rerenderStep();
+    });
+
+    // ── Agent Mode toggle ──
+    document.getElementById('toggle-agent-mode')?.addEventListener('click', () => {
+      agentMode = !agentMode;
       rerenderStep();
     });
 
@@ -2513,7 +2616,7 @@ export async function renderEngine(container) {
 
   // ── Helper: build master prompt (DNA Chain — Fusión de Capas) ──────────────
   // Slot order: [ESTILO_VISUAL] + [FORMATO_CREATIVO] + [OBJETO_HEROE] + [VISUAL_TWIST] + [ADN_MARCA]
-  function buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode = 'none' }) {
+  function buildMasterPrompt({ project, angle, style, formats, selectedFace, useFace, brandKit, textMode = 'none', heroOverride = null, useCelebrity = false }) {
     // === LAYER 1: VISUAL STYLE (lighting, textures, rendering quality) ===
     const styleLayer = [
       style.lighting,
@@ -2525,7 +2628,8 @@ export async function renderEngine(container) {
 
     // === LAYER 3: HERO OBJECT (from Cerebro visual_briefing + script DNA) ===
     const vb = project?.logic_dna?.visual_briefing || {};
-    const heroObject = vb.hero_object || project.logic_dna?.hook || '';
+    // heroOverride: used when celebrity translation has replaced the real name with visual descriptors
+    const heroObject = heroOverride || vb.hero_object || project.logic_dna?.hook || '';
     const centralConflict = vb.central_conflict || project.logic_dna?.tension || '';
     const requiredEmotion = vb.required_emotion || '';
     const heroLayer = [
@@ -2588,16 +2692,27 @@ export async function renderEngine(container) {
       'OBJECTIVE: Stand out in the YouTube feed. Be visually distinct from competitors while staying 100% true to the video\'s theme and emotions.',
     ].filter(Boolean).join('\n');
 
-    // === SLOT 6: FACE INTEGRATION ===
-    // When a face image is attached to the request, instruct the model to USE that real person.
-    // Never describe facial traits as text — the model must anchor to the actual photo.
-    const faceLayer = useFace && selectedFace
-      ? `CREATOR FACE (mandatory): The reference photo of the real creator is attached to this request as an image. You MUST use that exact real person's face — do NOT generate a fictional or AI-invented face. Preserve 100% of their real identity: bone structure, eyes, nose, mouth, hair, skin tone, piercing or any distinctive features. Required expression: ${requiredEmotion || selectedFace.expression_type} — make it hyper-expressive and over-the-top cinematic, but the face must unmistakably be the same real person from the reference photo.`
-      : `NO HUMAN PRESENCE — ABSOLUTE RULE: Zero faces, zero people, zero bodies, zero hands, zero silhouettes, zero humanoid shapes of any kind. If any option in LAYER 2 describes a face-based composition, SKIP that option entirely and choose the next available option that builds visual impact using only objects, environments, graphic elements, symbols, or abstract visual language. This rule is NON-NEGOTIABLE and overrides any face-related instruction in any other layer.`;
+    // === LAYER 6: FACE / CELEBRITY INTEGRATION ===
+    // 4 combinations: (useFace + useCelebrity) | (useCelebrity only) | (useFace only) | (none)
+    const faceLayer = (() => {
+      if (useFace && useCelebrity && selectedFace) {
+        return `DUAL PERSON COMPOSITION — CELEBRITY + CREATOR REACTION:
+PRIMARY subject (celebrity): ${heroObject} — must occupy 50–60% of the frame. Their most iconic visual identity must be instantly recognizable in 0.2 seconds at thumbnail size. Use their well-known appearance: signature features, iconic style, characteristic pose. Do NOT invent a generic person.
+SECONDARY subject (creator): The reference photo of the real creator is attached to this request. They appear in a SMALLER, SECONDARY position — right side or upper corner — expressing a visceral emotion (shock, disbelief, excitement, awe) DIRECTED AT the celebrity. Preserve 100% of the creator's real facial identity from the photo: bone structure, eyes, hair, skin tone.
+Required creator expression: ${requiredEmotion || selectedFace.expression_type} — hyper-expressive, 2x over-the-top cinematic.
+NARRATIVE RULE: The celebrity and creator must connect through eye-line direction. The creator visually reacts TO the celebrity. This visual tension IS the thumbnail story. The creator does NOT compete for dominance — they AMPLIFY the emotional reading.`;
+      }
+      if (!useFace && useCelebrity) {
+        return `CELEBRITY SUBJECT (mandatory): ${heroObject} — generate with their most iconic and immediately recognizable visual identity. Must be identifiable by any viewer in 0.2 seconds at thumbnail size. Use their signature physical features, iconic style elements, or characteristic pose. Required emotional expression: ${requiredEmotion || 'intense, over-the-top cinematic, commanding'} — 2x exaggerated beyond natural. This is the primary and only human element in the composition.`;
+      }
+      if (useFace && !useCelebrity && selectedFace) {
+        return `CREATOR FACE (mandatory): The reference photo of the real creator is attached to this request as an image. You MUST use that exact real person's face — do NOT generate a fictional or AI-invented face. Preserve 100% of their real identity: bone structure, eyes, nose, mouth, hair, skin tone, and any distinctive features. Required expression: ${requiredEmotion || selectedFace.expression_type} — make it hyper-expressive and over-the-top cinematic, but the face must unmistakably be the same real person from the reference photo.`;
+      }
+      return `NO HUMAN PRESENCE — ABSOLUTE RULE: Zero faces, zero people, zero bodies, zero hands, zero silhouettes, zero humanoid shapes of any kind. If any option in LAYER 2 describes a face-based composition, SKIP that option entirely and choose the next available option that builds visual impact using only objects, environments, graphic elements, symbols, or abstract visual language. This rule is NON-NEGOTIABLE and overrides any face-related instruction in any other layer.`;
+    })();
 
-    // Hard preamble injected before all layers when no face is used —
-    // prevents the model from defaulting to AI-generated faces when format options reference them.
-    const noFacePreamble = !useFace ? `🚫 HARD CONSTRAINT — READ BEFORE ANYTHING ELSE: This thumbnail must contain ZERO human faces, people, or body parts of any kind. No real faces, no AI-generated faces, no silhouettes, no hands, no humanoid figures. Any composition option in LAYER 2 that involves a person's face or body MUST be skipped. Build maximum visual impact using only objects, environments, graphic design, symbols, and abstract elements. This constraint cannot be overridden by any instruction that follows.
+    // Hard preamble only when absolutely no person is in the image — prevents AI-generated faces
+    const noFacePreamble = (!useFace && !useCelebrity) ? `🚫 HARD CONSTRAINT — READ BEFORE ANYTHING ELSE: This thumbnail must contain ZERO human faces, people, or body parts of any kind. No real faces, no AI-generated faces, no silhouettes, no hands, no humanoid figures. Any composition option in LAYER 2 that involves a person's face or body MUST be skipped. Build maximum visual impact using only objects, environments, graphic design, symbols, and abstract elements. This constraint cannot be overridden by any instruction that follows.
 
 ` : '';
 
@@ -2629,7 +2744,7 @@ ${faceLayer}
 
 FINAL REQUIREMENTS: Ultra-sharp. Maximum visual punch. Vibrant. Palette faithful to the video's content. Visually distinct from competitors.
 
-${textMode === 'ai' ? `━━━ LAYER 7: TIPOGRAFIA Y TEXTO — OVERLAY TECHNIQUE ━━━
+${(textMode === 'ai') ? `━━━ LAYER 7: TIPOGRAFIA Y TEXTO — OVERLAY TECHNIQUE ━━━
 ⚠️ MANDATORY TEXT REQUIREMENT — NON-NEGOTIABLE: This thumbnail MUST contain physically rendered, clearly readable text. Text generation is OBLIGATORY. An image without visible text is a failed generation. You MUST render at least 1 word. There are NO exceptions. Even if the composition seems full, text MUST be present somewhere in the frame.
 
 You are a senior YouTube thumbnail creative director with 15+ years of experience studying viral content psychology. You have analyzed over 50,000 high-performing thumbnails and understand exactly which words stop a human mid-scroll. Typography is a surgical tool — one perfectly chosen word doubles CTR; five mediocre words destroy the image.
@@ -2658,7 +2773,7 @@ Apply the correct psychological trigger for this specific content:
 • URGENCY / DANGER: A word that signals something critical is happening right now, creating FOMO or threat response. (ex: "ALERTA", "AHORA", "ULTIMO")
 • IDENTITY CHALLENGE: A word that speaks directly to the viewer's self-concept, making them feel personally called out. (ex: "VOS", "TODOS", "NADIE", "YO")
 • VALIDATION / REVELATION: A word that confirms something the viewer suspected but never saw confirmed. (ex: "CONFIRMADO", "EXPUESTO", "VERDAD")
-The word MUST be thematically coherent with the psychological angle of this specific variant (Layer 4). Use the video's original language — match the language of the hook/title/tension.
+The word MUST be thematically coherent with the psychological angle of this specific variant (Layer 4). LANGUAGE RULE — MANDATORY: All text rendered inside the image MUST be in SPANISH. The target audience is Spanish-speaking — English words in the image create immediate disconnection and destroy CTR. No exceptions.
 
 ━━ PLACEMENT — OVERLAY RULES ━━
 Text goes ON TOP of the scene. These rules are absolute:
@@ -2681,7 +2796,7 @@ SUPERVIVENCIA/AVENTURA/NATURALEZA: Military stencil, raw brushstroke paint, eart
 ━━ RENDERING TECHNIQUE ━━
 Text must appear physically embedded in the visual world — 3D extrusion, neon glow, painted surface, spray paint, stamped ink, hologram overlay, etched material. NOT a flat digital sticker. Letterforms must respect the thumbnail's lighting (cast shadows, receive light from the key light source) and color palette (Layer 2.5). Perfect kerning. Zero merged characters. Zero overlapping glyphs. Zero letter bleed. Every character must be individually distinct and perfectly legible.
 
-⚠️ FINAL MANDATORY CHECK: Before finalizing the image, confirm that at least 1 clearly readable word is visible in the frame. If no text is present — you MUST add it now. Text is REQUIRED, not optional.` : `REGLA ABSOLUTA — CERO TEXTO EN LA IMAGEN: PROHIBIDO renderizar texto, palabras, letras, numeros o tipografia en cualquier parte de la imagen — ni en pantallas, senales, banners, barras, badges, carteles, ni en ningun otro lugar. Cualquier elemento de diseno que normalmente contendria texto debe mostrar UNICAMENTE color solido, formas geometricas, patrones visuales abstractos o iconos graficos — NUNCA caracteres legibles. El texto se aplica exclusivamente en post-produccion. VIOLAR ESTA REGLA ES EL ERROR #1 — EVITAR A TODA COSTA.`}
+⚠️ FINAL MANDATORY CHECK: Before finalizing the image, confirm that at least 1 clearly readable word is visible in the frame. If no text is present — you MUST add it now. Text is REQUIRED, not optional.` : `ABSOLUTE RULE — ZERO TEXT IN THE IMAGE: No text, words, letters, numbers, or typography anywhere in the image — not on screens, signs, banners, badges, posters, or any surface. CRITICAL: Do NOT generate blank rectangular color bars, empty banner shapes, horizontal color bands, or ANY element that visually resembles a text placeholder — even if empty. Every single element in the composition must be a photographic, environmental, figurative, or atmospheric visual element that exists in the physical world of the scene. There is no "space reserved for text" — the composition is 100% complete as rendered. Text is applied exclusively in post-production. GENERATING A BLANK BAR OR RECTANGLE IS THE SAME VIOLATION AS GENERATING TEXT — BOTH ARE FORBIDDEN.`}
 
 UNIVERSO VISUAL CERRADO — ANTI-ALUCINACION: Renderiza UNICAMENTE los elementos visuales explicitamente descritos en las capas anteriores. PROHIBIDO agregar elementos por asociacion cultural o de genero: no inventar logotipos, marcas, insignias, iconos no especificados, efectos de franquicia, pantallas con contenido, fondos de escenografia no mencionados, ni ningun elemento decorativo que no este descripto literalmente arriba. Si el estilo evoca un genero (noticiero, cine de accion, documental), renderiza SOLO la estetica visual del genero (iluminacion, color, composicion) — NO sus elementos de UI, marcos de programa, graficos de produccion ni branding inventado. Cada pixel debe justificarse en alguna de las capas anteriores.`;
   }
@@ -2727,7 +2842,29 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
 
   // ── Helper: generate one image and save to DB ─────────────────────────────
   // Inserts placeholder, immediately updates UI, then generates image in background
-  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode = 'none', faceImageUrl = null, parentId = null, signal = null }) {
+  async function generateAndSaveVariant({ project, angle, style, formats, imagePrompt, textMode: tMode = 'none', faceImageUrl = null, parentId = null, signal = null, useCelebrity = false }) {
+
+    // ── Step 0: Celebrity translation (quality model only) ──
+    // When useCelebrity=true the user chose the permissive model — keep the real name as-is.
+    // When useCelebrity=false translate any celebrity name to visual descriptors so the
+    // quality model (gemini-3.1-flash-image) can still render them without being blocked.
+    const rawHero = project?.logic_dna?.visual_briefing?.hero_object || '';
+    let finalPrompt = imagePrompt;
+    let translatedHero = rawHero;
+    if (!useCelebrity && rawHero && rawHero.length > 2) {
+      translatedHero = await translateCelebrityIfNeeded(rawHero);
+      if (translatedHero !== rawHero) {
+        finalPrompt = imagePrompt.split(rawHero).join(translatedHero);
+      }
+    }
+    // Choose the image generation model based on user's celebrity preference
+    const imageModel = useCelebrity ? IMAGE_GEN_MODEL_CELEBRITY : null; // null = default quality model
+
+    // ── Step 1: Prompt critic (Level 1) ──
+    // Silently reinforces the prompt before generation — every generation benefits.
+    const videoContext = { hook: project.logic_dna?.hook || '', angle: angle.name };
+    finalPrompt = await critiqueAndRefinePrompt(finalPrompt, videoContext);
+
     const isRealAngleId = angle.id && !String(angle.id).startsWith('ai-');
     const { data: inserted, error: insertErr } = await supabase
       .from('thumbnail_variants')
@@ -2738,7 +2875,7 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
         style_preset: style.label,
         impact_score: Math.floor(Math.random() * 20) + 80,
         ai_metadata: {
-          prompt: imagePrompt,
+          prompt: finalPrompt,
           angle_name: angle.name,
           format: formats.map(f => f.label).join(' + '),
           style: style.label,
@@ -2746,6 +2883,8 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
           parent_id: parentId,
           face_image_url: faceImageUrl || null,
           text_mode: tMode,
+          translated_hero: translatedHero !== rawHero ? translatedHero : undefined,
+          agent_mode: agentMode,
         }
       })
       .select()
@@ -2759,11 +2898,44 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
 
     try {
       const safetyFallback = buildSafetyFallbackPrompt(angle, project, style);
-      const dataUrl = await generateImage(imagePrompt, faceImageUrl, safetyFallback, signal);
+
+      // ── Step 2: Agent Mode (Level 2) — draft → image critique → refined final ──
+      if (agentMode) {
+        // 2a. Generate draft (not saved, just held in memory)
+        const draftDataUrl = await generateImage(finalPrompt, faceImageUrl, safetyFallback, signal, imageModel);
+        // 2b. Critique the draft image
+        const draftBase64 = draftDataUrl.split(',')[1];
+        const improvement = await critiqueImageForRefinement(draftBase64, {
+          hook: project.logic_dna?.hook || '',
+          angle: angle.name,
+          style: style.label,
+        });
+        // 2c. Append improvement instructions and regenerate
+        if (improvement) {
+          finalPrompt = `${finalPrompt}\n\n━━━ AGENT IMPROVEMENT — MANDATORY CORRECTIONS ━━━\n${improvement}`;
+        }
+      }
+
+      const dataUrl = await generateImage(finalPrompt, faceImageUrl, safetyFallback, signal, imageModel);
+
+      // ── Step 3: Canvas text compositing (if textMode === 'canvas') ──
+      let finalDataUrl = dataUrl;
+      if (tMode === 'canvas') {
+        const textSuggestions = project.logic_dna?.text_suggestions || [];
+        const angleIndex = (project.logic_dna?.selected_angles || []).findIndex(a => a.name === angle.name);
+        const overlayText = textSuggestions[angleIndex >= 0 ? angleIndex % textSuggestions.length : 0] || textSuggestions[0] || '';
+        if (overlayText) {
+          finalDataUrl = await compositeTextOnImage(dataUrl, overlayText);
+        }
+      }
+
+      // ── Step 4: Resize to 1280×720 JPEG (YouTube standard, <2MB) ──
+      finalDataUrl = await resizeImageTo720p(finalDataUrl);
+
       const userId = getState().session?.user?.id;
-      const blob = await fetch(dataUrl).then(r => r.blob());
-      const mimeType = blob.type || 'image/jpeg';
-      const ext = mimeType.includes('png') ? 'png' : 'jpg';
+      const blob = await fetch(finalDataUrl).then(r => r.blob());
+      const mimeType = 'image/jpeg';
+      const ext = 'jpg';
       const fileName = `${userId}/thumbnails/${project.id}/${inserted.id}.${ext}`;
       const { error: uploadError } = await supabase.storage.from('thumbnails').upload(fileName, blob, { contentType: mimeType });
       if (uploadError) throw new Error(`Upload falló: ${uploadError.message}`);
@@ -2788,20 +2960,82 @@ Do NOT replicate the same composition, color palette, or lighting mood as the ba
         await supabase.from('thumbnail_variants').delete().eq('id', inserted.id).catch(() => {});
         const localIdx = project.thumbnail_variants?.findIndex(v => v.id === inserted.id);
         if (localIdx !== -1) project.thumbnail_variants.splice(localIdx, 1);
-        throw imgErr; // re-throw so the caller knows it was aborted
+        throw imgErr;
       }
       console.error('Image gen failed:', imgErr);
       await supabase.from('thumbnail_variants').update({
         ai_metadata: { ...inserted.ai_metadata, generating: false, error: imgErr.message }
       }).eq('id', inserted.id);
 
-      // ── Update local variant to show error state ──
       const localVariant = project.thumbnail_variants.find(v => v.id === inserted.id);
       if (localVariant) {
         localVariant.ai_metadata = { ...inserted.ai_metadata, generating: false, error: imgErr.message };
       }
       render();
     }
+  }
+
+  // ── Helper: resize any image to exactly 1280×720 (YouTube standard) ─────────
+  // Output is always JPEG at 0.92 quality (~300-600KB, well within YouTube's 2MB limit).
+  function resizeImageTo720p(dataUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 720;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 1280, 720);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
+  // ── Helper: composite text overlay onto an image using Canvas API ────────────
+  function compositeTextOnImage(dataUrl, text) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        const word = text.toUpperCase().trim();
+        const fontSize = Math.max(Math.floor(canvas.width * 0.1), 48);
+        const padX = Math.floor(canvas.width * 0.05);
+        const padY = Math.floor(canvas.height * 0.05);
+
+        // Dark gradient bar behind text for universal readability
+        const gradH = fontSize * 2.2;
+        const grad = ctx.createLinearGradient(0, canvas.height - gradH, 0, canvas.height);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.72)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, canvas.height - gradH, canvas.width, gradH);
+
+        // Text: Impact bold white + thick black stroke
+        ctx.font = `900 ${fontSize}px Impact, "Arial Black", sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        const textY = canvas.height - padY;
+
+        ctx.strokeStyle = 'rgba(0,0,0,0.95)';
+        ctx.lineWidth = Math.floor(fontSize * 0.14);
+        ctx.lineJoin = 'round';
+        ctx.strokeText(word, padX, textY);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(word, padX, textY);
+
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(dataUrl); // fallback: return original if canvas fails
+      img.src = dataUrl;
+    });
   }
 
   async function reloadProjects() {

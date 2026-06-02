@@ -33,7 +33,16 @@
       "Bash(supabase functions *)",
       "Bash(supabase secrets *)",
       "WebFetch(domain:discuss.ai.google.dev)",
-      "WebFetch(domain:docs.cloud.google.com)"
+      "WebFetch(domain:docs.cloud.google.com)",
+      "Bash(taskkill /F /IM node.exe)",
+      "PowerShell(Stop-Process -Name \"node\" -Force -ErrorAction SilentlyContinue)",
+      "Bash(git -C \"d:\\\\INTELIGENCIA ARTIFICIAL\\\\Antigravity\\\\ClickAngle\" log --oneline -15)",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(mkdir -p /tmp/thumbs)",
+      "Bash(curl -s -o /tmp/thumbs/A_sin_texto.jpg \"https://ahbrflukfncghlyscogq.supabase.co/storage/v1/object/public/thumbnails/3522b436-50d3-4dfb-bf26-00c4f710d8a6/thumbnails/37134280-619a-4b33-baf1-3ae8d9c21854/45b5c8e1-8ea6-4897-93c3-36b591a43b5b.jpg\")",
+      "Bash(curl -s -o /tmp/thumbs/B_sin_texto.jpg \"https://ahbrflukfncghlyscogq.supabase.co/storage/v1/object/public/thumbnails/3522b436-50d3-4dfb-bf26-00c4f710d8a6/thumbnails/37134280-619a-4b33-baf1-3ae8d9c21854/490fe2de-eec2-4223-99ab-5037a37c3c1f.jpg\")",
+      "Bash(curl -s -o /tmp/thumbs/C_sin_texto.jpg \"https://ahbrflukfncghlyscogq.supabase.co/storage/v1/object/public/thumbnails/3522b436-50d3-4dfb-bf26-00c4f710d8a6/thumbnails/37134280-619a-4b33-baf1-3ae8d9c21854/b6b3bfba-2975-43b9-b611-4a784ab4532a.jpg\")",
+      "Bash(curl -s -o /tmp/thumbs/D_sin_texto.jpg \"https://ahbrflukfncghlyscogq.supabase.co/storage/v1/object/public/thumbnails/3522b436-50d3-4dfb-bf26-00c4f710d8a6/thumbnails/37134280-619a-4b33-baf1-3ae8d9c21854/60af9824-787e-4cda-92c4-6b5c92a8f95f.jpg\")"
     ]
   }
 }
